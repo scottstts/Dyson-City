@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 refs
+# headless review renders
+tools/out

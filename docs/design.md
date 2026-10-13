@@ -2,66 +2,112 @@
 
 ## 1. Pitch
 
-A quiet first-person walk through **Dyson**, the only city on the inner surface of a Dyson sphere. Dyson is small: a garden city about a kilometre across with eight refined buildings, set on still water under a glass dome. Everywhere else, the sphere is bare metal. Up close it feels like a calm, beautiful place. Overhead, a star fills the sky. On every side, the empty metal shell climbs upward until it disappears into the star's glare. There are no people, no objectives and no time of day.
+A quiet first-person walk through **Dyson**, the only city on the inner surface of a Dyson sphere. Dyson is small: a garden city about a kilometre across, with eight refined places. Everywhere else the sphere is bare, undeveloped megastructure.
+
+You stand on what feels like ordinary ground. Overhead, a real star fills the sky, a burning surface 90° across. On every side, the inner face of the sphere rises out of the horizon haze, climbs the sky as a vast pieced-together structure, and disappears into the star's glare. A normal place set inside something incomprehensibly large. There are no people, no objectives and no time of day.
 
 Pillars:
 
-1. **Intimate ground, incomprehensible sky.** Everything within reach is human-scale and finely detailed. Everything above the horizon is cosmic.
-2. **Quality over quantity.** A few places, each crafted inside and out. No filler buildings, no repeated blocks.
-3. **Photoreal calm.** Warm, soft high-dynamic-range light, still water and real materials.
-4. **Physics serves the picture.** Plausible enough to explain what the player sees and feels; bent freely for visuals and playability.
+1. **Photoreal, not illustrated.** Every frame should read as a photograph taken by someone standing there: physically motivated light, real atmosphere, a camera-like exposure. It must not read as a stylised picture, a painted ball or a demo scene.
+2. **Astronomical scale, felt correctly.** Everything within reach is human-scale and finely detailed. Everything above the horizon is hundreds of thousands of kilometres away and must look it.
+3. **Intimate ground, incomprehensible sky.**
+4. **Quality over quantity.** A few places, each crafted inside and out.
+5. **Physics serves the picture.** Use physics to decide what the image looks like. Bend it freely where it would hurt the look or playability.
 
 ## 2. World frame
 
-| Fact | Choice | What the player experiences |
+| Fact | Choice | Consequence in the image |
 |---|---|---|
-| Star | Orange star, always centred at the zenith, **~80° across** | Dominates the sky. Its limb sits ~50° above the horizon in every direction. Warm amber-gold light, boiling granulation, dark spot groups, prominences arching over the limb, occasional flares |
-| Gravity | Spin gravity, **1 g**, felt as "down" | Walking, jumping and falling feel like Earth. Coriolis is ignored |
-| Location | Dyson sits **on the sphere's equator** | Gravity only points straight down near the equator, so the only city is here. The rest of the sphere is uninhabited bare metal |
-| Spin | The shell rotates under a star that does not rotate with it | The star's surface **drifts slowly east→west (~1° per minute)**. Perceptible if you watch; the only clock in a timeless world |
-| Light | **Eternal day**, no time of day | One fixed lighting setup, tuned to perfection. Variation comes from star drift, flares and viewpoint |
-| The Veil | A transparent geodesic **glass dome ~8 km across, ~2 km high**, enclosing the city, its air and the surrounding water | It passes only a tiny fraction of the starlight, which is why the star can be looked at and its detail seen. A faint lattice is drawn across the sky. The dome's ribs land on a ring foundation, **the Rim** |
+| Star | A Sun-like G2 star, radius **696,000 km** | A blinding white photosphere: granulation, turbulent convection, faculae, spots, flares, a glowing corona |
+| Shell | Inner radius **984,000 km** from the star's centre (288,000 km above its surface) | The star is **90° across**. Its limb sits **45° above the horizon** in every direction |
+| Gravity | Spin gravity, **1 g** at the equator (17.5 h rotation). The star's own pull and Coriolis are ignored | Walking and falling feel like Earth |
+| Location | The city sits **on the equatorial band, just west of a hub** (the circular joint where a meridian frame crosses the band, as in the logo) | Only there does "down" point straight down. The hub drum rises on the eastern horizon |
+| Spin | The shell turns under a star that does not turn with it | The star's surface drifts **east → west at ~0.83° per minute**. This is the only clock |
+| Light | **Eternal day.** One fixed lighting setup | Variation comes from star drift, flares and viewpoint |
 
-Reference scale (for consistency, not simulated): star radius ≈ 500,000 km, shell radius ≈ 780,000 km. Anything on the far shell must be hundreds of km wide to be visible, so far-shell features are continent-sized.
+### Seeing at this scale
 
-## 3. The sky, from the ground up
+The facts below decide most of the image. They are the main corrections to the first two builds.
 
-1. **Horizon (0–3°).** The dome's Rim and its rib footings ring the horizon across the water. Beyond, the bare metal plain stretches out under light haze from the dome's air.
-2. **The climbing shell (3–50°).** The inner surface of the sphere rises on every side as an endless engineered metal landscape:
-   - Panel fields with visible seams at many scales.
-   - **Meridian ribs**: great structural bands running pole to pole.
-   - Equatorial track lines along the spin direction.
-   - Tiny amber running lights along the ribs, which give a sense of scale.
+- **A point on the shell at central angle γ from you appears at elevation γ/2.** The horizon is the shell next to you. The star's limb (45°) is the shell 90° around the sphere. Everything above the horizon is far away:
 
-   A soft luminous haze, coming from the dome air and scattering in the Veil glass, builds toward the horizon and toward the star.
-3. **The Breach (~25° up, toward the north-east).** This is a single unfinished sector of the shell. Its outer panels were never installed, so only the bare structural lattice stands there. Construction gantries are frozen mid-work across it, and deep space shows through the gaps.
-   - To the naked eye it is easy to miss: a small dark notch with a fine lattice texture against the bright metal. It sits off both main axes, so you have to look for it.
-   - The black gaps look empty because your eyes are adjusted to the bright city.
-   - Only the telescope, with its own narrow-field exposure, reveals the starfield beyond. It is the only view of the outside universe in the game.
-4. **The polar hubs (~45°, due north and due south).** Each pole sits just under the star's limb. The meridian ribs converge on a vast hub structure there. These are the main landmarks of the far shell.
-5. **The Veil lattice.** A very faint geodesic grid across the whole sky. It is more visible against the bright star.
-6. **The star limb (~50°).** Bright, reddened at the edge, limb-darkened, with prominence loops and filaments standing off it.
-7. **The star disc (50–90°).** Fine granulation, bright plage networks, slowly evolving spot groups, occasional flares. The whole surface drifts westward.
+  | Elevation | Distance to that shell point | Size of 1° there |
+  |---|---|---|
+  | 1° | 34,000 km | 600 km |
+  | 10° | 342,000 km | 6,000 km |
+  | 22.5° | 753,000 km | 13,000 km |
+  | 45° (limb) | 1,390,000 km | 24,000 km |
 
-The star should feel *almost too big*: a surface, not a light bulb.
+- **The ground does not visibly curve upward near the city.** From eye height, the deck crosses eye level about 60 km away, and the whole deck beyond ~5 km compresses into a pixel-thin strip at the horizon. The shell only rises measurably at hundreds of thousands of km. **No surface ever rises steeply near the city.** The concept image is wrong about this: its walls climb right behind the buildings. Its *feel* is right: warm blazing star, vast structure climbing into glare.
+- **Anything visible on the far shell is continent-sized.** A readable structural member is thousands to tens of thousands of km wide. The habitable city is invisible from anywhere else on the sphere.
+- **Everything outside is lit by the same star.** The far shell receives exactly the light the ground at your feet receives. Brightness differences up there come from material (dark collectors versus bright deck), geometry (faces turned toward or away from the star), occlusion, atmosphere and glare. They never come from "distance darkness".
+- **A daylight exposure hides the stars.** Space seen through gaps in the structure is black, veiled by the air in front of it. Stars appear only at very different exposures (a future telescope).
+- **Scale must come from content.** Seeing a sphere from a point on it is a stereographic projection, so its silhouettes cannot tell 200 m from 1,000,000 km. What tells it:
+  - the local air, which veils the lowest structure;
+  - detail with no countable elements at any scale (a regular rhythm a few degrees apart reads as human-scale architecture);
+  - depth from structure standing off the shell, and open space behind it;
+  - physically consistent light: the same star lights everything, and every inward-facing surface receives the same irradiance.
+  The shell must also climb continuously out of the horizon haze. It must never hang over the plain like a canopy.
+- **Everything is first principles.** This view has no real-world reference, so the look is derived from geometry, radiometry and materials, not invented as art. The full reasoning is in `docs/world.md`.
 
-## 4. Dyson — the city
+## 3. The Dyson structure
+
+The sphere is the project logo (`public/logo.png`), modelled as drawn: an equatorial band with ring hubs, six meridian spines, big curved gore panels in each sector, open bands beside the band, alternating wide openings and narrow slots between the gores, and polar collars. The city is on the band, 20° west of a hub. The full specification is in `docs/sky.md`.
+
+The shell is black glossy metal. Collectors concentrate starlight onto receivers, the structure's lines of light. Details are in `docs/sky.md`.
+
+**Nothing has random holes, missing modules, slivers or wireframe lattices.**
+
+## 4. Media and the Veil
+
+- **Air band.** Spin gravity holds air against the Girdle; the Veil roofs it at 6 km. It is clean, Earth-like air, 0.55 bar.
+  - It hazes the horizon and veils the lowest structure.
+  - Its short column overhead leaves the open bands dark.
+- **The trapped plasma.** A dense hot corona held near the star (fed by the shell's back-warming), with Thomson optical depth ~0.8 along a line grazing the star.
+  - It gives the fiery glow at the limb, continuous and ringless.
+  - It veils structure near the limb.
+  - Dust cannot exist here (~3,400 K).
+- **The Veil.** It is required: unshielded, the habitat would sit at ~4,850 K. It is a spectrally neutral attenuator, so the star's light stays white. Details are in `docs/world.md`.
+
+## 5. The star
+
+The star must look like a real star seen from 288,000 km: a surface of hot, moving gas, not a light bulb, and *almost uncomfortably* big.
+
+- **Activity.** It is caged: back-warming makes it more active than the Sun. Granulation, mesoscale clumps and darker pockets carry it, laced with bright branching magnetic filaments, with spot groups and flares.
+- **Colour.** It comes from temperature (Planck) and per-channel limb darkening. To the eye and camera it is white: blinding, flooding the frame through the lens's glare, with its texture just showing.
+- **Motion.** The surface drifts ~0.83°/min with the shell's spin, and convection is time-lapsed so the gas visibly boils.
+- **It is the brightest thing in the frame** and floods its surroundings through the eye-and-lens glare and the plasma glow, with no ring.
+
+## 6. The site## 6. The site (earmarked land)
+
+The city has not been built yet in the world phase. What exists is the land earmarked for it:
+
+- **The Girdle deck**: bare structural metal plating to the horizon, with a plate, bay and sector hierarchy.
+- **The Garden Deck footprint**: on the equatorial band, just west of the hub. A raised, 1 km foundation platform of pale engineered stone. Its stepped perimeter rises 1.2 m above the deck. Survey axes are inlaid in bronze:
+  - the Spinward axis runs east–west;
+  - the Meridian axis runs north–south.
+  A bronze datum disc marks the centre.
+- Nothing else stands on it. It is a finished, vacant site, ready for the city.
+
+The **first-impression shot** is from the platform near its east edge, looking east. The deck plain runs to the horizon haze. The Girdle ribbon rises into the sky toward the east hub, frames arc overhead, and the star fills the top of the view.
+
+## 7. Dyson — the city (next phase)
 
 ### Site
 
-- **The Garden Deck** is a raised stone platform about **1 km across**, holding the city. Its edge is a balustraded terrace above the water, so there are no invisible walls.
-- **The Still** is a calm, shallow reflecting water plane. It surrounds the Deck out to the Rim (~3.5 km) and doubles the star and the climbing shell in its surface.
+- **The Garden Deck** is the 1 km platform above (§6). Its edge becomes a balustraded terrace above water, so there are no invisible walls.
+- **The Still** is a calm, shallow reflecting water plane. It surrounds the Deck out to the Rim (~3.5 km).
 - **The Mirror Basin** is the city's central water. It opens eastward into the Still.
-- **The Colonnade Viaduct** is a white arched viaduct carrying the maglev. It crosses the Basin, then runs out across the Still to the Rim.
-- **The landscape between buildings** is terraced gardens, a cypress avenue, canals with footbridges, plazas and water stairs. This is the public realm that joins the places together.
+- **The Colonnade Viaduct** carries the maglev across the Basin and out over the Still to the Rim.
+- **The landscape between buildings** is terraced gardens, a cypress avenue, canals with footbridges, plazas and water stairs.
 
-The layout follows a classical cross of axes:
+The layout is a classical cross of axes:
 
-- The **Spinward Axis** runs east–west. It is the Basin's long axis, ending in the viaduct and the open Still.
-- The **Meridian Axis** runs north–south, pointing at the polar hubs.
+- The **Spinward axis** runs east–west. It points at the two equatorial hubs.
+- The **Meridian axis** runs north–south. It points at the poles on the star's limb.
 
 ```
-                         N  (polar hub, ~45° up)
+                         N  (pole, on the star's limb)
                                   │
              Observatory          │          Archive
                                   │
@@ -70,118 +116,132 @@ The layout follows a classical cross of axes:
              Conservatory         │          Thermae
                                   │
                            Canal House
-                         S  (polar hub, ~45° up)
+                         S
 ```
-
-**First impression:** the player starts on the terrace at the west end of the Mirror Basin, looking east down the water. In view are the viaduct, the open Still beyond, the shell climbing into the sky and the star overhead. This is the concept-image shot.
 
 ### Places
 
-Eight places. Every one has a fully detailed exterior **and** interior, and each has a distinct identity.
+Eight places. Each has a fully detailed exterior **and** interior, and each has a distinct identity.
 
 | # | Place | Exterior | Interior | Why go there |
 |---|---|---|---|---|
-| 1 | **Central Station** | A vaulted stone-and-glass hall on the viaduct at the Basin's east mouth | Barrel-vaulted concourse with a glazed roof, a platform with a docked pod, benches | Ride the maglev out across the Still to the Rim |
-| 2 | **Zenith Spire** | The tallest structure (~180 m): a slender ceramic-and-gold spire with stacked ring balconies, at the Basin's west head | Stone lobby, a glass lift in an open core, and at the top the **Crown**: a lounge ringed by an open-air deck | The best panorama in the game |
-| 3 | **Conservatory** | A large ribbed glass dome on a curved stone podium | A botanical interior with lush planting and water rills, plus a raised walkway at canopy height | Starlight filtered through glass and leaves |
-| 4 | **Observatory** | A domed stone drum with a rotating slit dome | Instrument hall in brass, gold and dark wood, with the great telescope at the centre | The telescope (§5) |
-| 5 | **Archive** | A colonnaded hall with deep porticoes | A tall library hall, with the **Sphere Model** at its centre: a large cutaway model of the Dyson sphere and its star, with a single glowing point marking the city | Understand the scale of where you are |
-| 6 | **Thermae** | A low, long bathhouse: stepped stone volumes with oculi in the roof | Still pools under beams of starlight from the oculi, steam, polished stone, a quiet colonnade | The most serene interior: light and water |
-| 7 | **Canal House** | A refined residence on a canal: curved terraces, pergola, private mooring | Living spaces, a study, and a roof terrace, furnished as if someone just stepped out | Human intimacy in an empty world |
-| 8 | **Rim Gallery** | A long curved gallery built into the Rim, at the foot of the dome ribs, reached only by maglev | The glass wall of the dome itself. Outside: the raw bare-metal shell, close up and endless | The edge of the habitable world |
+| 1 | **Central Station** | Vaulted stone-and-glass hall on the viaduct at the Basin's east mouth | Barrel-vaulted concourse with glazed roof, platform with a docked pod, benches | Ride the maglev out to the Rim |
+| 2 | **Zenith Spire** | The tallest structure (~180 m): slender ceramic-and-gold spire with stacked ring balconies | Stone lobby, glass lift in an open core, the **Crown** lounge and open deck at the top | The best panorama |
+| 3 | **Conservatory** | Large ribbed glass dome on a curved stone podium | Botanical interior with water rills and a canopy walkway | Starlight filtered through glass and leaves |
+| 4 | **Observatory** | Domed stone drum with a rotating slit dome | Brass, gold and dark-wood instrument hall around the great telescope | The telescope (§8) |
+| 5 | **Archive** | Colonnaded hall with deep porticoes | Tall library hall around the **Sphere Model**: a cutaway model of the sphere and its star, with one glowing point for the city | Understand the scale of where you are |
+| 6 | **Thermae** | Low, long bathhouse with roof oculi | Still pools under beams of starlight, steam, polished stone | Light and water |
+| 7 | **Canal House** | Refined residence on a canal: terraces, pergola, mooring | Living spaces, study, roof terrace, as if someone just stepped out | Human intimacy in an empty world |
+| 8 | **Rim Gallery** | Long curved gallery at the Rim, at the Veil's footing, reached by maglev | The Veil's glass wall, with the bare deck plain beyond | The edge of the habitable world |
 
-Tone: pristine, maintained and empty. It should feel serene, not eerie. Unseen automation keeps the lights on and the water clean.
+Tone: pristine, maintained, empty. Serene, not eerie.
 
-## 5. Interactions
+## 8. Interactions
 
-Every interaction uses a single **"Press E to …"** prompt. There are no menus, inventories or multi-step mechanics.
+A single **"Press E to …"** prompt. No menus, inventories or multi-step mechanics.
 
 | Interaction | Prompt | Behaviour |
 |---|---|---|
 | Doors | *Press E to open* | Sliding or pivoting doors animate open |
-| Elevators | *Press E to go up / down* | The lift travels with the player inside, and the view is preserved |
-| Maglev | *Press E to board* | A seated ride between Central Station and the Rim Gallery (~60–90 s over the Still). Mouse-look stays free. Press E at arrival to step off |
-| Telescope | *Press E to use telescope* | A steerable view with mouse aim and scroll zoom. Press E to step back |
-| Sphere Model | *Press E to examine* | The camera settles on the model, which slowly turns. Press E to step back |
-| Benches | *Press E to sit* | The camera settles into a framed, slow look. Press E to stand |
+| Elevators | *Press E to go up / down* | The lift travels with the player inside |
+| Maglev | *Press E to board* | Seated ride between Central Station and the Rim Gallery. Mouse-look stays free |
+| Telescope | *Press E to use telescope* | Steerable view: mouse aim, scroll zoom, its own exposure |
+| Sphere Model | *Press E to examine* | The camera settles on the slowly turning model |
+| Benches | *Press E to sit* | Framed, slow look |
 
-**The telescope.** The sphere encloses everything and the star fills the centre of the sky, so outer stars can't be seen directly. The one exception is **the Breach** (§3). The telescope looks at what the naked eye cannot resolve:
+**The telescope** resolves what the eye cannot:
 
-- **The star's surface:** granulation cells, the fine structure of spot groups, flare ribbons, prominence loops at the limb.
-- **The far shell:** the polar hubs, meridian rib junctions, panel-seam patterns hundreds of km wide, running lights, the sheer emptiness of the metal.
-- **The Breach:** the unfinished lattice and its frozen gantries. When it is centred and zoomed in, the telescope's exposure adapts, and stars and a faint band of the galaxy appear through the gaps. This is the game's quiet discovery: nothing points to it, and the player has to find it.
+- granulation, spot fine structure, flare ribbons, prominences;
+- the far structure's plates, lights and hubs.
 
-**Other ambient motion (no NPCs):** driverless pods on the viaduct, fountains, rippling canals, swaying trees and drifting star features.
+Its exposure adapts to its narrow field. When it points through a gap in the structure, the stars and a faint band of the galaxy appear. This is the game's quiet discovery.
 
-**Movement:** WASD + mouse look, sprint, jump, crouch. Grounded and slightly unhurried. Solid collision with walkable stairs and ramps.
+**Movement:** WASD + mouse look, sprint, jump, crouch. Grounded and slightly unhurried.
 
-## 6. Visual style: Solar Neoclassical
+## 9. Visual style
 
-Classical proportion, colonnades, domes and spires, built with futuristic materials and precision. Calm, luminous and warm. No grime, no cyberpunk.
+### The world
 
-**Architecture**
-- Curved, terraced massing: drums, ring balconies, stepped podiums, shallow domes, barrel vaults.
-- Slender vertical accents: spires with rings and finials.
-- Colonnades and arcades: thin columns, deep shadow reveals, arched viaducts.
-- Every edge resolved: bevels, chamfers, stone coursing, panel seams, mullion profiles, drip edges, plinths, copings.
-- Interiors are equally considered: coffered or ribbed ceilings, inlaid floors, built-in joinery, light coves, real furniture.
+The style is photoreal megastructure: engineering at a scale beyond comprehension, rendered with physical light. The look is derived, not painted.
 
-**Material palette**
+- A blinding white star whose glare floods the frame; its texture is just visible.
+- A patchwork of mirror tiles reflecting real pieces of the enclosure: gaps dark, the star blazing.
+- Distance shown by media: a white Thomson veil over the far shell, and blue Rayleigh air low down.
+
+### The city: Solar Neoclassical
+
+Classical proportion, colonnades, domes and spires, built with futuristic precision. Calm, luminous and warm. No grime, no cyberpunk.
+
+- Every edge resolved: bevels, chamfers, coursing, seams, mullions, copings.
+- Interiors are equally considered.
 
 | Material | Use |
 |---|---|
-| Honed pale limestone/travertine (warm white, subtle veining) | Podiums, terraces, balustrades, interior floors |
-| White ceramic composite panels | Façades, drums, spire bodies |
-| Brushed champagne-gold / anodized bronze | Rings, finials, mullions, railings, fittings |
-| Low-iron glass with a faint gold coating | Domes, curtain walls, maglev pods |
+| Honed pale limestone/travertine | Podiums, terraces, the Garden Deck |
+| White ceramic composite | Façades, drums, spires |
+| Brushed champagne-gold / anodized bronze | Rings, finials, mullions, railings, survey inlays |
+| Low-iron glass, faint gold coating | Domes, curtain walls, pods, the Veil |
 | Dark polished basalt | Accent bands, water edges, steps |
-| Warm dark wood, leather, fabric | Interiors: joinery, furniture |
-| Water | Still mirror surfaces, rippled canals, fountains, rills, pools |
-| Bare shell metal (outside the Veil) | Brushed titanium-grey panels with seam networks and service hardware: cold and industrial against the warm city |
+| Warm dark wood, leather, fabric | Interiors |
+| Water | Still mirrors, canals, fountains, pools |
 
-**Vegetation:** Italian cypress, stone pine, olive, clipped boxwood, lawn, lavender, flowering magenta/coral shrubs, vines on pergolas, water lilies. Well kept, gently swaying.
+**Vegetation:** Italian cypress, stone pine, olive, clipped boxwood, lawn, lavender, flowering shrubs, vines, water lilies.
 
-**Lighting mood**
-- Exterior:
-  - Warm amber-gold light from straight overhead, from a huge area source.
-  - Very soft, short shadows, with contact shadowing under overhangs.
-  - Bright warm bounce light, and a blue-gold high skylight.
-  - Strong star reflections in water and glass.
-- Interiors: daylit through oculi, domes and glazing, with warm artificial accent light. They should feel distinctly cooler and calmer than outside.
+### Lighting mood
 
-## 7. UI / HUD
+The key light is a 90° area source straight overhead. It produces:
 
-- **In play:** nothing on screen. Looking at an interactable shows a small centred dot and the "Press E to …" prompt beneath it.
-- **Place titles:** when entering a place, its name fades in briefly, once per visit.
-- **Entry screen:** title, "Enter", loading progress. This same screen shows platform-gate and boot/GPU errors.
-- **Pause menu:** resume, settings (mouse sensitivity, FOV, audio volume).
-- **Typography:** one refined sans-serif, generous letter-spacing, translucent light panels.
+- very soft, short shadows and strong contact occlusion;
+- bright warm bounce;
+- strong sheen on glossy surfaces;
+- the star reflected in water and glass.
 
-## 8. Platform
+Interiors are daylit through openings and feel cooler and calmer.
 
-- **Chromium-based desktop browsers only** (Chrome, Edge, and other Chromium browsers), gated from day one.
-- The entry screen checks the platform before any engine code loads:
-  - Chromium brand
-  - not a mobile device
-  - WebGPU available
-- Unsupported platforms get a clear, styled message and never attempt to boot. This includes Firefox and Safari, even where they support WebGPU.
+## 10. UI / HUD
 
-## 9. Rendering scope
+- **In play:** nothing on screen. Looking at an interactable shows a small dot and the prompt.
+- **Place titles:** fade in briefly on entering.
+- **Entry screen:** title, loading progress, "Enter". It shows platform-gate and boot/GPU errors.
+- **Pause:** resume, mouse sensitivity, FOV.
+- **Typography:** one refined sans-serif, generous letter-spacing, translucent panels.
 
-Implementation details go in separate docs. The image must deliver:
+## 11. Platform
 
-- **Star:** an emissive procedural surface with multi-scale convection, spots, plage, limb darkening, prominences and flares. Bright, but its detail stays readable after tone mapping.
-- **Far shell:** a procedural metal surface on the sphere (panels, ribs, polar hubs, running lights), with haze and glare by elevation. It needs enough detail to hold up under telescope zoom.
-- **The Breach:** a cutout region of the far shell showing open lattice and gantries over a starfield. The starfield is invisible at city exposure and appears only through the telescope's own exposure.
-- **Veil:** a geodesic glass dome with a rib lattice, subtle Fresnel, and a faint glow where it crosses the star.
-- **City:** soft area-light shadows, ambient occlusion for contact grounding, mirror-still and rippled water, glass, interiors daylit through openings, bloom, auto-exposure and grading.
-- **Seam:** the Rim and the haze over the Still hide the transition from the local scene to the far-shell rendering.
+- **Chromium-based desktop browsers only**, gated before engine code loads. The gate requires:
+  - a Chromium brand;
+  - a non-mobile device;
+  - WebGPU.
+- Unsupported platforms get a clear styled message and never boot.
 
-**Performance stance:** there is no hard frame-rate target while building. It needs to be playable on the dev machine, and dedicated optimization passes come later. Even so, no known performance pitfalls should be introduced along the way.
+## 12. Rendering scope
 
-## 10. Out of scope
+Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
+
+- **Physically based radiometry.** One radiance scale for the star, the far structure, the atmosphere and local materials. Exposure is a camera, never a fix for wrong ratios.
+- **Star:**
+  - procedural white-light photosphere at real scales;
+  - flares;
+  - footprint-filtered detail.
+- **Far structure:** analytic ray-traced megastructure in the sky shader; light transport from a boot-time enclosure solve; plating sampled per pixel at its level of detail.
+- **Media:** trapped-plasma line integrals and the Veil-roofed air, both precomputed at boot.
+- **Atmosphere:** custom single + multiple scattering for the concave band geometry. Precomputed at boot because the observer and star are fixed. One model owns sky haze, aerial perspective on local geometry, and the aureole.
+- **Local scene:**
+  - image-based lighting from the rendered sky;
+  - GTAO contact occlusion;
+  - temporal anti-aliasing.
+- **Camera:**
+  - fixed exposure metered on the structure (the light never changes);
+  - the eye's glare from its point-spread function: exact for the star, screen-space for everything else;
+  - daylight white balance (the Veil supplies the warm cast);
+  - hue-preserving filmic tone map (overexposed colour runs toward yellow and white, never pastel) and grade;
+  - subtle lens response.
+
+**Performance stance:** no hard frame-rate target while building, but no known performance pitfalls.
+
+## 13. Out of scope
 
 - NPCs, dialogue, quests, inventory, combat.
 - Time of day, weather, seasons.
-- Leaving the Veil. The bare shell is only seen, never walked.
+- Leaving the habitable band. The far structure is only seen, never walked.
 - Non-Chromium browsers and mobile.
