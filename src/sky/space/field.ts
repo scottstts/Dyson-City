@@ -25,7 +25,7 @@ const BULGE = vec3(1.0, 0.8, 0.57);
 const EXTINCTION = vec3(0.72, 1.0, 1.4);
 
 /** The Milky Way's surface brightness in the plane, away from the bulge (scene radiance). */
-const GALAXY_BRIGHTNESS = 0.08;
+const GALAXY_BRIGHTNESS = 0.12;
 
 /** Ridged fBm: thin bright crests where the noise crosses its mean (filaments, wisps). */
 function ridged(p: V3, octaves: number, fp: F, sharp: number): F {

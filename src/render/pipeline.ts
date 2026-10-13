@@ -8,7 +8,9 @@
  *     → TRAA (sky pixels carry rotation-only velocity)
  *     → glare: the eye's scatter and the camera's bloom (render/glare.ts, glarePass.ts) — the star's
  *       share analytic, every other source spread in screen space — then exposure × white balance
- *     → filmic tone map (once) → grade → grain → sRGB OETF → dither
+ *     → lens vignette → film look: black point + high contrast (render/tsl/look.ts)
+ *     → filmic tone map (once)
+ *     → grade (saturation) → grain → sRGB OETF → dither
  *
  * Exposure is the fixed camera exposure (render/exposure.ts). Debug views short-circuit the
  * chain at named stages (?view=...).
@@ -16,7 +18,7 @@
 import { RenderPipeline, type PerspectiveCamera, type Scene, type WebGPURenderer, type DataTexture } from 'three/webgpu';
 import {
   pass, mrt, output, normalView, velocity, packNormalToRGB, unpackRGBToNormal, sample, screenUV, vec3, vec4, float, Fn, If, uniform, texture,
-  getViewPosition, length, normalize, mix, max, pow, smoothstep, sRGBTransferOETF, agxToneMapping,
+  getViewPosition, length, normalize, mix, pow, dot, smoothstep, sRGBTransferOETF, agxToneMapping,
   acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, fwidth, exp,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
@@ -25,6 +27,7 @@ import { traa } from 'three/addons/tsl/display/TRAANode.js';
 import { aerialLutUV, type AtmosphereTextures } from '../atmosphere/luts';
 import { hash12 } from './tsl/noise';
 import { hueFilmic } from './tsl/toneMap';
+import { filmLook, vignette } from './tsl/look';
 import { createGlarePass, HALATION } from './glarePass';
 
 type TexNode = Node<'vec4'> & { sample(uv: Node<'vec2'>): Node<'vec4'>; value: import('three/webgpu').Texture };
@@ -37,7 +40,6 @@ export interface CameraSettings {
   /** Camera white balance: per-channel gains with unit luminance. */
   whiteBalance: Node<'vec3'>;
   saturation: Node<'float'>;
-  contrast: Node<'float'>;
   grain: Node<'float'>;
 }
 
@@ -79,7 +81,6 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
     exposure: uniform(0.14) as unknown as Node<'float'>,
     whiteBalance: uniform(vec3(1.0, 1.0, 1.0)) as unknown as Node<'vec3'>,
     saturation: uniform(1.08) as unknown as Node<'float'>,
-    contrast: uniform(1.0) as unknown as Node<'float'>,
     grain: uniform(0.012) as unknown as Node<'float'>,
   };
 
@@ -136,18 +137,21 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   // --- Glare: the eye's scatter and the camera's bloom (render/glare.ts, render/glarePass.ts) ---
   const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant });
 
+  // The optical axis, for the lens vignette (the camera looks down its local −Z).
+  const camAxis = normalize(camWorld.mul(vec4(0, 0, -1, 0)).xyz);
+
   const camera = Fn(() => {
     const uv = screenUV;
     const viewDir = viewDirAt(uv);
-    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir).mul(settings.exposure).mul(settings.whiteBalance);
+    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir).mul(settings.exposure).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
+    // The look sits before the display transform, in scene-linear exposure (render/tsl/look.ts).
+    const looked = filmLook(exposed) as unknown as Node<'vec3'>;
     // The clipped disc's halation spills white past its outline (glarePass.ts), screen-blended.
     const spill = vec3(...HALATION.tint).mul(glare.halation(viewDir));
-    const mapped = float(1).sub(float(1).sub(toneMap(opts.toneMapper, exposed)).mul(float(1).sub(spill)));
-    // Grade in display-linear: contrast about mid-grey (in log-ish space) and saturation.
+    const mapped = float(1).sub(float(1).sub(toneMap(opts.toneMapper, looked)).mul(float(1).sub(spill)));
+    // Grade in display-linear: saturation (contrast is the look's).
     const lum = luminance(mapped);
-    const graded0 = mix(vec3(lum), mapped, settings.saturation);
-    const pivot = float(0.18);
-    const graded = pow(max(graded0, vec3(1e-6)).div(pivot), vec3(settings.contrast)).mul(pivot).min(vec3(1.0));
+    const graded = mix(vec3(lum), mapped, settings.saturation).clamp(0, 1);
     // Fine luminance-weighted grain.
     const n = hash12(screenCoordinate.xy.add(fract(sin(uniformTime.mul(12.9898)).mul(437.585)).mul(1000))).sub(0.5);
     const grained = graded.add(graded.mul(n).mul(settings.grain).mul(2));

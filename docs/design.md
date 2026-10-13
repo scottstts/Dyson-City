@@ -212,7 +212,7 @@ Interiors are daylit through openings and feel cooler and calmer.
 
 ## 12. Rendering scope
 
-Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
+Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/shadows.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
 
 - **Physically based radiometry.** One radiance scale for the star, the far structure, the atmosphere and local materials. Exposure is a camera, never a fix for wrong ratios.
 - **Star:**
@@ -230,6 +230,7 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
   - fixed exposure keyed to the star (the light never changes);
   - glare: the eye's scatter and a strong camera bloom above a threshold (exact for the star, screen-space for everything else), and halation that spills the clipped disc past its outline;
   - daylight (D65) white balance: the star's own light carries one warm cast;
+  - a film look: a black point that takes the glare veil off, a high-contrast curve and a very light lens vignette;
   - hue-preserving filmic tone map (overexposed colour runs toward yellow and white, never pastel) and grade;
   - subtle lens response.
 

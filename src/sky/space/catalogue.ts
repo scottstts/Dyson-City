@@ -85,15 +85,15 @@ const K = NEBULA_KIND;
  */
 export const NEBULAE: readonly Nebula[] = [
   // In the gap left of the band in the first-impression view.
-  nebula(K.emission, 15, 48, 20, 20, 11, 0.26),
+  nebula(K.emission, 15, 48, 20, 20, 11, 0.39),
   // In the gap right of the band in the first-impression view (the first sits left of it).
-  nebula(K.emission, 21, -29, 13, -35, 23, 0.24),
-  nebula(K.emission, 250, 62, 13, 60, 37, 0.22),
-  nebula(K.reflection, 75, 30, 9, 10, 41, 0.1),
-  nebula(K.reflection, 205, -60, 11, 80, 53, 0.1),
-  nebula(K.remnant, 310, -30, 14, 0, 67, 0.16),
-  nebula(K.remnant, 100, 66, 10, 30, 71, 0.14),
-  nebula(K.galaxy, 185, 42, 5.5, 38, 83, 0.32),
+  nebula(K.emission, 21, -29, 13, -35, 23, 0.36),
+  nebula(K.emission, 250, 62, 13, 60, 37, 0.33),
+  nebula(K.reflection, 75, 30, 9, 10, 41, 0.15),
+  nebula(K.reflection, 205, -60, 11, 80, 53, 0.15),
+  nebula(K.remnant, 310, -30, 14, 0, 67, 0.24),
+  nebula(K.remnant, 100, 66, 10, 30, 71, 0.21),
+  nebula(K.galaxy, 185, 42, 5.5, 38, 83, 0.48),
   nebula(K.dark, 150, -45, 14, 15, 97, 1.6),
   nebula(K.dark, 280, 40, 12, -20, 101, 1.4),
 ];

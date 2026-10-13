@@ -11,7 +11,7 @@ scene MRT (output, packed normal, velocity)
     sky: the star's atmosphere (sky/star/atmosphere.ts): rgb emission over exp(−τ) of what is behind
   → TRAA (resolved on x/(1+x) of exposed luminance and expanded after)
   → glare: eye scatter + camera bloom (glare.ts, glarePass.ts) → exposure × D65 white balance
-  → hue-preserving filmic → halation of the clipped disc (screen blend) → grade → grain → OETF → dither
+  → lens vignette → film look (black point, high contrast) → hue-preserving filmic → halation of the clipped disc (screen blend) → grade → grain → OETF → dither
 ```
 
 - **Post camera uniforms.** Post passes need their own `projInv`/`camWorld` uniforms. TSL camera nodes inside a post pass refer to the quad camera.
@@ -39,4 +39,15 @@ Energy-conserving glare cannot hide the limb: just outside it, at most half the 
   - **Rejected:** local adaptation that held the disc's texture and limb gradient visible. It read as a lamp or as a stone ball (grey mottles on off-white), not as blinding light.
 - **D65 white balance**, as a camera set to daylight. The 5,772 K star renders hot cream-white, and everything it lights shares that one warm cast. **Rejected:** balancing on the star itself, which made the world neutral grey-white, like an overcast day.
 - **Tone curve:** linear in log exposure below a knee at display 0.45 (black stays black, mid-grey stays mid-grey), then a long exponential shoulder toward white; colour runs to white near display white. **Rejected:** AgX's lifted toe (it greyed the dark metal) and ACES/Reinhard shoulders.
-- **Grade:** saturation 1.08, no extra contrast.
+- **Grade:** saturation 1.08. Contrast is the film look's alone.
+
+## Film look (`tsl/look.ts`)
+
+A lightweight compositing layer in the final camera pass (no extra passes), on exposed radiance before the tone curve, as a film look sits before the display transform.
+
+- **Black point (flare compensation).** The star's glare veil and the air lift the whole frame. The starry gaps exposed at ~0.11, under a stop below mid-grey; the darkest pixel was ~37 % grey and nothing was black, so a contrast look alone barely changed the frame. A smooth floor (0.075, soft knee) is taken off each channel and the rest rescaled about a bright pivot (0.45): darks go deep, mid-grey drops ~0.5 stop, highlights keep their place. It is a grading choice: scene radiance is untouched.
+  - **Per channel, not on luminance.** Flare is added light, so taking it off each channel gives back the colour under it. On luminance it darkened a nebula behind the neutral veil into grey.
+  - **Rejected:** rescaling about mid-grey. It pushed highlights up nearly a stop and burnt the stone.
+  - Space was brightened 1.5× with it (`docs/sky.md`), or the nebulae's outer clouds sank into the new blacks.
+- **High contrast** (in the manner of Blender Filmic's "High Contrast"). A log-exposure S-curve about mid-grey on luminance (hue preserved): gain 1.35 below mid-grey, easing to 1.18 above, where the tone curve's shoulder already compresses.
+- **Lens vignette.** Very light: 15 % of the natural cos⁴ falloff, ~0.2 stop in the corners at the default 62° field, none at telescope fields.
