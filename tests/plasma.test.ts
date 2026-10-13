@@ -14,16 +14,13 @@ function view(thetaDeg: number) {
   return plasmaSegment(lut, b, x0, x1);
 }
 
-describe('trapped plasma', () => {
-  it('has the configured optical depth along the grazing line', () => {
-    const L = Math.sqrt(1 - S * S);
-    let tau = 0;
-    const n = 4000;
-    for (let i = 0; i < n; i++) {
-      const x = -L + ((i + 0.5) / n) * 2 * L;
-      tau += plasmaExtinction(Math.hypot(S, x)) * ((2 * L) / n);
+describe('interior plasma fill', () => {
+  it('the line table carries the fill\'s optical depth along a whole chord', () => {
+    for (const b of [0.75, 0.9]) {
+      const L = Math.sqrt(1 - b * b);
+      expect(-Math.log(plasmaSegment(lut, b, -L, L).T)).toBeCloseTo(plasmaExtinction() * 2 * L, 4);
     }
-    expect(tau).toBeCloseTo(PLASMA.limbOpticalDepth + PLASMA.fillDepth * 2 * L, 3);
+    expect(PLASMA.fillDepth).toBeLessThan(0.05);
   });
 
   it('segment integrals compose: S(a→c) = S(a→b)·… with T multiplicative', () => {
@@ -36,7 +33,7 @@ describe('trapped plasma', () => {
     for (let c = 0; c < 3; c++) expect(ac.S[c]).toBeCloseTo(ab.S[c] + ab.T * bc.S[c], 3);
   });
 
-  it('glows brightest at the limb, stays fainter than the disc beside it, and fades outward with no ring', () => {
+  it('stays far fainter than the disc beside it and fades outward with no ring', () => {
     // Just inside the limb the disc hides the far half of the grazing path; the limb-darkened disc
     // (μ ≈ 0.1 there) still outshines the full glow just outside, so the radiance falls across the limb.
     const discNearLimb = 10 * Math.pow(0.1, 0.508);

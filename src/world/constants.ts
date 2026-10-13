@@ -17,6 +17,9 @@ export const STAR_RADIUS_KM = 696_000;
 export const SHELL_RADIUS_KM = 984_000;
 export const SHELL_RADIUS_M = SHELL_RADIUS_KM * KM;
 
+/** Light travel time across one shell radius (s): the far shell is up to ~1.4 radii away. */
+export const SHELL_LIGHT_SECONDS = SHELL_RADIUS_KM / 299_792.458;
+
 /** Star radius in shell units, and the star's angular radius seen from anywhere on the shell. */
 export const STAR_RADIUS_R = STAR_RADIUS_KM / SHELL_RADIUS_KM;
 export const STAR_ANGULAR_RADIUS = Math.asin(STAR_RADIUS_R);

@@ -1,25 +1,19 @@
 /**
- * The interior medium: the star's own wind, trapped by the shell.
+ * The interior medium: a thin, nearly uniform plasma filling the sphere.
  *
- * What fills the ~10⁶ km between the city and the far shell? Not air: the habitat's air is held to
- * the band. Not dust: at 1.4 stellar radii any grain sits above ~3,400 K and sublimates. What
- * remains is the stellar wind (1.5·10⁹ kg/s for a Sun-like star) that the shell's magnetic cage
- * holds in: a few centuries of it is ~10¹⁹ kg of fully ionised hydrogen and helium at coronal
- * temperatures, ~10¹² electrons per cm³, densest near the star.
+ * Physics bounds it tightly. Dust sublimates and molecules dissociate at the cavity's 3,600–4,400 K;
+ * neutral gas falls onto the star (a scale height of ~150 km at 5,000 K); only coronal plasma at
+ * 1–3 MK can fill the cavity, and a plasma dense enough to veil the far shell visibly would radiate
+ * more power than the star emits. So the cavity is effectively clear: crispness is the right
+ * message for structure a million kilometres away. An earlier dense corona (optical depth ~1 along
+ * a line grazing the star) was removed: its glow around the limb read as a lamp in fog.
  *
- * How it looks follows from the mechanism. Fully ionised gas has no bound electrons, so there is no
- * Rayleigh scattering (no blue), no absorption bands and no ionisation glow worth the name: its
- * free electrons Thomson-scatter, which is grey — the same for every wavelength — with phase
- * (3/16π)(1 + cos²θ). So the medium glows in the star's own colour, white, in proportion to the
- * column of electrons and the starlight reaching them:
- *
- *  - along lines that graze the star, a bright, continuous corona (no ring);
- *  - across the whole interior, a thin white veil (fillDepth): invisible over the 10⁴ km to the
- *    nearby band, it lifts and softens structure and gaps 10⁶ km away — the aerial perspective of
- *    this enclosure, white where Earth's is blue.
- *
- * The habitat's own air (atmosphere/) is ordinary Rayleigh air, so the lowest few degrees, seen
- * through hundreds of km of it, go blue-grey: two media, two colours, one light.
+ * What remains is a faint fill of free electrons (fillDepth), kept as a deliberate, subtle visual
+ * term. Free electrons Thomson-scatter, which is grey — the same for every wavelength — with phase
+ * (3/16π)(1 + cos²θ), so the fill glows in the star's own white. Invisible over the 10⁴ km to the
+ * nearby band, it lifts the structure and gaps ~10⁶ km away very slightly: an aerial perspective
+ * that grows with distance, white where Earth's is blue. The habitat's own air (atmosphere/) is
+ * ordinary Rayleigh air and veils everything in front of it blue.
  *
  * Because star, medium and shell are all spherically symmetric about the star centre, every ray
  * inside the sphere is fixed by its impact parameter b (closest distance to the centre) and its
@@ -36,17 +30,10 @@ import { STAR_RADIUS_R } from '../../world/constants';
 import { LIMB_DARKENING_EXPONENT, STAR_CENTER_RADIANCE } from '../../world/radiometry';
 
 export const PLASMA = {
-  /** Thomson optical depth along the line of sight that grazes the limb (both halves). */
-  limbOpticalDepth: 1.2,
-  /** Hydrostatic scale height near the star (shell units; ≈ 70,000 km, a ~2 MK corona). */
-  scaleHeight: 0.045,
-  /** Share of the grazing optical depth carried by the 1/r² wind tail. */
-  windShare: 0.03,
   /**
-   * Optical depth per shell radius of path of the thin plasma that fills the whole interior (the
-   * wind's slow-moving remainder, held in by the shell's magnetic cage). Over the ~10⁴ km to the
-   * nearby band it is invisible; over the ~10⁶ km to the shell near the star it veils and softens
-   * — the aerial perspective of this enclosure, and its main cue of distance.
+   * Optical depth per shell radius of path of the thin plasma filling the interior: over the
+   * ~10⁴ km to the nearby band it is invisible; over the ~10⁶ km to the shell near the star it veils
+   * very slightly.
    */
   fillDepth: 0.01,
 } as const;
@@ -56,30 +43,9 @@ export const PLASMA_LUT = { width: 384, height: 256, sourceR: 96, sourceMu: 48 }
 
 const S = STAR_RADIUS_R;
 
-/** Unnormalised density profile (hydrostatic + wind). */
-function profile(r: number): number {
-  const rr = Math.max(r, S);
-  return (1 - PLASMA.windShare) * Math.exp(-(rr - S) / PLASMA.scaleHeight) / hydroGrazing + (PLASMA.windShare * (S / rr) ** 2) / windGrazing;
-}
-
-/** Grazing line integrals of each unit profile at b = S, so each part carries its share of τ. */
-const hydroGrazing = grazingIntegral((r) => Math.exp(-(r - S) / PLASMA.scaleHeight));
-const windGrazing = grazingIntegral((r) => (S / r) ** 2);
-
-function grazingIntegral(f: (r: number) => number): number {
-  const L = Math.sqrt(1 - S * S);
-  const n = 4000;
-  let sum = 0;
-  for (let i = 0; i < n; i++) {
-    const x = -L + ((i + 0.5) / n) * 2 * L;
-    sum += f(Math.sqrt(S * S + x * x));
-  }
-  return (sum * 2 * L) / n;
-}
-
-/** Extinction coefficient (per shell radius) at radius r. */
-export function plasmaExtinction(r: number): number {
-  return PLASMA.limbOpticalDepth * profile(r) + PLASMA.fillDepth;
+/** Extinction coefficient (per shell radius): uniform through the interior. */
+export function plasmaExtinction(): number {
+  return PLASMA.fillDepth;
 }
 
 /**
@@ -176,7 +142,7 @@ export function computePlasmaLut(): PlasmaLut {
           const xm = xPrev + (k + 0.5) * dx;
           if (b < S && Math.abs(xm) < xs) continue;
           const r = Math.sqrt(b * b + xm * xm);
-          const kExt = plasmaExtinction(r);
+          const kExt = plasmaExtinction();
           sampleSource(src, r, -xm / r, J);
           const w = Math.exp(-tau) * (1 - Math.exp(-kExt * dx));
           for (let c = 0; c < 4; c++) I[c] += w * J[c];

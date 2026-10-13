@@ -95,6 +95,11 @@ export interface PlatingSample {
   moduleId: V2;
   /** Centre of the leaf division (arc coordinates), for fields that must follow its edges. */
   leafCentre: V2;
+  /** Position within the tile (−1..1) and within the leaf facet (0..1). */
+  tileLocal: V2;
+  facetLocal: V2;
+  /** Tile size (arc units), for footprint tests of tile-scale detail. */
+  tileSize: V2;
   /** Coverage of tile gaps and of module mullions (footprint-filtered, fading to their mean). */
   seam: F;
   mullion: F;
@@ -244,6 +249,9 @@ export function plating(a: V2, moduleSize: V2, tU: V3, tV: V3, n0: V3, fp: V2, s
     moduleHash: mh,
     moduleId: mId,
     leafCentre: mId.add(0.5).mul(leafSize) as unknown as V2,
+    tileLocal: local as unknown as V2,
+    facetLocal: mUV as unknown as V2,
+    tileSize: tileSize as unknown as V2,
     seam,
     mullion,
   };

@@ -18,7 +18,7 @@ Pillars:
 
 | Fact | Choice | Consequence in the image |
 |---|---|---|
-| Star | A Sun-like G2 star, radius **696,000 km** | A blinding white photosphere: granulation, turbulent convection, faculae, spots, flares, a glowing corona |
+| Star | A Sun-like G2 star, radius **696,000 km** | A blinding white photosphere: countless granules, faculae, spots, flares, prominences at the limb |
 | Shell | Inner radius **984,000 km** from the star's centre (288,000 km above its surface) | The star is **90° across**. Its limb sits **45° above the horizon** in every direction |
 | Gravity | Spin gravity, **1 g** at the equator (17.5 h rotation). The star's own pull and Coriolis are ignored | Walking and falling feel like Earth |
 | Location | The city sits **on the equatorial band, just west of a hub** (the circular joint where a meridian frame crosses the band, as in the logo) | Only there does "down" point straight down. The hub drum rises on the eastern horizon |
@@ -54,31 +54,28 @@ The facts below decide most of the image. They are the main corrections to the f
 
 The sphere is the project logo (`public/logo.png`), modelled as drawn: an equatorial band with ring hubs, six meridian spines, big curved gore panels in each sector, open bands beside the band, alternating wide openings and narrow slots between the gores, and polar collars. The city is on the band, 20° west of a hub. The full specification is in `docs/sky.md`.
 
-The shell is black glossy metal. Collectors concentrate starlight onto receivers, the structure's lines of light. Details are in `docs/sky.md`.
+The shell is a fictional refractory alloy: dark, warm metal that mirrors the enclosure and glows faintly with the heat it collects. Its hottest coolant channels run as thin orange-gold lines along panel borders, girders and hub rims: the logo's lines. Details are in `docs/sky.md`.
 
 **Nothing has random holes, missing modules, slivers or wireframe lattices.**
 
 ## 4. Media and the Veil
 
-- **Air band.** Spin gravity holds air against the Girdle; the Veil roofs it at 6 km. It is clean, Earth-like air, 0.55 bar.
+- **Air band.** Spin gravity holds air against the Girdle; the Veil roofs it at 1.2 km. It is clean air, 0.55 bar.
   - It hazes the horizon and veils the lowest structure.
   - Its short column overhead leaves the open bands dark.
-- **The trapped plasma.** A dense hot corona held near the star (fed by the shell's back-warming), with Thomson optical depth ~0.8 along a line grazing the star.
-  - It gives the fiery glow at the limb, continuous and ringless.
-  - It veils structure near the limb.
-  - Dust cannot exist here (~3,400 K).
+- **The cavity is clear.** Dust and molecules cannot exist at ~4,000 K, neutral gas falls onto the star, and a plasma dense enough to see would outshine the star. Crispness is the right message a million km away. A faint white plasma fill adds a subtle aerial perspective that grows with distance.
 - **The Veil.** It is required: unshielded, the habitat would sit at ~4,850 K. It is a spectrally neutral attenuator, so the star's light stays white. Details are in `docs/world.md`.
 
 ## 5. The star
 
 The star must look like a real star seen from 288,000 km: a surface of hot, moving gas, not a light bulb, and *almost uncomfortably* big.
 
-- **Activity.** It is caged: back-warming makes it more active than the Sun. Granulation, mesoscale clumps and darker pockets carry it, laced with bright branching magnetic filaments, with spot groups and flares.
-- **Colour.** It comes from temperature (Planck) and per-channel limb darkening. To the eye and camera it is white: blinding, flooding the frame through the lens's glare, with its texture just showing.
-- **Motion.** The surface drifts ~0.83°/min with the shell's spin, and convection is time-lapsed so the gas visibly boils.
-- **It is the brightest thing in the frame** and floods its surroundings through the eye-and-lens glare and the plasma glow, with no ring.
+- **Activity.** It is caged and more active than the Sun. Granulation at its true size carries it (~620,000 granules on the visible disc), with faculae toward the limb, spot groups, flares, and prominences standing off the limb.
+- **Colour.** It comes from temperature (Planck) and per-channel limb darkening. To the eye and camera it is white-hot, with its texture just held, and its glare veils everything near it.
+- **Motion.** Everything runs in real time: the surface drifts ~0.8°/min with the shell's spin, granules live ~8 min, prominences stream and erupt at their true speeds. Fast motion would make it a small object. Flares echo in the far shell's mirrors seconds later.
+- **It is the brightest thing in the frame** and dazzles its surroundings through the eye's glare, with a razor-sharp limb and no halo.
 
-## 6. The site## 6. The site (earmarked land)
+## 6. The site (earmarked land)
 
 The city has not been built yet in the world phase. What exists is the land earmarked for it:
 
@@ -165,8 +162,8 @@ Its exposure adapts to its narrow field. When it points through a gap in the str
 The style is photoreal megastructure: engineering at a scale beyond comprehension, rendered with physical light. The look is derived, not painted.
 
 - A blinding white star whose glare floods the frame; its texture is just visible.
-- A patchwork of mirror tiles reflecting real pieces of the enclosure: gaps dark, the star blazing.
-- Distance shown by media: a white Thomson veil over the far shell, and blue Rayleigh air low down.
+- A patchwork of warm metal tiles reflecting real pieces of the enclosure and glowing faintly with heat: gaps dark, the star blazing in the tiles near the limb.
+- Distance shown by content, light and motion (`docs/scale.md`): blue habitat air in front of everything, a crisp cavity behind it.
 
 ### The city: Solar Neoclassical
 
@@ -224,14 +221,14 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
   - flares;
   - footprint-filtered detail.
 - **Far structure:** analytic ray-traced megastructure in the sky shader; light transport from a boot-time enclosure solve; plating sampled per pixel at its level of detail.
-- **Media:** trapped-plasma line integrals and the Veil-roofed air, both precomputed at boot.
+- **Media:** thin-plasma line integrals and the Veil-roofed air, both precomputed at boot.
 - **Atmosphere:** custom single + multiple scattering for the concave band geometry. Precomputed at boot because the observer and star are fixed. One model owns sky haze, aerial perspective on local geometry, and the aureole.
 - **Local scene:**
   - image-based lighting from the rendered sky;
   - GTAO contact occlusion;
   - temporal anti-aliasing.
 - **Camera:**
-  - fixed exposure metered on the structure (the light never changes);
+  - fixed exposure keyed to the star (the light never changes);
   - the eye's glare from its point-spread function: exact for the star, screen-space for everything else;
   - daylight white balance (the Veil supplies the warm cast);
   - hue-preserving filmic tone map (overexposed colour runs toward yellow and white, never pastel) and grade;

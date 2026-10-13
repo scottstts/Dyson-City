@@ -12,10 +12,11 @@
  *                = T_pl(ε)·L_shell(ε) + S_pl(ε)                  for 0 ≤ ε ≤ 45° (a chord)
  *                = L_shell(|ε|)                                  below the local tangent plane
  *
- * with a_m the area share of each surface class (open slots reflect nothing: light escapes there).
- * The solution is not a mean: mirrors near the limb see the star through their lobes and blaze,
- * and their reflections lower down chain around the sphere until they escape through a gap, so the
- * shell darkens with distance from the star. That gradient is a property of the enclosure.
+ * with a_m the area share of each surface class (open slots reflect nothing: light escapes there),
+ * plus each class's thermal glow (thermal.ts), which the rest of the shell reflects in turn. The
+ * solution is not a mean: polished metal near the limb sees the star through its lobes and blazes,
+ * and reflections lower down chain around the sphere until they escape through a gap, so the shell
+ * darkens with distance from the star. That gradient is a property of the enclosure.
  *
  * Outputs (all relative to the reference photosphere; the shader scales them by the star's
  * measured illuminant):
@@ -28,53 +29,42 @@
 import { STAR_ANGULAR_RADIUS, STAR_RADIUS_R } from '../../world/constants';
 import { LIMB_DARKENING_EXPONENT, STAR_CENTER_RADIANCE } from '../../world/radiometry';
 import { combinePlasmaLut, plasmaSegment, type PlasmaLut } from '../medium/plasma';
+import { COLLECTOR_DIFFUSE, COLLECTOR_F0, STRUCTURE_DIFFUSE, STRUCTURE_F0, VEIL_F0 } from './materials';
+import { COLLECTOR_TEMPERATURE, COLLECTOR_TEMPERATURE_SPREAD, OFFLINE_SHARE, STRUCTURE_TEMPERATURE, meanGlowRadiance } from './thermal';
 
 type RGB = [number, number, number];
 
 /**
- * A surface class of the inner face: specular (F0) over a Lambert base. Rough finishes use a GGX
- * lobe of `roughness`; mirror finishes set `sigma`, the 1σ spread of their facet normals (figure
- * and set errors), whose lobe is Gaussian — short-tailed, unlike GGX, which matters under a star
- * 90° across.
+ * A surface class of the inner face: specular (F0) over a Lambert base, plus its thermal glow.
+ * Rough finishes use a GGX lobe of `roughness`; mirror finishes set `sigma`, the 1σ spread of
+ * their facet normals (figure and set errors), whose lobe is Gaussian — short-tailed, unlike GGX,
+ * which matters under a star 90° across.
  */
 export interface SurfaceClass {
   f0: RGB;
   albedo: RGB;
   roughness: number;
   sigma?: number;
+  /** Thermal emission (scene radiance, isotropic). */
+  emission?: RGB;
 }
 
 /** Micro-roughness of the polished plating as a normal spread (≈ 0.25°). */
 export const MIRROR_MICRO_SIGMA = 0.0045;
 
-/**
- * The shell is black glossy metal: a collector that absorbs the starlight it harvests, finished
- * polished. A black-chrome-like metal reflects ~13 % at normal incidence, rising toward 1 at grazing
- * (Fresnel), and scatters almost nothing diffusely — so it is dark except where it mirrors something
- * bright: the star near the limb, receivers, the bright structure opposite, and at grazing angles.
- */
-export const BLACK_CHROME: RGB = [0.13, 0.13, 0.135];
-/** Its diffuse residue (a black absorber under the polish). */
-export const PLATE_DIFFUSE: RGB = [0.003, 0.003, 0.0032];
-/** Black structural metal of girders and hubs: slightly brighter F0, slightly less polished. */
-export const BLACK_STEEL: RGB = [0.16, 0.16, 0.165];
-export const STEEL_DIFFUSE: RGB = [0.004, 0.004, 0.0042];
+const collectorGlow = meanGlowRadiance(COLLECTOR_TEMPERATURE, COLLECTOR_TEMPERATURE_SPREAD).map((v) => v * (1 - OFFLINE_SHARE)) as RGB;
 
 /**
  * Surface classes and their area shares of the inner face as seen from anywhere (shares from
- * tools/coverage.mjs for the layout in layout.ts). Mirror plating is
- * micro-smooth; its spread σ here combines module set errors (~1.1°), tile set errors (~1.7°
- * passive, ~4.6° for actively trimmed heliostat tiles), each tile's shallow dome and its mirrors'
- * fine alignment (~0.2°) (plating.ts, resolved per tile and per pixel in the shader).
+ * tools/coverage.mjs for the layout in layout.ts; materials.ts, thermal.ts). Collector plating's
+ * spread σ combines module set errors (~1.1°), tile set errors (~1.7°) and each tile's shallow dome
+ * (plating.ts, resolved per tile and per pixel in the shader).
  */
 export const SURFACES = {
-  polished: { area: 0.26, cls: { f0: BLACK_CHROME, albedo: PLATE_DIFFUSE, roughness: 0.08, sigma: 0.038 } },
-  heliostat: { area: 0.12, cls: { f0: BLACK_CHROME, albedo: PLATE_DIFFUSE, roughness: 0.08, sigma: 0.083 } },
-  satin: { area: 0, cls: { f0: BLACK_CHROME, albedo: [0, 0, 0], roughness: 0.24 } },
-  aged: { area: 0, cls: { f0: [0.8, 0.8, 0.79], albedo: [0.06, 0.06, 0.06], roughness: 0.55 } },
-  pv: { area: 0.08, cls: { f0: [0.04, 0.04, 0.042], albedo: [0.006, 0.007, 0.009], roughness: 0.08 } },
-  structure: { area: 0.05, cls: { f0: BLACK_STEEL, albedo: STEEL_DIFFUSE, roughness: 0.15, sigma: 0.05 } },
-  veil: { area: 0.06, cls: { f0: BLACK_CHROME, albedo: PLATE_DIFFUSE, roughness: 0.08, sigma: 0.038 } },
+  collector: { area: 0.34, cls: { f0: COLLECTOR_F0, albedo: COLLECTOR_DIFFUSE, roughness: 0.08, sigma: 0.045, emission: collectorGlow } },
+  satin: { area: 0.1, cls: { f0: COLLECTOR_F0, albedo: COLLECTOR_DIFFUSE, roughness: 0.32, emission: collectorGlow } },
+  structure: { area: 0.07, cls: { f0: STRUCTURE_F0, albedo: STRUCTURE_DIFFUSE, roughness: 0.18, sigma: 0.05, emission: meanGlowRadiance(STRUCTURE_TEMPERATURE, 0.03) } },
+  veil: { area: 0.06, cls: { f0: VEIL_F0, albedo: [0.002, 0.002, 0.002], roughness: 0.05, sigma: 0.02 } },
   open: { area: 0.43, cls: null },
 } as const satisfies Record<string, { area: number; cls: SurfaceClass | null }>;
 
@@ -232,7 +222,7 @@ function classRadiance(cls: SurfaceClass, eps: number, inc: Incoming, smp: Sampl
     const cz = Math.sqrt(Math.max(0, 1 - smp.u[k]));
     for (let c = 0; c < 3; c++) dif[c] += incoming(inc, cz, c);
   }
-  for (let c = 0; c < 3; c++) out[c] = acc[c] / smp.n + (cls.albedo[c] * dif[c]) / smp.n;
+  for (let c = 0; c < 3; c++) out[c] = acc[c] / smp.n + (cls.albedo[c] * dif[c]) / smp.n + (cls.emission?.[c] ?? 0);
 }
 
 export interface EnclosureResult {

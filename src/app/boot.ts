@@ -67,7 +67,7 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
 
   console.info(`[Dyson] boot: ${fatal.stage} took ${(performance.now() - stageStart).toFixed(0)} ms`);
   fatal.stage = 'running';
-  game.start();
+  if (!debug.manual) game.start();
   if (debug.autostart) entry.hide();
   else entry.showReady(() => game.enter());
   (window as unknown as { __dyson?: unknown }).__dyson = { game, world, atmosphere, ready: true };

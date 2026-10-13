@@ -2,10 +2,11 @@
  * Camera exposure and colour: a photograph taken standing on the Girdle.
  *
  * The exposure is set from the key light, the star: its disc mean lands STAR_KEY on the tone curve's
- * input (~4.5 stops over mid-grey), blinding white with its texture just held by the long shoulder
- * (tsl/toneMap.ts). Everything else falls where its radiance puts it: the shell is black glossy
- * metal, so it stays dark except where it mirrors something bright. Metering on the shell instead
- * would lift black metal to grey. The light never changes, so the exposure is fixed — no pumping.
+ * input (~3.8 stops over mid-grey), white-hot with its granulation, limb darkening and spots held by
+ * the long shoulder (tsl/toneMap.ts). Everything else falls where its radiance puts it: the shell
+ * is dark warm metal, so it stays dark except where it mirrors something bright or glows with heat.
+ * Metering on the shell instead would lift dark metal to grey. The light never changes, so the
+ * exposure is fixed — no pumping.
  *
  * White balance is daylight: the star's own ~5,800 K light is white. The Veil is spectrally neutral
  * (a broadband attenuator), so nothing tints the world but the media it is seen through.

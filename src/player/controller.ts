@@ -53,6 +53,13 @@ export class PlayerController {
     this.apply(0);
   }
 
+  /** Sets the view direction directly (debug/review tooling). */
+  setLook(yaw: number, pitch: number): void {
+    this.yaw = yaw;
+    this.pitch = pitch;
+    this.apply(0);
+  }
+
   update(dt: number): void {
     const [dx, dy] = this.input.consumeLook();
     const k = LOOK_RAD_PER_PX * this.sensitivity * (this.camera.fov / 60);

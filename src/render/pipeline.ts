@@ -120,8 +120,10 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
 
   // --- Temporal AA ----------------------------------------------------------------------------
   // TAA resolves in a compressed space (x/(1+x) of exposed luminance) and the result is expanded
-  // again: thin lines brighter than the star (receivers, glints) otherwise dominate the history
-  // blend and the neighbourhood clamp, and flicker as sub-pixel geometry moves under the jitter.
+  // again, so the few sub-pixel highlights that remain (glints, the star seen in tilted tiles) do
+  // not dominate the history blend. Nothing on the structure emits above the star's radiance
+  // (tests/thermal.test.ts): sub-pixel super-white lines flickered under camera motion, when
+  // TRAA tightens its variance clip, and their glare pumped with them.
   const aaPass = traa(lit, depthTex, velocityTex, cam);
   const hdrTex = (aaPass as unknown as { getTextureNode(): TexNode }).getTextureNode();
   const hdr = { sample: (uv: Node<'vec2'>) => vec4(taaDecode(hdrTex.sample(uv).rgb), 1.0), get rgb() { return taaDecode(hdrTex.rgb); } };

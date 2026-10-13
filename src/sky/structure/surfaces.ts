@@ -1,18 +1,19 @@
 /**
- * Surfaces of the far structure: what each part is made of and how it is laid out. Lighting is in
- * shading.ts; the light transport these finishes take part in is solved in enclosure.ts.
+ * Surfaces of the far structure: what each part is made of, how it is laid out, and how hot it
+ * runs. Lighting is in shading.ts; the light transport these finishes take part in is solved in
+ * enclosure.ts; the materials are in materials.ts and the heat glow in thermal.ts.
  *
- *  - Collector panels: fields of aluminium mirror plating (plating.ts) — polished, satin and aged
- *    tiles — with clustered photovoltaic modules (dark glass). The mirrors are what make the shell
- *    a mosaic: each tile reflects its own piece of the enclosure, star near the limb, dark chains of
- *    reflections lower down.
- *  - Frames, rings, collars, hubs and the band's rims: brushed structural-steel girder decks with a
- *    recessed spine channel, chamfered edges and receiver lines; hub drums under a white ceramic
- *    thermal coating.
- *  - Receivers: absorber tubes at the focus of trough concentrators along every frame edge and hub
- *    rim. Concentrated starlight makes them several times brighter than the star's disc: the only
- *    "lights" that can show in this daylight (a lamp would be invisible).
- *  - The band (the Veil's top): mirror panes, rejecting the star's heat by reflection.
+ *  - Collector panels: plating (plating.ts) of a warm refractory alloy — polished and satin tiles,
+ *    a few offline — over ribbed bays (relief.ts). The metal mirrors its own piece of the enclosure
+ *    (the mosaic, brightest toward the star) and glows dark bronze with heat. The glow carries the
+ *    detail: hot tile centres, cooled seams, coolant warming across each facet, regional loads.
+ *  - Headers: the hottest coolant runs along each panel's perimeter and both edges of every girder
+ *    and hub rim — continuous orange-gold lines (the logo's lines), real in width, a few percent of
+ *    the star's radiance at most, so they never saturate, bloom or flicker.
+ *  - Frames, rings, collars, hubs and the band's rims: the alloy as structural girder decks with a
+ *    recessed spine channel, chamfered edges and sections of collector plating; it runs cooler than
+ *    the collectors, so the frames read dark.
+ *  - The band (the Veil's top): mirror panes, rejecting the light.
  *
  * Seen from 30,000–1,400,000 km, one pixel spans tens to thousands of km; every feature is
  * footprint-filtered to its mean before it can alias.
@@ -22,8 +23,9 @@ import type { Node } from 'three/webgpu';
 import { hash33, valueNoise3 } from '../../render/tsl/noise';
 import { STRUCTURE } from './layout';
 import { MAT, panelField, type StructureHit } from './trace';
-import { plating, gridLines, resolved, eastAt, northAt, axisFootprint, type PlatingSpec } from './plating';
-import { BLACK_CHROME, PLATE_DIFFUSE, STEEL_DIFFUSE, BLACK_STEEL, SURFACES } from './enclosure';
+import { plating, gridLines, resolved, eastAt, northAt, axisFootprint, type PlatingSpec, type PlatingSample } from './plating';
+import { COLLECTOR_DIFFUSE, COLLECTOR_F0, STRUCTURE_DIFFUSE, STRUCTURE_F0, VEIL_F0 } from './materials';
+import { COLLECTOR_TEMPERATURE, HEADER_TEMPERATURE, OFFLINE_SHARE, OFFLINE_TEMPERATURE, STRUCTURE_TEMPERATURE, glowNode } from './thermal';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -32,35 +34,21 @@ type V4 = Node<'vec4'>;
 
 /**
  * The finishes a pixel can mix when its tiles are unresolved (shading.ts evaluates each with the
- * prefiltered enclosure): passive polished aluminium, actively trimmed (heliostat) polished
- * aluminium, photovoltaic cell glass (dark, single tiles among the mirrors), brushed structural
- * steel. `tilt` is each finish's normal spread.
+ * prefiltered enclosure): polished collector, satin collector, offline collector (same metal, cold),
+ * structural alloy. `tilt` is each finish's normal spread; `mirror` selects the Gaussian facet lobe.
  */
 export const FINISHES = [
-  { f0: BLACK_CHROME, roughness: 0.08, albedo: PLATE_DIFFUSE, tilt: 0.03, mirror: true },
-  { f0: BLACK_CHROME, roughness: 0.08, albedo: PLATE_DIFFUSE, tilt: 0.08, mirror: true },
-  { f0: SURFACES.pv.cls.f0, roughness: SURFACES.pv.cls.roughness, albedo: SURFACES.pv.cls.albedo, tilt: 0.006, mirror: true },
-  { f0: BLACK_STEEL, roughness: 0.15, albedo: STEEL_DIFFUSE, tilt: 0.05, mirror: true },
+  { f0: COLLECTOR_F0, roughness: 0.08, albedo: COLLECTOR_DIFFUSE, tilt: 0.03, mirror: true },
+  { f0: COLLECTOR_F0, roughness: 0.32, albedo: COLLECTOR_DIFFUSE, tilt: 0.05, mirror: false },
+  { f0: COLLECTOR_F0, roughness: 0.08, albedo: COLLECTOR_DIFFUSE, tilt: 0.04, mirror: true },
+  { f0: STRUCTURE_F0, roughness: 0.18, albedo: STRUCTURE_DIFFUSE, tilt: 0.05, mirror: true },
 ] as const;
 
-/** Share of each finish among the tiles of a mirror field and of a structural deck. */
-const MIRROR_FIELD = vec4(0.72, 0.28, 0.0, 0.0);
-/** Collector regions dense in heliostats, and in cell glass (see the panel block). */
-const MODULE_HELIO = vec4(0.35, 0.65, 0.0, 0.0);
-const MODULE_CELL = vec4(0.45, 0.1, 0.45, 0.0);
-/** Girder deck sections: mirror-plated and dark radiator sections among the steel. */
-const DECK_MIRROR = vec4(0.55, 0.2, 0.05, 0.2);
-const DECK_RADIATOR = vec4(0.0, 0.0, 0.85, 0.15);
-const STRUCTURAL_DECK = vec4(0.0, 0.0, 0.08, 0.92);
-
-/**
- * Concentrated-light receivers fed by the heliostat fields: radiance relative to the star's disc
- * mean, C·ρ/2 with concentration C ≈ 300 and a selective absorber's visible reflectance ρ ≈ 0.08 —
- * far brighter than the star itself, as real solar-tower receivers are.
- */
-export const RECEIVER_RADIANCE = 12;
-/** A selective absorber reflects more red than blue, and the hot receiver adds a little glow. */
-export const RECEIVER_TINT = [1.18, 0.98, 0.8] as const;
+/** Shares (polished, satin, offline, structural) among the tiles of each kind of field. */
+const COLLECTOR_FIELD = vec4(0.72 - OFFLINE_SHARE, 0.28, OFFLINE_SHARE, 0.0);
+const SATIN_FIELD = vec4(0.3 - OFFLINE_SHARE, 0.7, OFFLINE_SHARE, 0.0);
+const DECK_COLLECTOR = vec4(0.5, 0.28, 0.02, 0.2);
+const STRUCTURAL_DECK = vec4(0.0, 0.0, 0.0, 1.0);
 
 export interface SurfaceSample {
   /** The pixel's own finish (a resolved tile). */
@@ -79,26 +67,28 @@ export interface SurfaceSample {
   mixKeep: F;
   /** 1 for a mirror finish (Gaussian facet lobe), 0 for a rough one (GGX). */
   mirror: F;
-  /** Rogue mirror under the pixel (plating.ts): normal and area weight. */
+  /** Rogue facet under the pixel (plating.ts): normal and area weight. */
   rogueNormal: V3;
   rogueWeight: F;
-  /** Emitted/concentrated radiance relative to the star's disc mean. */
-  emission: F;
+  /** Share of the star's cap the surface sees (relief occlusion). */
+  occlusion: F;
+  /** Thermal emission (scene radiance), footprint-filtered. */
+  emission: V3;
 }
 
-const MIRROR_PLATING: PlatingSpec = {
+const COLLECTOR_PLATING: PlatingSpec = {
   splitUp: 2,
   splitChance: [0.85, 0.7, 0.35],
   tileSplit: [0.95, 0.8, 0.65, 0.5],
   mirrors: 8,
   mirrorSigma: 0.004,
-  rogueShare: 0.002,
+  rogueShare: 0.001,
   rogueTilt: 0.7,
   pillow: 0.02,
   moduleSigma: 0.02,
   tileSigma: 0.03,
-  activeShare: 0.25,
-  activeSigma: 0.08,
+  activeShare: 0.28,
+  activeSigma: 0.07,
   tileSeam: 0.04,
   mullion: 0.025,
 };
@@ -119,6 +109,14 @@ const DECK_PLATING: PlatingSpec = {
   tileSeam: 0.03,
   mullion: 0.04,
 };
+
+/**
+ * Header lines: half-width (shell units, ≈ 400–500 km) and their offset in from the outline. The
+ * headers carry the hottest coolant; their temperature drifts slowly along their length.
+ */
+const PANEL_HEADER = { offset: 0.0026, halfWidth: 0.00055 };
+const GIRDER_HEADER = { at: 0.86, halfWidth: 0.0006 };
+const HUB_HEADER = { outer: 0.9, inner: 0.2, halfWidth: 0.00055 };
 
 /** Coverage of a line of half-width hw at signed distance x, filtered by the pixel footprint. */
 export function lineCoverage(x: F, hw: F | number, footprint: F): F {
@@ -141,27 +139,9 @@ function fpAlong(fp: Footprint, g: V3): F {
 }
 
 /**
- * Receiver line: the absorbers each heliostat field concentrates onto. They are installations
- * hundreds to thousands of km long, so they never read as a row of lamps: one continuous luminous
- * line whose strength drifts (fed by fields in different states of tracking) over two octaves of
- * `scale` (arc units) with no period. Unresolved
- * stretches fade to their mean. `fpAcross`/`fpAlongLine` are the coordinates' footprints. Returns
- * radiance relative to the star's disc mean.
- */
-function receiver(across: F, hw: number, along: F, scale: number, fpAcross: F, fpAlongLine: F, seed: F): F {
-  const cover = lineCoverage(across, hw, fpAcross);
-  const n1 = valueNoise3(vec3(along.div(scale), seed, 1.7));
-  const n2 = valueNoise3(vec3(along.div(scale * 0.27), seed.add(5.3), 3.1));
-  // Continuous: strength drifts along the line, never switching off like a row of lamps.
-  const stretch = n1.mul(n1).mul(1.6).add(0.15).mul(n2.mul(0.6).add(0.7));
-  const r = resolved(float(scale * 0.27), fpAlongLine);
-  const lit = mix(float(0.75), stretch, r);
-  return cover.mul(lit).mul(RECEIVER_RADIANCE);
-}
-
-/**
- * Picks a tile's finish from its hash given the field's shares (polished, heliostat, satin,
- * structural). The heliostat interval comes first so it matches plating.ts's active tiles.
+ * Picks a tile's finish from its hash given the field's shares (polished, satin, offline,
+ * structural). The satin interval comes first so it coincides with plating.ts's actively trimmed
+ * tiles (their larger set errors).
  */
 function pickFinish(h: F, w: V4): F {
   const c1 = w.y;
@@ -171,23 +151,47 @@ function pickFinish(h: F, w: V4): F {
 }
 
 function finishF0(i: F): V3 {
-  return select(i.lessThan(1.5), vec3(...BLACK_CHROME), select(i.lessThan(2.5), vec3(...FINISHES[2].f0), vec3(...BLACK_STEEL)));
+  return select(i.lessThan(2.5), vec3(...COLLECTOR_F0), vec3(...STRUCTURE_F0));
 }
 
 function finishRoughness(i: F): F {
-  return select(i.lessThan(1.5), float(FINISHES[0].roughness), select(i.lessThan(2.5), float(FINISHES[2].roughness), float(FINISHES[3].roughness)));
+  return select(i.lessThan(0.5), float(FINISHES[0].roughness), select(i.lessThan(1.5), float(FINISHES[1].roughness), select(i.lessThan(2.5), float(FINISHES[2].roughness), float(FINISHES[3].roughness))));
 }
 
 function finishAlbedo(i: F): V3 {
-  return select(i.lessThan(1.5), vec3(...PLATE_DIFFUSE), select(i.lessThan(2.5), vec3(...FINISHES[2].albedo), vec3(...FINISHES[3].albedo)));
+  return select(i.lessThan(2.5), vec3(...COLLECTOR_DIFFUSE), vec3(...STRUCTURE_DIFFUSE));
+}
+
+/** 1 for mirror-lobed finishes, 0 for the satin (GGX) finish. */
+function finishMirror(i: F): F {
+  return select(i.greaterThan(0.5).and(i.lessThan(1.5)), float(0), float(1));
 }
 
 /**
- * Side faces of girders and hub drums, tens of thousands of km tall: black glossy metal walls with a
- * patchwork of panels at a power-law spread of sizes (two irregular quadtree levels), continuous
- * tonal variation at several scales, and recessed gallery decks whose heights change from one
- * irregular section of the wall to the next. No joints at a single spacing and no countable rhythm:
- * those read as masonry. `along`/`depth` in shell units, `height` 0..1 up the face.
+ * Temperature of a plated surface (K). `base` is the field's working temperature; tile-scale
+ * variation (set per tile, a dome hotter at the centre, cooled seams) fades out as tiles fall below a
+ * pixel, facet-scale coolant gradients as facets do. Offline tiles are cold.
+ */
+function platedTemperature(p: PlatingSample, base: F, fin: F, facetResolved: F, occlusion: F): F {
+  const rT = p.tileResolved;
+  const tile = p.tileHash.z.sub(0.5).mul(0.05);
+  const r2 = dot(p.tileLocal, p.tileLocal).mul(0.5).min(1.0);
+  const dome = float(0.5).sub(r2).mul(0.05);
+  // Coolant enters each facet on one side and warms across it (direction set per facet).
+  const dir = select(p.moduleHash.y.lessThan(0.5), p.facetLocal.x, p.facetLocal.y);
+  const flow = dir.sub(0.5).mul(0.05).mul(select(p.moduleHash.x.lessThan(0.5), float(1), float(-1)));
+  // Shaded bay floors near rib walls absorb less and run cooler.
+  const shade = occlusion.sub(1).mul(0.08);
+  const rel = float(1).add(tile.add(dome).mul(rT)).add(flow.mul(facetResolved)).add(shade).sub(p.seam.mul(0.06)).sub(p.mullion.mul(0.05));
+  return select(fin.greaterThan(1.5).and(fin.lessThan(2.5)), float(OFFLINE_TEMPERATURE), base.mul(rel));
+}
+
+/**
+ * Side faces of girders and hub drums, tens of thousands of km tall: alloy walls with a patchwork of
+ * panels at a power-law spread of sizes (two irregular quadtree levels), continuous tonal variation
+ * at several scales, and recessed gallery decks whose heights change from one irregular section of
+ * the wall to the next. No joints at a single spacing and no countable rhythm: those read as
+ * masonry. `along`/`depth` in shell units, `height` 0..1 up the face.
  */
 function sideFace(out: SurfaceSample, along: F, height: F, depth: F, fpAlongFace: F, fpUp: F, seed: F): void {
   const fpH = fpUp.div(depth);
@@ -196,7 +200,6 @@ function sideFace(out: SurfaceSample, along: F, height: F, depth: F, fpAlongFace
   const g1 = sec.x.mul(0.3).add(0.25);
   const g2 = g1.add(sec.y.mul(0.3).add(0.2));
   const deck = max(lineCoverage(height.sub(g1), 0.02, fpH), lineCoverage(height.sub(g2), 0.014, fpH).mul(step(0.35, sec.z)));
-  // Panel patchwork: cells of 0.008 split once or twice, each with its own tone.
   const p = vec2(along, height.mul(depth));
   const c0 = hash33(vec3(floor(p.div(0.008)), seed.add(80.0)));
   const c1 = hash33(vec3(floor(p.div(0.004)), seed.add(81.0)));
@@ -206,10 +209,13 @@ function sideFace(out: SurfaceSample, along: F, height: F, depth: F, fpAlongFace
   const panelTone = mix(float(0.5), cell.y, fade);
   const broad = valueNoise3(vec3(along.div(0.05), height.mul(2.0), seed)).mul(0.6).add(valueNoise3(vec3(along.div(0.012), height.mul(6.0), seed.add(2.0))).mul(0.4));
   const tone = float(0.5).add(broad.mul(0.3)).add(panelTone.mul(0.16)).add(sec.z.mul(0.1));
-  out.f0.assign(vec3(...BLACK_STEEL).mul(tone.mul(0.8).add(0.6)).mul(float(1).sub(deck.mul(0.6))));
-  out.roughness.assign(mix(float(0.12).add(cell.z.mul(0.1)), float(0.4), deck));
-  out.albedo.assign(vec3(...STEEL_DIFFUSE).mul(float(1).sub(deck.mul(0.5))));
+  out.f0.assign(vec3(...STRUCTURE_F0).mul(tone.mul(0.7).add(0.65)).mul(float(1).sub(deck.mul(0.5))));
+  out.roughness.assign(mix(float(0.14).add(cell.z.mul(0.12)), float(0.45), deck));
+  out.albedo.assign(vec3(...STRUCTURE_DIFFUSE).mul(float(1).sub(deck.mul(0.5))));
   out.mixWeights.assign(vec4(0, 0, 0, 1));
+  // Walls face sideways (they see half the star) and only conduct: they run well below the decks.
+  const T = float(STRUCTURE_TEMPERATURE * 0.86).mul(float(1).add(broad.sub(0.5).mul(0.04)).add(panelTone.sub(0.5).mul(0.02).mul(fade)));
+  out.emission.assign(glowNode(T).mul(float(1).sub(deck.mul(0.3))));
 }
 
 export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): SurfaceSample {
@@ -217,9 +223,9 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
   const q = pos.sub(vec3(0, 1, 0));
   const qn = normalize(q).toVar();
   const out: SurfaceSample = {
-    f0: vec3(...BLACK_STEEL).toVar(),
+    f0: vec3(...STRUCTURE_F0).toVar(),
     roughness: float(0.36).toVar(),
-    albedo: vec3(...STEEL_DIFFUSE).toVar(),
+    albedo: vec3(...STRUCTURE_DIFFUSE).toVar(),
     normal: hit.normal.toVar(),
     spread: float(0).toVar(),
     mix: float(0).toVar(),
@@ -230,15 +236,16 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
     mirror: float(0).toVar(),
     rogueNormal: hit.normal.toVar(),
     rogueWeight: float(0).toVar(),
-    emission: float(0).toVar(),
+    occlusion: hit.occlusion.toVar(),
+    emission: vec3(0).toVar(),
   };
 
-  /** Applies a plating sample with a field of finishes. */
-  const applyPlating = (p: ReturnType<typeof plating>, field: V4, seamDark: number) => {
-    const fin = pickFinish(p.blockHash.z, field);
+  /** Applies a plating sample with a field of finishes; returns the picked finish index. */
+  const applyPlating = (p: PlatingSample, field: V4, seamDark: number): F => {
+    const fin = pickFinish(p.blockHash.z, field).toVar();
     out.f0.assign(finishF0(fin).mul(float(1).sub(p.seam.mul(seamDark))));
     out.roughness.assign(mix(finishRoughness(fin).add(p.tileHash.x.sub(0.5).mul(0.04)), float(0.7), p.seam));
-    // Coated tiles vary batch to batch in tone.
+    // Batches vary in tone.
     out.albedo.assign(finishAlbedo(fin).mul(p.tileHash.y.mul(0.3).add(0.82)).mul(float(1).sub(p.seam)));
     out.normal.assign(p.normal);
     out.spread.assign(p.spread);
@@ -246,24 +253,35 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
     // The finish mix of the N tiles under the pixel varies binomially about the field's shares.
     const n = max(p.sampleCount, 1.0);
     const dev = (w: F, h: F) => h.sub(0.5).mul(Math.sqrt(12)).mul(sqrt(w.mul(w.oneMinus()).div(n)));
-    const helio = clamp(field.y.add(dev(field.y, p.sampleHash.y)), 0, 1);
-    const cell = clamp(field.z.add(dev(field.z, p.sampleHash.z)), 0, float(1).sub(helio));
-    const rest = float(1).sub(helio).sub(cell);
+    const satin = clamp(field.y.add(dev(field.y, p.sampleHash.y)), 0, 1);
+    const cold = clamp(field.z.add(dev(field.z, p.sampleHash.z)), 0, float(1).sub(satin));
+    const rest = float(1).sub(satin).sub(cold);
     const restShare = field.x.add(field.w).max(1e-4);
-    out.mixWeights.assign(vec4(rest.mul(field.x).div(restShare), helio, cell, rest.mul(field.w).div(restShare)));
+    out.mixWeights.assign(vec4(rest.mul(field.x).div(restShare), satin, cold, rest.mul(field.w).div(restShare)));
     out.mixNormal.assign(p.sampleNormal);
     out.mixSpread.assign(p.pillowSigma);
     out.mixKeep.assign(sqrt(p.sampleKeep));
-    out.mirror.assign(float(1).sub(p.seam));
+    out.mirror.assign(finishMirror(fin).mul(float(1).sub(p.seam)));
     out.rogueNormal.assign(p.rogueNormal);
-    out.rogueWeight.assign(p.rogueWeight.mul(float(1).sub(p.seam)).mul(select(fin.lessThan(1.5), float(1), float(0))));
-    // Brushed steel: its brushing spread rides on the tile's own.
+    out.rogueWeight.assign(p.rogueWeight.mul(float(1).sub(p.seam)).mul(select(fin.lessThan(0.5), float(1), float(0))));
+    // Structural tiles: their brushing spread rides on the tile's own.
     out.spread.assign(select(fin.greaterThan(2.5), sqrt(p.spread.mul(p.spread).add(FINISHES[3].tilt * FINISHES[3].tilt)), p.spread));
+    return fin;
+  };
+
+  /**
+   * Heat glow of a plated surface: the pixel's own tile where resolved, blending to the mean of the
+   * sample under the pixel (its share of cold tiles, and the convexity of glow in temperature).
+   */
+  const applyGlow = (p: PlatingSample, fin: F, base: F, facetResolved: F) => {
+    const own = glowNode(platedTemperature(p, base, fin, facetResolved, out.occlusion));
+    const mean = glowNode(base.mul(float(1).sub(out.occlusion.oneMinus().mul(0.04)))).mul(float(1.04).mul(out.mixWeights.z.oneMinus()));
+    out.emission.assign(mix(own, mean, p.tileResolved.oneMinus()));
   };
 
   If(hit.mat.equal(MAT.frame), () => {
-    // Box girders: plated top deck with a recessed spine channel, receiver lines near both edges
-    // and chamfered edges; plated side faces.
+    // Box girders: plated top deck with a recessed spine channel, hot headers near both edges and
+    // chamfered edges; plated side faces.
     // Every member is a slab of the plane (axis, offset c) ∩ the layer: its centreline is a circle
     // of radius √(1 − c²); arc lengths across and along follow from that, for any member.
     const idx = hit.aux.z;
@@ -291,44 +309,51 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       const hb = hash33(vec3(big.id, idx, 61.0));
       const hs = hash33(vec3(small.id, idx, 67.0));
       const kind = hb.x.mul(0.7).add(hs.x.mul(0.3));
-      const field = select(kind.lessThan(0.42), STRUCTURAL_DECK, select(kind.lessThan(0.66), DECK_MIRROR, select(kind.lessThan(0.82), DECK_RADIATOR, STRUCTURAL_DECK)));
+      const collecting = step(0.42, kind).mul(step(kind, 0.72));
+      const field = select(collecting.greaterThan(0.5), DECK_COLLECTOR, STRUCTURAL_DECK);
       const p = plating(vec2(along, across) as unknown as V2, vec2(0.03, 0.03) as unknown as V2, alongDir, acrossDir, hit.normal, vec2(fA, fX) as unknown as V2, DECK_PLATING, idx.add(100.0));
-      applyPlating(p, field, 0.7);
+      const fin = applyPlating(p, field, 0.7);
       const tone = hs.y.mul(0.3).add(0.82);
       out.f0.mulAssign(tone);
       out.albedo.mulAssign(tone);
-      // Section joints and, in some sections, transverse cross-girders.
+      // Section joints and, in some sections, transverse cross-girders (spacing set per section).
       const joints = max(lineCoverage(big.d, 0.0005, fA), lineCoverage(small.d, 0.00018, fA).mul(0.7));
-      const ribbed = step(hs.z, 0.3).mul(gridLines(along, float(0.0026), float(0.0005), fA));
+      const ribbed = step(hs.z, 0.3).mul(gridLines(along, hs.y.mul(0.002).add(0.0022), float(0.0005), fA));
       const dark = max(joints, ribbed.mul(0.8));
-      out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL).mul(0.25), dark));
+      out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.3), dark));
       out.albedo.assign(mix(out.albedo, vec3(0.01), dark));
       out.mix.mulAssign(dark.oneMinus());
       out.mirror.mulAssign(dark.oneMinus());
       // Spine channel: a recessed, darker trough along the centreline, its width set per section.
       const channel = lineCoverage(u, hb.y.mul(0.1).add(0.04), fX.div(hw));
-      out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL).mul(0.3), channel));
+      out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.35), channel));
       out.roughness.assign(mix(out.roughness, float(0.55), channel));
       out.mirror.mulAssign(channel.oneMinus());
       out.rogueWeight.mulAssign(channel.oneMinus());
-      // Chamfered edges catch the star: their normals lean outward across the girder.
-      const chamfer = smoothstep(0.955, 0.985, u);
+      // Chamfered edges catch the star where they are wide enough to resolve.
+      const chamferRes = resolved(hw.mul(0.03), fX);
+      const chamfer = smoothstep(0.955, 0.985, u).mul(chamferRes);
       out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.add(acrossDir.mul(select(across.greaterThan(0.0), float(1), float(-1))))), chamfer.mul(0.8))));
       out.mix.mulAssign(chamfer.oneMinus());
-      // Receiver lines near both edges.
-      const rx = abs(across).sub(hw.mul(0.9));
-      out.emission.assign(receiver(rx, 0.00028, along, 0.012, fX, fA, idx.add(across.greaterThan(0.0).select(float(0), float(31.0)))).mul(step(0.3, hb.z)).mul(joints.oneMinus()));
+      // Heat: collecting sections run at collector temperature, structural ones cooler; joints and
+      // the channel cooler still. Headers run hot along both edges.
+      const base = mix(float(STRUCTURE_TEMPERATURE), float(COLLECTOR_TEMPERATURE), collecting).mul(hs.x.sub(0.5).mul(0.03).add(1));
+      applyGlow(p, fin, base, float(1));
+      out.emission.mulAssign(float(1).sub(max(dark.mul(0.5), channel.mul(0.6))));
+      const drift = valueNoise3(vec3(along.div(0.05), idx, 3.0)).sub(0.5).mul(0.05).add(1);
+      const header = lineCoverage(abs(across).sub(hw.mul(GIRDER_HEADER.at)), GIRDER_HEADER.halfWidth, fX).mul(joints.mul(0.6).oneMinus());
+      out.emission.assign(mix(out.emission, glowNode(float(HEADER_TEMPERATURE).mul(drift)), header));
     }).Else(() => {
       const height = float(1).sub(length(q)).div(depth);
       sideFace(out, along, height, depth, fpAlong(fpc, alongDir), fpAlong(fpc, qn.negate()), idx);
       // The rounded top edge of the girder.
       const edge = smoothstep(0.96, 0.995, height);
-      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7))));
+      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7).mul(resolved(depth.mul(0.035), fpAlong(fpc, qn.negate()))))));
     });
   });
 
   If(hit.mat.equal(MAT.hub), () => {
-    // Hubs: plated concentric terraces, radial spokes, a dark central shaft, receiver rings.
+    // Hubs: plated concentric terraces, radial spokes, a dark central shaft, hot header rings.
     const idx = hit.aux.z;
     const beta = hit.size.x;
     const r = hit.aux.x;
@@ -344,27 +369,34 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       const fT = fpAlong(fpc, tangent);
       const fR = fpAlong(fpc, radial);
       const p = plating(vec2(az.mul(rArc), rArc) as unknown as V2, vec2(beta.mul(0.16), beta.mul(0.16)) as unknown as V2, tangent, radial, hit.normal, vec2(fT, fR) as unknown as V2, DECK_PLATING, idx.add(300.0));
-      applyPlating(p, STRUCTURAL_DECK, 0.7);
+      // Terraces of irregular width (each hub its own), alternate ones carrying collector plating.
+      const rw = r.add(valueNoise3(vec3(r.mul(5.0), idx, 13.0)).sub(0.5).mul(0.09));
+      const terrace = floor(rw.div(0.16));
+      const sector = floor(az.div(Math.PI / 6).add(terrace.mul(0.37)));
+      const collecting = step(0.45, hash33(vec3(terrace, sector, idx.add(41.0))).x);
+      const fin = applyPlating(p, select(collecting.greaterThan(0.5), DECK_COLLECTOR, STRUCTURAL_DECK), 0.7);
       // Terrace steps every 0.16 of the radius: a dark riser line and a sloped lip.
-      const tr = fract(r.div(0.16));
-      const riser = lineCoverage(tr.sub(0.5).abs().sub(0.5).abs(), 0.03, fR.div(beta.mul(0.16)));
-      out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL).mul(0.25), riser));
+      const tr = fract(rw.div(0.16));
+      const riser = lineCoverage(tr.sub(0.5).abs().sub(0.5).abs(), 0.025, fR.div(beta.mul(0.16)));
+      out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.7), riser));
       out.roughness.assign(mix(out.roughness, float(0.6), riser));
       const spokes = gridLines(az.mul(rArc), rArc.mul(Math.PI / 8).max(1e-4), beta.mul(0.012), fT);
-      out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL).mul(0.45), spokes.mul(0.7)));
+      out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.45), spokes.mul(0.7)));
       const shaft = smoothstep(0.17, 0.14, r);
-      out.f0.assign(mix(out.f0, vec3(0.02), shaft));
+      out.f0.assign(mix(out.f0, vec3(0.03), shaft));
       out.albedo.assign(mix(out.albedo, vec3(0.005), shaft));
       out.mirror.mulAssign(float(1).sub(max(riser, shaft)));
       out.rogueWeight.mulAssign(float(1).sub(max(riser, shaft)));
       out.mix.mulAssign(float(1).sub(shaft));
-      const chamfer = smoothstep(0.955, 0.99, r);
+      const chamfer = smoothstep(0.955, 0.99, r).mul(resolved(beta.mul(0.035), fR));
       out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.add(radial)), chamfer.mul(0.8))));
-      // Receiver rings: the rim, the inner terrace edge and the shaft lip.
-      const along = az.mul(rArc);
-      out.emission.assign(
-        receiver(rArc.sub(beta.mul(0.93)), 0.00026, along, 0.01, fR, fT, idx).add(receiver(rArc.sub(beta.mul(0.19)), 0.00014, along, 0.006, fR, fT, idx.add(19.0)).mul(1.4)),
-      );
+      const base = mix(float(STRUCTURE_TEMPERATURE), float(COLLECTOR_TEMPERATURE), collecting);
+      applyGlow(p, fin, base, float(1));
+      out.emission.mulAssign(float(1).sub(max(riser.mul(0.5), max(shaft, spokes.mul(0.3)))));
+      // Header rings: the rim and the shaft lip, where the hub gathers the heat of its spines.
+      const ring = max(lineCoverage(rArc.sub(beta.mul(HUB_HEADER.outer)), HUB_HEADER.halfWidth, fR), lineCoverage(rArc.sub(beta.mul(HUB_HEADER.inner)), HUB_HEADER.halfWidth * 0.7, fR));
+      const drift = valueNoise3(vec3(az.mul(3.0), idx, 5.0)).sub(0.5).mul(0.04).add(1);
+      out.emission.assign(mix(out.emission, glowNode(float(HEADER_TEMPERATURE).mul(drift)), ring));
     }).Else(() => {
       const hDepth = hit.size.y;
       const height = float(1).sub(length(q)).div(hDepth);
@@ -372,14 +404,13 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       const fUp = fpAlong(fpc, qn.negate());
       sideFace(out, az.mul(beta), height, hDepth, fT, fUp, idx);
       const edge = smoothstep(0.96, 0.995, height);
-      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7))));
-      
+      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7).mul(resolved(hDepth.mul(0.035), fUp)))));
     });
   });
 
   If(hit.mat.equal(MAT.panel), () => {
-    // Collector fields: modules sized to fit each cell exactly, mullions between them; PV modules
-    // in clustered blocks.
+    // Collector fields: modules sized to fit each cell exactly, structural ribs between them
+    // (relief.ts), regions of polished and of satin plating.
     const pf = panelField(qn);
     const nu = max(floor(pf.span.x.div(S.panelModule).add(0.5)), 1.0);
     const nv = max(floor(pf.span.y.div(S.panelModule).add(0.5)), 1.0);
@@ -390,76 +421,71 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
     const seed = pf.cell.z.mul(7.0).add(pf.cell.x.mul(31.0)).add(pf.cell.y.mul(3.0));
     const fU = fpAlong(fpc, tU);
     const fV = fpAlong(fpc, tV);
-    const p = plating(a, msize, tU, tV, hit.normal, vec2(fU, fV) as unknown as V2, MIRROR_PLATING, seed);
-    // Module types follow a regional field (three octaves, from continental to district scale)
+    const p = plating(a, msize, tU, tV, hit.normal, vec2(fU, fV) as unknown as V2, COLLECTOR_PLATING, seed);
+    // Field types follow a regional field (three octaves, from continental to district scale)
     // evaluated at each division's centre, so regions are patchworks of whole divisions with
-    // ragged, division-aligned borders — fields of different installation eras, never isolated
+    // ragged, division-aligned borders — installations of different eras, never isolated
     // countable rectangles.
     const lc = p.leafCentre;
     const region = valueNoise3(vec3(lc.div(0.3), seed.add(3.0))).mul(0.5)
       .add(valueNoise3(vec3(lc.div(0.1), seed.add(4.0))).mul(0.32))
       .add(valueNoise3(vec3(lc.div(0.035), seed.add(5.0))).mul(0.18));
-    const mt = region.add(p.moduleHash.z.sub(0.5).mul(0.1));
-    const field = select(mt.lessThan(0.36), MODULE_HELIO, select(mt.lessThan(0.6), MIRROR_FIELD, select(mt.lessThan(0.66), MODULE_CELL, MIRROR_FIELD)));
-    applyPlating(p, field, 0.85);
-    // Photovoltaic regions: dark blue cell glass where the field runs high; rare service modules.
-    const pv = max(step(0.66, mt), step(p.moduleHash.z, 0.025));
-    // Regional ageing: broad tonal variation of the mirror fields at continental scales.
+    const mt = region.add(p.moduleHash.z.sub(0.5).mul(0.1)).toVar();
+    const fin = applyPlating(p, select(mt.lessThan(0.38), SATIN_FIELD, COLLECTOR_FIELD), 0.85);
+    // Rib walls and bevels (relief.ts) are matte structural faces in the bays' shade, not polished
+    // collector: a polished wall would mirror the star into a thin bright slit.
+    const wall = smoothstep(0.005, 0.04, float(1).sub(dot(hit.normal, qn.negate())));
+    out.roughness.assign(mix(out.roughness, float(0.6), wall));
+    out.f0.mulAssign(wall.mul(-0.55).add(1));
+    out.mirror.mulAssign(wall.oneMinus());
+    out.mix.mulAssign(wall.oneMinus());
+    out.rogueWeight.mulAssign(wall.oneMinus());
+    // Regional ageing: broad tonal variation at continental scales.
     const age = valueNoise3(vec3(a.div(0.5), seed.add(9.0))).mul(0.6).add(valueNoise3(vec3(a.div(0.16), seed.add(10.0))).mul(0.4));
-    out.f0.mulAssign(age.mul(0.16).add(0.9));
-    out.albedo.mulAssign(age.mul(0.9).add(0.55));
-    const pvGrid = gridLines(a.x, msize.x.div(24), msize.x.div(24).mul(0.06), fU).mul(0.6);
-    out.f0.assign(mix(out.f0, vec3(...SURFACES.pv.cls.f0).add(pvGrid.mul(0.3)), pv));
-    out.roughness.assign(mix(out.roughness, float(SURFACES.pv.cls.roughness), pv));
-    out.albedo.assign(mix(out.albedo, vec3(...SURFACES.pv.cls.albedo), pv));
-    out.normal.assign(mix(out.normal, p.facetNormal, pv));
-    out.spread.assign(mix(out.spread, float(0.004), pv));
-    out.mix.mulAssign(pv.oneMinus());
-    out.mirror.mulAssign(pv.oneMinus());
-    out.rogueWeight.mulAssign(pv.oneMinus());
-    // Mullions: structural strips between modules.
-    const mull = p.mullion.mul(smoothstep(0.0, 0.002, pf.dist));
-    out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL).mul(0.9), mull));
-    out.roughness.assign(mix(out.roughness, float(0.34), mull));
-    out.albedo.assign(mix(out.albedo, vec3(...STEEL_DIFFUSE), mull));
-    out.mirror.mulAssign(mull.oneMinus());
-    out.rogueWeight.mulAssign(mull.oneMinus());
-    out.mix.mulAssign(mull.oneMinus());
-    // The panel's border: a structural rim with a rounded outer edge.
+    out.f0.mulAssign(age.mul(0.2).add(0.88));
+    // Heat: regional load (±3 %) at continental scale, then the plated detail.
+    const facetRes = resolved(min(msize.x, msize.y).mul(0.25), max(fU, fV));
+    const base = float(COLLECTOR_TEMPERATURE).mul(mt.sub(0.5).mul(0.06).add(1));
+    applyGlow(p, fin, base, facetRes);
+    // The panel's border: a structural rim with a rounded outer edge, running cooler.
     const fG = fpAlong(fpc, pf.grad);
     const rim = float(1).sub(smoothstep(max(float(0.0016).sub(fG), 0.0008), float(0.0016), pf.dist));
-    out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL), rim));
+    out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0), rim));
     out.roughness.assign(mix(out.roughness, float(0.3), rim));
-    out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.add(pf.grad.negate().mul(0.6))), rim.mul(smoothstep(0.0009, 0.0002, pf.dist)))));
+    out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.add(pf.grad.negate().mul(0.6))), rim.mul(smoothstep(0.0009, 0.0002, pf.dist)).mul(resolved(float(0.0007), fG)))));
     out.mix.mulAssign(rim.oneMinus());
     out.mirror.mulAssign(rim.oneMinus());
     out.rogueWeight.mulAssign(rim.oneMinus());
-    // Receivers along the panel's rim: each field concentrates onto its own edge.
-    out.emission.assign(receiver(pf.dist.sub(0.0011), 0.00012, a.x.add(a.y), 0.014, fG, max(fU, fV), seed.add(800.0)).mul(0.7));
+    out.emission.assign(mix(out.emission, glowNode(float(STRUCTURE_TEMPERATURE)), rim));
+    // The perimeter header: the collected heat leaves each panel along its border.
+    const header = lineCoverage(pf.dist.sub(PANEL_HEADER.offset), PANEL_HEADER.halfWidth, fG);
+    const drift = valueNoise3(vec3(a.x.add(a.y).div(0.04), seed, 11.0)).sub(0.5).mul(0.05).add(1);
+    out.emission.assign(mix(out.emission, glowNode(float(HEADER_TEMPERATURE).mul(drift)), header));
   });
 
   If(hit.mat.equal(MAT.panelEdge), () => {
-    out.f0.assign(vec3(...BLACK_STEEL).mul(0.8));
+    out.f0.assign(vec3(...STRUCTURE_F0).mul(0.8));
     out.roughness.assign(0.45);
     out.mixWeights.assign(vec4(0, 0, 0, 1));
+    out.emission.assign(glowNode(float(STRUCTURE_TEMPERATURE * 0.88)));
   });
 
   If(hit.mat.equal(MAT.girdle), () => {
-    // The Veil's top: mirror panes on a metal grid.
+    // The Veil's top: mirror panes on a metal grid. It rejects the light; it does not glow.
     const lat = hit.aux.x;
     const lon = hit.aux.y;
     const a = vec2(lon.mul(cos(lat)), lat) as unknown as V2;
     const fE = fpAlong(fpc, eastAt(qn));
     const fN = fpAlong(fpc, northAt(qn));
-    const p = plating(a, vec2(0.042, 0.042) as unknown as V2, eastAt(qn), northAt(qn), hit.normal, vec2(fE, fN) as unknown as V2, MIRROR_PLATING, float(500.0));
-    applyPlating(p, MIRROR_FIELD, 0.85);
-    out.f0.assign(mix(out.f0, vec3(...BLACK_STEEL), p.mullion));
-    out.roughness.assign(mix(out.roughness, float(0.34), p.mullion));
+    const p = plating(a, vec2(0.042, 0.042) as unknown as V2, eastAt(qn), northAt(qn), hit.normal, vec2(fE, fN) as unknown as V2, COLLECTOR_PLATING, float(500.0));
+    applyPlating(p, vec4(1, 0, 0, 0), 0.85);
+    out.f0.assign(mix(vec3(...VEIL_F0), vec3(...STRUCTURE_F0), max(p.mullion, p.seam)));
+    out.roughness.assign(mix(float(0.05), float(0.34), p.mullion));
     out.mirror.mulAssign(p.mullion.oneMinus());
-    out.rogueWeight.mulAssign(p.mullion.oneMinus());
-    out.mix.mulAssign(p.mullion.oneMinus());
+    out.rogueWeight.assign(0);
+    out.mix.assign(0);
+    out.emission.assign(glowNode(float(STRUCTURE_TEMPERATURE)).mul(p.mullion));
   });
 
-  out.emission.assign(clamp(out.emission, 0, RECEIVER_RADIANCE * 2));
   return out;
 }

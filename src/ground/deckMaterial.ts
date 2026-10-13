@@ -3,7 +3,7 @@
  *
  * Material: dark glass-ceramic plates (albedo ≈ 0.07) with a polished, glazed top — a dielectric
  * clear coat that mirrors the sky — over recessed seams and fastener rows. Each plate lies with its
- * own few-milliradian set error, so the sky's reflection (the shell's mosaic, the receivers, the
+ * own few-milliradian set error, so the sky's reflection (the shell's mosaic, its hot header lines, the
  * horizon haze, the star near one's feet) breaks plate by plate, sharp nearby and smoothing into a
  * glossy sheen toward the horizon.
  *

@@ -16,9 +16,8 @@ type F = Node<'float'>;
 
 const REC709 = vec3(0.2126, 0.7152, 0.0722);
 
-/** Stops over mid-grey (0.18) that reach display white, the knee's display value, and the slope. */
-export const EV_MAX = 4.5;
-const KNEE = 0.6;
+/** The knee's display value and the slope of the linear segment. */
+const KNEE = 0.45;
 const GAMMA = 1.1;
 const S_KNEE = Math.log2(KNEE / 0.18) / GAMMA;
 const RATE = (KNEE * Math.LN2 * GAMMA) / (1 - KNEE);
@@ -51,6 +50,6 @@ export const hueFilmic = Fn(([color]: [V3]) => {
   const Lm = curve(L);
   const scaled = c.mul(Lm.div(L));
   // Path to white for the brightest values.
-  const whitened = mix(scaled, vec3(Lm), smoothstep(0.45, 1.0, Lm));
+  const whitened = mix(scaled, vec3(Lm), smoothstep(0.5, 1.0, Lm));
   return redistribute(redistribute(whitened, Lm), Lm);
 }).setLayout({ name: 'dyHueFilmic', type: 'vec3', inputs: [{ name: 'color', type: 'vec3' }] });

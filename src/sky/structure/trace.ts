@@ -12,6 +12,7 @@
 import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, abs, floor, smoothstep, clamp, asin, atan, cos, sin, acos, select, length, cross } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { STRUCTURE, hubAxes, isWide, meridianNormal, sphereDir, struts } from './layout';
+import { marchRelief, RELIEF } from './relief';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -43,6 +44,8 @@ export interface StructureHit {
   aux: V3;
   /** Slab plane normal (frames) or cone axis (hubs). */
   axis: V3;
+  /** Share of the star's cap the hit point sees (relief occlusion; 1 on open surfaces). */
+  occlusion: F;
   /**
    * Member size: frames (half-width in plane-offset units, depth, centre offset of the slab plane);
    * hubs (angular radius, depth, 0).
@@ -182,6 +185,9 @@ export interface PanelField {
   span: V2;
   /** Cell identity: (latitude band 0–2, hemisphere ±1, meridian sector 0–5). */
   cell: V3;
+  /** Western bound of the plated span and its width (longitude, radians). */
+  lon0: F;
+  lonSpan: F;
 }
 
 /**
@@ -231,6 +237,8 @@ export function panelField(qn: V3): PanelField {
     uv: vec2(lon.sub(bA).div(lonSpan), absLat.sub(S.panelLow).div(S.panelHigh - S.panelLow)),
     span: vec2(lonSpan.mul(cosLat), S.panelHigh - S.panelLow),
     cell: vec3(0, sgnLat, sector),
+    lon0: bA,
+    lonSpan,
   };
 }
 
@@ -250,7 +258,7 @@ function inGirdle(qn: V3): B {
  * Nearest structure hit along o + t·d (o relative to the observer, d unit). `footprint0` is the
  * angular pixel size, used only to anti-alias panel outlines.
  */
-export function traceStructure(o: V3, d: V3, footprint0: F): StructureHit {
+export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false): StructureHit {
   const S = STRUCTURE;
   const oc = o.sub(vec3(0, 1, 0)).toVar();
   const b = dot(oc, d);
@@ -264,6 +272,7 @@ export function traceStructure(o: V3, d: V3, footprint0: F): StructureHit {
     aux: vec3(0).toVar(),
     axis: vec3(0, 0, 1).toVar(),
     size: vec3(0).toVar(),
+    occlusion: float(1).toVar(),
   };
 
   // Meridian spines: three planes, each carrying two spines 180° apart (indices 0–2).
@@ -330,6 +339,25 @@ export function traceStructure(o: V3, d: V3, footprint0: F): StructureHit {
       best.mat.assign(float(MAT.panel));
       const ll = latLon(qTop);
       best.aux.assign(vec3(ll.lat, ll.lon, 0));
+      if (withRelief) {
+        // Relief: ribs and recessed bays on the module lattice (relief.ts), sized as in surfaces.ts.
+        const pf = panelField(qTop);
+        const nu = max(floor(pf.span.x.div(S.panelModule).add(0.5)), 1.0);
+        const nv = max(floor(pf.span.y.div(S.panelModule).add(0.5)), 1.0);
+        const module = vec2(pf.span.x.div(nu), pf.span.y.div(nv));
+        const cosLat = cos(ll.lat).max(0.05);
+        const seed = pf.cell.z.mul(7.0).add(pf.cell.x.mul(31.0)).add(pf.cell.y.mul(3.0));
+        // Fade with how well the ribs are resolved, and away from the panel's outline (its rim is flat).
+        const ribWidth = min(module.x, module.y).mul(RELIEF.ribHalf * 2);
+        const amp = float(1).sub(smoothstep(ribWidth.mul(0.6), ribWidth.mul(1.8), fpTop)).mul(smoothstep(0.002, 0.004, pf.dist));
+        const fr = { lon0: pf.lon0, lonSpan: pf.lonSpan, latLow: float(S.panelLow), module, cosLat, hemi: pf.cell.y, seed };
+        const rh = marchRelief(oc, d, tTop, 1 - S.panelDepth, fr, amp, qTop.negate());
+        best.t.assign(rh.t);
+        best.normal.assign(rh.normal);
+        best.occlusion.assign(rh.occlusion);
+        const lr = latLon(normalize(oc.add(d.mul(rh.t))));
+        best.aux.assign(vec3(lr.lat, lr.lon, 0));
+      }
     }).ElseIf(tExit.lessThan(best.t), () => {
       If(panelCoverage(qShell, footprint0.mul(tExit)).greaterThan(0.5), () => {
         // The ray dropped past a panel's outline and met its edge face.

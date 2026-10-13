@@ -3,12 +3,11 @@
  *
  *   below the horizon → the deck/pad (used by the environment capture and the sub-pixel strip
  *                        beyond the deck mesh), lit by the attenuated star and skylight
- *   star disc          → white-light photosphere, then the local air
- *   elsewhere          → the far structure (traced, with one traced reflection) or open space,
- *                        then the local air
- *
- * The interior of the sphere is effectively vacuum (dust sublimates at ~3,600 K at 1.4 stellar
- * radii; any plasma is far too thin to see), so the only medium is the local air band.
+ *   star disc          → white-light photosphere
+ *   elsewhere          → the far structure (traced, with relief and one traced reflection) or
+ *                        open space
+ *   then               → prominences standing off the limb, the thin interior plasma
+ *                        (sky/medium/plasma.ts) and the local air, in that order along the ray.
  *
  * Units: shell radii for geometry, scene radiance for colour (see world/radiometry.ts).
  */
@@ -24,6 +23,7 @@ import type { StarState } from './star/starState';
 import { traceStructure, shadeStructure, MAT, type ShellLight } from './structure/structure';
 import { plasmaSegment } from './medium/plasmaNodes';
 import { spaceRadiance } from './space';
+import { prominenceEmission } from './star/prominenceNodes';
 
 type V3 = Node<'vec3'>;
 
@@ -68,7 +68,7 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
       const localRaw = sampleLut(tex.skyLocalS, tex.skyLocalT, lutUV);
       // Scattered light scales with the source: the LUTs are integrated for the reference photosphere.
       const illuminant = star.illuminant as unknown as V3;
-      const light: ShellLight = { illuminant, pre: tex.enclosurePre, preMirror: tex.enclosurePreMirror, irr: tex.enclosureIrr, plasma: tex.plasma };
+      const light: ShellLight = { illuminant, pre: tex.enclosurePre, preMirror: tex.enclosurePreMirror, irr: tex.enclosureIrr, plasma: tex.plasma, star };
       // The air's LUTs already carry the Veil-filtered sky that lights it (atmosphere/worker.ts).
       const local = { S: localRaw.S.mul(illuminant).toVar(), T: localRaw.T.toVar() };
       const out = vec3(0).toVar();
@@ -90,7 +90,7 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
           col.assign(surface(n, mu).rgb);
           tEnd.assign(t);
         }).Else(() => {
-          const hit = traceStructure(vec3(0), d, pixelAngle);
+          const hit = traceStructure(vec3(0), d, pixelAngle, true);
           mat.assign(hit.mat);
           tEnd.assign(hit.t);
           If(hit.mat.equal(MAT.space).or(hit.mat.equal(MAT.none)), () => {
@@ -102,7 +102,9 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
             col.assign(shadeStructure(hit, d, pixelAngle, light, noise));
           });
         });
-        // The trapped plasma between the observer and what the ray meets (sky/medium/plasma.ts).
+        // Prominences standing off the limb, in front of whatever the ray meets.
+        col.addAssign(prominenceEmission(star, star.prominences, d, tEnd, pixelAngle, s).mul(illuminant));
+        // The thin plasma between the observer and what the ray meets (sky/medium/plasma.ts).
         const pl = plasmaSegment(tex.plasma, vec3(0, -1, 0), d, float(0), tEnd);
         const seen = col.mul(pl.T).add(pl.S.mul(illuminant)).toVar();
         out.assign(seen.mul(local.T).add(local.S));

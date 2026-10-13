@@ -11,6 +11,9 @@
  *   ?noao                                                    disable GTAO
  *   ?probe                                                   lighting probe spheres in front of the spawn
  *   ?autostart                                               skip the Enter click (renders behind no UI)
+ *   ?wobble=<deg>                                            periodic yaw sweep (±deg, 37-frame period) for flicker checks
+ *   ?steady                                                  with ?wobble: the same amplitude every period (isolates aliasing from TAA motion softening)
+ *   ?manual                                                  no animation loop: frames are stepped via __dyson.game.renderFrame
  */
 import type { DebugView, ToneMapper } from '../render/pipeline';
 
@@ -27,6 +30,9 @@ export interface DebugParams {
   profile: boolean;
   fov: number | null;
   look: [number, number] | null;
+  wobble: number | null;
+  steady: boolean;
+  manual: boolean;
 }
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare'];
@@ -50,5 +56,8 @@ export function readDebugParams(search = window.location.search): DebugParams {
     profile: q.has('profile'),
     fov: q.get('fov') !== null && Number.isFinite(Number(q.get('fov'))) ? Number(q.get('fov')) : null,
     look: q.get('look') ? (q.get('look')!.split(',').map(Number).slice(0, 2) as [number, number]) : null,
+    wobble: q.get('wobble') !== null && Number.isFinite(Number(q.get('wobble'))) ? Number(q.get('wobble')) : null,
+    steady: q.has('steady'),
+    manual: q.has('manual'),
   };
 }

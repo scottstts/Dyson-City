@@ -19,5 +19,9 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
 - **Hidden-tab frames.** `nextFrame` falls back to a 100 ms timeout, because requestAnimationFrame stalls in hidden panes during boot.
 - **GPU errors.** Device-loss and error callbacks are installed before `renderer.init()`, chained to Three's defaults. Any GPU error during boot aborts startup. Fatal runtime errors stop the loop and show the entry screen's error panel.
 - **Viewport.** DPR policy and resize coalescing are in `core/viewport.ts`, following the project rules.
-- **Debug URL parameters** (`debug/params.ts`): `spot`, `view` (incl. `glare`), `sky`, `tm`, `ev`, `time`, `fov`, `look`, `ao`, `probe`, `profile`, `autostart`. `tools/probe-hdr.mjs` reads back scene radiance at screen points for calibration.
+- **Debug URL parameters** (`debug/params.ts`): `spot`, `view` (incl. `glare`), `sky`, `tm`, `ev`, `time`, `fov`, `look`, `ao`, `probe`, `profile`, `autostart`, `wobble`, `steady`, `manual`. `tools/probe-hdr.mjs` reads back scene radiance at screen points for calibration.
 - **Headless renders.** `node tools/render.mjs [--query ...] spot…` renders fixed viewpoints (`debug/viewpoints.ts`). It prints exposure, the star illuminant and GPU time (with `profile`). The first render of a batch runs slow (GPU warm-up); profile with a warm-up spot first.
+- **Flicker meter.** `node tools/flicker.mjs --wobble 3 --steady spot…` boots with `?manual`, steps frames by hand while the camera sweeps its yaw (37-frame period, ±3° ≈ 10 px/frame at the turn), and captures the frame at the same phase of every sweep. The view is identical, so per-pixel differences are temporal instability. It prints mean and 99.9th-percentile σ and writes a heat map.
+  - With `--steady` the camera speed at each capture is identical too, and only the TAA jitter phase differs: this isolates aliasing and crawl.
+  - Without it, TAA's normal softening under motion is mixed in, and high-contrast detail inflates the numbers.
+  - A WebGPU canvas is only readable in the task that rendered it, so the capture happens right after `renderFrame`.

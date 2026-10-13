@@ -1,21 +1,15 @@
 /**
- * Veiling glare from first principles: the image is convolved with the point-spread function of the
- * eye looking through a camera lens. Light scattered in the cornea, lens and retina spreads a fraction of every source over
- * the whole field; a star 90° across therefore floods the view. Nothing here is tuned by eye: the
- * strength and shape come from the PSF and the star's radiance.
+ * Veiling glare: the image is convolved with the point-spread function of the eye. Light scattered
+ * in the cornea, lens and retina spreads a share of every source over the field; a star 90° across
+ * therefore veils everything near it — dark metal beside the star goes charcoal, which is what being
+ * dazzled by a source this large looks like.
  *
- * PSF: Spencer, Shirley, Zimmerman & Greenberg 1995, "Physically-based glare effects for digital
- * images" (photopic), θ in degrees:
- *   f0 = 2.61e6·exp(−(θ/0.02)²)   (the sharp core)
- *   f1 = 20.91 / (θ + 0.02)³
- *   f2 = 72.37 / (θ + 0.02)²
- *   P  = 0.384·f0 + 0.478·f1 + 0.138·f2, normalised to unit integral over the sphere.
- *
- * The lens adds its own halo (scattering in its glass and at its surfaces, the aperture's edge and
- * the sensor stack): here half of every source's light, spread over a few to tens of degrees — a
- * camera looking into a star 90° across, whose light floods the frame so that the scene is made
- * out through a bright veil. The share is a property of this camera, not a free tuning of the
- * scene: the spread is energy-conserving, so what the glow adds the sources lose.
+ * The scatter has the shape of the CIE 180 disability-glare function, a power law: the glare has no
+ * characteristic angular size, so the limb stays razor-sharp and no halo rims the star. Rejected: a
+ * lens halo of Gaussian lobes (3.5°/11°/30°) carrying 60 % of every source's light — a glow of fixed
+ * angular size around a clipped disc is the signature of a lamp in haze, and it veiled the far
+ * structure 10–50× brighter than the structure itself. The spread is energy-conserving: what the
+ * glare adds, the sources lose.
  *
  * Energy within GLARE_CORE_DEG stays in the rendered image (it is the image's own sharpness); the
  * rest is the glare. The star's share is exact and analytic (a 1D table over the angle from the
@@ -29,24 +23,18 @@ export const GLARE_CORE_DEG = 0.1;
 
 const RAD = Math.PI / 180;
 
-/** Unnormalised photopic PSF of the eye (Spencer et al. 1995), θ in degrees. */
-export function eyePsfRaw(thetaDeg: number): number {
-  const t = thetaDeg;
-  const f0 = 2.61e6 * Math.exp(-((t / 0.02) ** 2));
-  const f1 = 20.91 / (t + 0.02) ** 3;
-  const f2 = 72.37 / (t + 0.02) ** 2;
-  return 0.384 * f0 + 0.478 * f1 + 0.138 * f2;
+/**
+ * The eye's scatter, with the shape of the CIE 180 general disability-glare function (young eye,
+ * average pigmentation): L_veil/E = 10/θ³ + 5/θ² + 0.05/θ + 0.00125 per steradian, θ in degrees.
+ * A power law, so the glare has no characteristic angular size (a Gaussian halo has one, and reads
+ * as a lamp in haze): the limb stays razor-sharp, and dark metal near the star is veiled to
+ * charcoal — what being dazzled by a source this large looks like. Its integral is the share of
+ * every source's light scattered out of the image core.
+ */
+function scatterRaw(thetaDeg: number): number {
+  const t = thetaDeg + 0.05;
+  return 10 / t ** 3 + 5 / t ** 2 + 0.05 / t + 0.00125;
 }
-
-/** Lens halo: share of each source's light and its lobes (weights, σ in degrees). */
-export const LENS = {
-  share: 0.6,
-  lobes: [
-    { w: 0.6, sigmaDeg: 3.5 },
-    { w: 0.32, sigmaDeg: 11 },
-    { w: 0.08, sigmaDeg: 30 },
-  ],
-} as const;
 
 /** ∫ f dΩ over polar angles [a, b] (degrees) by log-spaced quadrature. */
 function integrate(f: (t: number) => number, aDeg: number, bDeg: number, moment = 0, steps = 4000): number {
@@ -62,31 +50,18 @@ function integrate(f: (t: number) => number, aDeg: number, bDeg: number, moment 
   return sum;
 }
 
-const LENS_NORMS = LENS.lobes.map((l) => integrate((t) => Math.exp(-(t * t) / (2 * l.sigmaDeg * l.sigmaDeg)), 1e-5, 180, 0, 8000));
+/** Share of every source's light the eye scatters (the CIE function's own integral). */
+export const EYE_SCATTER_SHARE = integrate(scatterRaw, 1e-5, 180, 0, 8000);
 
-function lensPsf(thetaDeg: number): number {
-  let s = 0;
-  LENS.lobes.forEach((l, i) => {
-    s += (l.w * Math.exp(-(thetaDeg * thetaDeg) / (2 * l.sigmaDeg * l.sigmaDeg))) / LENS_NORMS[i];
-  });
-  return s;
-}
-
-/** The camera's sharp core (the diffraction-limited image), θ in degrees. */
+/** The sharp core (the diffraction-limited image), θ in degrees. */
 function coreRaw(thetaDeg: number): number {
   return Math.exp(-((thetaDeg / 0.02) ** 2));
 }
 const CORE_TOTAL = integrate(coreRaw, 1e-5, 2, 0, 20000);
 
-/**
- * Normalised PSF of the camera (per steradian), θ in degrees: a sharp core and the lens halo. The
- * eye's own PSF (Spencer et al., eyePsfRaw) has a 1/θ² tail that, under a star filling 29 % of the
- * sky, veils every dark surface in the frame grey; a camera lens's halo falls off within a few tens
- * of degrees, so the glow engulfs the star's surroundings while dark structure further off stays
- * dark.
- */
+/** Normalised PSF (per steradian), θ in degrees: the sharp core plus the eye's scatter. */
 export function eyePsf(thetaDeg: number): number {
-  return ((1 - LENS.share) * coreRaw(thetaDeg)) / CORE_TOTAL + LENS.share * lensPsf(thetaDeg);
+  return ((1 - EYE_SCATTER_SHARE) * coreRaw(thetaDeg)) / CORE_TOTAL + scatterRaw(thetaDeg);
 }
 
 function integrateRaw(aDeg: number, bDeg: number, moment = 0, steps = 4000): number {

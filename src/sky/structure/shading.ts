@@ -9,21 +9,28 @@
  *  - diffuse: the enclosure's irradiance for the face's tilt (horizon-clipped);
  *  - pixels covering many tiles mix the finishes' reflections in the shares of the sample under them
  *    (plating.ts), about the sample's mean normal;
- *  - rogue mirrors (failed actuators, pointing anywhere) that mirror the star toward the viewer add
- *    point glints at the star's radiance;
- *  - receivers add concentrated starlight.
+ *  - rogue facets (failed actuators, pointing anywhere) that mirror the star toward the viewer add
+ *    point glints;
+ *  - the alloy's heat glow is added (thermal.ts);
+ *  - reflections of the star carry its flares at their retarded time: the far shell is up to 4.6
+ *    light-seconds away, so a flare's impulsive bursts flash in its mirrors seconds after they flash
+ *    on the disc (light echoes).
  *
  * Tables are in reference-photosphere units; everything scales by the star's measured illuminant.
  * There is no ambient term.
  */
 import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, mix, clamp, asin, acos, exp, texture, length, select, cross, abs, log, cos, sin } from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
-import { STAR_CENTER_RADIANCE, STAR_DISC_MEAN_RADIANCE, LIMB_DARKENING_EXPONENT } from '../../world/radiometry';
+import { STAR_CENTER_RADIANCE, LIMB_DARKENING_EXPONENT } from '../../world/radiometry';
 import { STAR_RADIUS_R } from '../../world/constants';
-import { BLACK_CHROME, ENCLOSURE_LUT, MIRROR_MICRO_SIGMA } from './enclosure';
+import { ENCLOSURE_LUT, MIRROR_MICRO_SIGMA } from './enclosure';
+import { COLLECTOR_F0 } from './materials';
+import { SHELL_LIGHT_SECONDS } from '../../world/constants';
+import { flareBrightening } from '../star/starSurface';
+import type { StarState } from '../star/starState';
 import { MAT, type StructureHit } from './trace';
 import { plasmaSegment } from '../medium/plasmaNodes';
-import { FINISHES, RECEIVER_TINT, type SurfaceSample } from './surfaces';
+import { FINISHES, type SurfaceSample } from './surfaces';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -36,6 +43,8 @@ export interface ShellLight {
   preMirror: DataTexture;
   irr: DataTexture;
   plasma: DataTexture;
+  /** The star's features, for flares seen in reflection (light echoes). */
+  star: StarState;
 }
 
 const { preWidth: PW, preHeight: PH, irrWidth: IW } = ENCLOSURE_LUT;
@@ -115,7 +124,13 @@ function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V
   const out = vec3(0).toVar();
   const tEnd = float(0).toVar();
   If(tStar.lessThan(1e8), () => {
-    out.assign(starRadianceToward(pos, r));
+    // Light echo: the reflected starlight left the star earlier than the direct light now arriving
+    // by (path via the reflector − direct path) / c.
+    const hitP = pos.add(r.mul(tStar));
+    const X = light.star.rotation.mul(normalize(hitP.sub(vec3(0, 1, 0))));
+    const delay = tStar.add(length(pos)).sub(length(hitP)).mul(SHELL_LIGHT_SECONDS);
+    const flare = min(flareBrightening(light.star, X, (light.star.time as unknown as F).sub(delay)), 3.0);
+    out.assign(starRadianceToward(pos, r).mul(flare.mul(0.8).add(1)));
     tEnd.assign(tStar);
   }).Else(() => {
     const hit = trace(pos, r);
@@ -157,7 +172,7 @@ export function shadeSurface(d: V3, pos: V3, s: SurfaceSample, light: ShellLight
       env.assign(mix(env, tracedReflection(pos.add(n.mul(2e-5)), rj, light, trace), sharpW));
     });
   });
-  const own = envBRDFApprox(s.f0, mix(rough, float(0.08), s.mirror), nov).mul(env).add(s.albedo.mul(irradiance(light, acos(clamp(dot(n, up), -1, 1)))).div(Math.PI));
+  const own = envBRDFApprox(s.f0, mix(rough, float(0.08), s.mirror), nov).mul(env).add(s.albedo.mul(irradiance(light, acos(clamp(dot(n, up), -1, 1)))).mul(s.occlusion).div(Math.PI));
 
   // Unresolved tiles: their finishes' reflections in area shares, about the module facet.
   const col = own.toVar();
@@ -193,10 +208,8 @@ export function shadeSurface(d: V3, pos: V3, s: SurfaceSample, light: ShellLight
     const mu = sqrt(max(float(1).sub(sinPsi.div(sinA).pow(2)), 0.0));
     const onDisc = select(c.greaterThan(sqrt(float(1).sub(sinA.mul(sinA)))).and(dot(rr, nr).greaterThan(0.0)), float(1), float(0));
     const star = vec3(...STAR_CENTER_RADIANCE).mul(vec3(mu).pow(vec3(...LIMB_DARKENING_EXPONENT)));
-    col.addAssign(star.mul(vec3(...BLACK_CHROME)).mul(onDisc).mul(s.rogueWeight));
+    col.addAssign(star.mul(vec3(...COLLECTOR_F0)).mul(onDisc).mul(s.rogueWeight));
   });
-  // Receivers: concentrated starlight, relative to the disc mean.
-  const emitted = vec3(...STAR_DISC_MEAN_RADIANCE).mul(vec3(...RECEIVER_TINT)).mul(s.emission);
-  return col.add(emitted).mul(light.illuminant) as unknown as V3;
+  return col.add(s.emission).mul(light.illuminant) as unknown as V3;
 }
 

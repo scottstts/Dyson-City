@@ -14,13 +14,13 @@ Code: `src/world/`.
 | Every inward-facing surface has its normal toward the star centre and sees the full 45° cap | Irradiance is π·L̄/2 everywhere. A white panel is only ~1 stop darker than the star; a mirror catching the star is as bright as the star |
 | A chord at elevation e passes R·cos e from the centre | A mirror on the shell reflects a view ray at elevation e into another chord at e; it can only show the star through facet tilt when e is near 45°. Lower down, reflections chain around the sphere until they escape through a gap: **the shell darkens away from the star** (solved in `sky/structure/enclosure.ts`) |
 | Seeing a sphere from a point on it is a stereographic projection | Geometry carries no absolute scale. Scale comes from detail statistics (countless pieces, never a countable rhythm), the open bands, the media and light |
-| Flux at the shell: 3.15×10⁷ W/m² | Anything absorbing settles near 4,850 K: the habitat needs the Veil; non-harvesting structure is mirror or white |
+| Flux at the shell: 3.15×10⁷ W/m² (23,000 suns) | The habitat needs the Veil. The structure is a fictional refractory alloy that absorbs it and runs hot (collectors ~2,600 K): it glows dark bronze, at ~0.6 % of the star (`sky/structure/thermal.ts`). The real limits — melting, radiator area — are set aside: physics is used where it shapes the picture |
 
 ## One radiance scale (`radiometry.ts`)
 
 - `STAR_LUMINANCE` (10) is the photosphere's disc-centre luminance; everything uses this scale and only the camera maps it to the screen.
 - `STAR_DISC_MEAN_RADIANCE` is the limb-darkened disc mean: the reference the atmosphere, plasma and enclosure tables are integrated with. The star's measured illuminant (`StarState.illuminant`) scales all of them.
-- **No ambient term, no lamps.** All light traces to the star. The structure's bright lines are concentrated-light receivers (see `sky.md`), the only "lights" bright enough to show in this daylight.
+- **No ambient term, no lamps.** All light traces to the star, directly or as the heat it puts into the structure: the shell's glow and its hot header lines (see `sky.md`). Nothing passive is brighter than the star; under a source 45° in half-angle, étendue caps concentration at 2×.
 
 ## The Veil
 

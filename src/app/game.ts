@@ -18,6 +18,9 @@ import type { AtmosphereTextures } from '../atmosphere/luts';
 import { loadSettings, PauseMenu, type PlayerSettings } from '../ui/pauseMenu';
 import type { EntryScreen } from '../ui/entryScreen';
 
+/** Frames per period of the debug yaw wobble (?wobble). */
+export const WOBBLE_PERIOD = 37;
+
 export class Game {
   readonly camera: PerspectiveCamera;
   readonly pipeline: Pipeline;
@@ -34,6 +37,8 @@ export class Game {
   private readonly world: World;
   private readonly debug: DebugParams;
   private readonly entry: EntryScreen;
+  private readonly spawnLook: Spawn;
+  private frameIndex = 0;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
     this.handle = handle;
@@ -55,6 +60,7 @@ export class Game {
     const base = VIEWPOINTS[debug.spot ?? DEFAULT_VIEWPOINT] ?? VIEWPOINTS[DEFAULT_VIEWPOINT];
     const spawn = debug.look ? { ...base, yaw: (debug.look[0] * Math.PI) / 180, pitch: (debug.look[1] * Math.PI) / 180 } : base;
     this.player.spawn(spawn);
+    this.spawnLook = spawn;
     if (debug.probe) addLightingProbes(world.scene, spawn.position, spawn.yaw);
     this.camera.updateMatrixWorld();
 
@@ -139,6 +145,16 @@ export class Game {
     if (this.debug.time === null) this.gameTime += dt;
     this.world.update(this.gameTime);
     if (this.playing) this.player.update(dt);
+    if (this.debug.wobble !== null) {
+      // Flicker review: a yaw sweep that returns to the same view every period, with a different
+      // amplitude (so a different motion history and speed) each time; the period is prime so the
+      // TAA jitter phase differs at every return.
+      const period = Math.floor(this.frameIndex / WOBBLE_PERIOD);
+      const scale = this.debug.steady ? 1 : 0.4 + 0.6 * (((Math.sin(period * 12.9898) * 43758.5453) % 1) + 1) % 1;
+      const a = (this.debug.wobble * scale * Math.PI) / 180;
+      this.player.setLook(this.spawnLook.yaw + a * Math.sin((2 * Math.PI * this.frameIndex) / WOBBLE_PERIOD), this.spawnLook.pitch);
+    }
+    this.frameIndex++;
     this.camera.updateMatrixWorld();
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);

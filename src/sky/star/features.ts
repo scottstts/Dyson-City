@@ -7,6 +7,8 @@
  * star radii from its centre), and the relative rotation brings every longitude past in 17.5 h.
  */
 
+import { RELATIVE_ROTATION_RATE } from '../../world/constants';
+
 export type V3 = [number, number, number];
 
 export interface Spot {
@@ -137,34 +139,60 @@ export interface FlareEvent {
   intensity: number;
   /** Orientation offset of the ribbon pair (radians around the region axis). */
   twist: number;
+  /**
+   * Impulsive bursts during the rise (absolute times, s): the spiky white-light kernels of a real
+   * flare's impulsive phase, each a few seconds long. Their sharp onsets are what the far shell's
+   * reflections echo seconds later (light travel time).
+   */
+  bursts: [number, number, number, number];
+}
+
+/** Relative amplitudes and width (s) of the impulsive bursts. */
+export const FLARE_BURST_AMPLITUDE = [1.4, 0.9, 1.7, 1.1] as const;
+export const FLARE_BURST_WIDTH = 2.0;
+
+/** Sub-observer point (star frame) at star time t: the star turns under the shell about Z. */
+export function subObserverAt(t: number): V3 {
+  const a = RELATIVE_ROTATION_RATE * t;
+  return [Math.sin(a), -Math.cos(a), 0];
 }
 
 /**
- * Deterministic flare sequence: flare k starts at a seeded time and picks among the regions with a
- * seeded preference; whether it is visible is decided at evaluation time (only regions on the
- * visible cap are drawn). The schedule is a pure function of k, so any game time can be evaluated.
+ * Deterministic flare sequence: flare k starts at a seeded time and erupts in one of the active
+ * regions then on the visible face (a game choice: flares on the far side would never be seen, and
+ * each one is a moment — on the disc and, seconds later, echoed in the far shell's mirrors). The
+ * schedule is a pure function of k, so any game time can be evaluated.
  */
-export function flareEvent(k: number, regionCount: number, seed = 7717): FlareEvent {
+export function flareEvent(k: number, regions: readonly ActiveRegion[], seed = 7717): FlareEvent {
   const rnd = mulberry32(seed + k * 7919);
-  return {
-    region: Math.floor(rnd() * regionCount),
-    start: flareStart(k, seed),
-    rise: 12 + rnd() * 20,
-    decay: 60 + rnd() * 120,
+  const start = flareStart(k, seed);
+  const rise = 40 + rnd() * 60;
+  const sub = subObserverAt(start);
+  const facing = regions.map((r, i) => ({ i, c: r.center[0] * sub[0] + r.center[1] * sub[1] + r.center[2] * sub[2] })).filter((r) => r.c > 0.78);
+  const pick = rnd();
+  const event = {
+    region: facing.length ? facing[Math.floor(pick * facing.length)].i : Math.floor(pick * regions.length),
+    start,
+    rise,
+    decay: 90 + rnd() * 150,
     intensity: 0.6 + rnd() * 0.9,
     twist: (rnd() - 0.5) * 0.6,
   };
+  const bursts = [0, 1, 2, 3].map((i) => start + rise * (0.15 + 0.2 * i + 0.12 * rnd())) as [number, number, number, number];
+  return { ...event, bursts };
 }
+
+/** Mean interval between flares (s). */
+export const FLARE_INTERVAL = 300;
 
 /** Start time of flare k: cumulative seeded intervals (closed-form via mean + bounded jitter). */
 export function flareStart(k: number, seed = 7717): number {
   const rnd = mulberry32(seed * 31 + k * 104729);
-  const mean = 150;
-  return k * mean + (rnd() - 0.5) * mean * 0.8;
+  return k * FLARE_INTERVAL + (rnd() - 0.5) * FLARE_INTERVAL * 0.8;
 }
 
-/** Envelope 0..1 of a flare at time t. */
-export function flareEnvelope(f: FlareEvent, t: number): number {
+/** Smooth envelope 0..1 of a flare at time t (rise, then exponential decay). */
+export function flareEnvelope(f: Pick<FlareEvent, 'start' | 'rise' | 'decay'>, t: number): number {
   const dt = t - f.start;
   if (dt < 0) return 0;
   if (dt < f.rise) {
@@ -172,4 +200,14 @@ export function flareEnvelope(f: FlareEvent, t: number): number {
     return x * x * (3 - 2 * x);
   }
   return Math.exp(-(dt - f.rise) / f.decay);
+}
+
+/** Brightening factor of a flare at time t: the envelope with its impulsive bursts on top (mirrored in the shader). */
+export function flareBrightness(f: FlareEvent, t: number): number {
+  let bursts = 0;
+  f.bursts.forEach((tb, i) => {
+    const x = (t - tb) / FLARE_BURST_WIDTH;
+    bursts += FLARE_BURST_AMPLITUDE[i] * Math.exp(-x * x);
+  });
+  return f.intensity * flareEnvelope(f, t) * (1 + bursts);
 }
