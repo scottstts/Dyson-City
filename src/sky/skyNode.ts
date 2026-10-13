@@ -6,8 +6,11 @@
  *   star disc          → white-light photosphere
  *   elsewhere          → the far structure (traced, with relief and one traced reflection) or
  *                        open space
- *   then               → prominences standing off the limb, the thin interior plasma
+ *   then               → the thin interior plasma
  *                        (sky/medium/plasma.ts) and the local air, in that order along the ray.
+ *
+ * The star's own atmosphere (corona, loops, prominences) is composited in a separate pass
+ * (sky/star/atmosphere.ts).
  *
  * Units: shell radii for geometry, scene radiance for colour (see world/radiometry.ts).
  */
@@ -23,7 +26,6 @@ import type { StarState } from './star/starState';
 import { traceStructure, shadeStructure, MAT, type ShellLight } from './structure/structure';
 import { plasmaSegment } from './medium/plasmaNodes';
 import { spaceRadiance } from './space';
-import { prominenceEmission } from './star/prominenceNodes';
 
 type V3 = Node<'vec3'>;
 
@@ -102,8 +104,6 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
             col.assign(shadeStructure(hit, d, pixelAngle, light, noise));
           });
         });
-        // Prominences standing off the limb, in front of whatever the ray meets.
-        col.addAssign(prominenceEmission(star, star.prominences, d, tEnd, pixelAngle, s).mul(illuminant));
         // The thin plasma between the observer and what the ray meets (sky/medium/plasma.ts).
         const pl = plasmaSegment(tex.plasma, vec3(0, -1, 0), d, float(0), tEnd);
         const seen = col.mul(pl.T).add(pl.S.mul(illuminant)).toVar();

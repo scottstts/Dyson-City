@@ -5,6 +5,7 @@ import type { Node } from 'three/webgpu';
 import { LUT } from './params';
 import { PLASMA_LUT } from '../sky/medium/plasma';
 import { ENCLOSURE_LUT } from '../sky/structure/enclosure';
+import { CORONA_SAMPLES } from '../sky/star/corona';
 import type { AtmosphereWorkerResult } from './worker';
 
 export interface AtmosphereTextures {
@@ -12,6 +13,8 @@ export interface AtmosphereTextures {
   skyLocalT: DataTexture;
   /** Star glare against the angle from the star's centre (render/glare.ts). */
   starGlare: DataTexture;
+  /** Coronal column against the sight line's impact parameter (sky/star/corona.ts). */
+  corona: DataTexture;
   aerialS: DataTexture;
   aerialT: DataTexture;
   groundIrradiance: Vector3;
@@ -52,7 +55,7 @@ function makeFloatTexture(data: Float32Array, width: number, height: number, nam
   return tex;
 }
 
-/** Runs the boot precompute (air, star glare, plasma, shell transport) in a worker so boot keeps the UI responsive. */
+/** Runs the boot precompute (air, star glare, corona, plasma, shell transport) in a worker so boot keeps the UI responsive. */
 export function computeAtmosphereTextures(): Promise<AtmosphereTextures> {
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./worker.ts', import.meta.url), { type: 'module' });
@@ -72,6 +75,7 @@ export function computeAtmosphereTextures(): Promise<AtmosphereTextures> {
         skyLocalS: makeTexture(r.skyLocal.scatter, LUT.skyWidth, LUT.skyHeight, 'atmo.skyLocal.S'),
         skyLocalT: makeTexture(r.skyLocal.transmittance, LUT.skyWidth, LUT.skyHeight, 'atmo.skyLocal.T'),
         starGlare: makeFloatTexture(r.starGlare, STAR_GLARE_SAMPLES, 1, 'glare.star'),
+        corona: makeFloatTexture(r.corona, CORONA_SAMPLES, 1, 'star.corona'),
         aerialS: makeTexture(r.aerial.scatter, LUT.apWidth, LUT.apHeight, 'atmo.aerial.S'),
         aerialT: makeTexture(r.aerial.transmittance, LUT.apWidth, LUT.apHeight, 'atmo.aerial.T'),
         groundIrradiance: new Vector3(...r.groundIrradiance),

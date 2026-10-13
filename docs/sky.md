@@ -8,21 +8,25 @@ Per view direction:
 
 1. below the horizon: ground (environment capture and the sub-pixel strip beyond the deck mesh);
 2. otherwise: the star disc, or the far structure (traced, with relief for primary rays), or open space;
-3. prominences standing off the limb (`star/prominenceNodes.ts`);
-4. the thin interior plasma between the observer and what the ray meets (`medium/plasma.ts`);
-5. the local air: in-scatter + transmittance.
+3. the thin interior plasma between the observer and what the ray meets (`medium/plasma.ts`);
+4. the local air: in-scatter + transmittance.
+
+The star's own atmosphere is composited onto sky pixels in a separate post pass (`star/atmosphere.ts`; see `render-pipeline.md`).
 
 ## Boot precompute (worker)
 
 In order, because each feeds the next:
 
+0. **Corona table** (`star/corona.ts`): the coronal column against the sight line's impact parameter.
 1. **Plasma line table** (`medium/plasma.ts`): τ(b, x) and transmittance-weighted in-scatter for every line through the sphere, lit by the limb-darkened disc and, separately, by a unit isotropic shell.
 2. **Enclosure solve** (`structure/enclosure.ts`): see below. It also sets the plasma's shell illumination.
 3. **Air** (`atmosphere/precompute.ts`): lit by the enclosure's sky (star + shell).
 
 ## Star (`star/`)
 
-What makes the star read as a 1.4-million-km body rather than a ~200 m glowing ball is scale, so the white-light photosphere carries no pattern that is not physically there:
+**In the normal view the star is blinding**: its disc clips to white and its outline dissolves into halation (`render-pipeline.md`). Almost nothing below is visible there; it lights the world, shows in the far shell's mirrors, and is what the telescope, with its own exposure, will reveal. Only large, bright activity well clear of the glare (eruptions, jets) registers as warm shapes in the blaze.
+
+The white-light photosphere carries no pattern that is not physically there, at true scale:
 
 | Layer | Scale at disc centre | Character |
 |---|---|---|
@@ -38,14 +42,27 @@ What makes the star read as a 1.4-million-km body rather than a ~200 m glowing b
 - **Colour comes from temperature.** Every element's 550 nm intensity becomes a brightness temperature and the other channels follow Planck; limb darkening is per channel.
 - **Rejected.** Domain-warped "convection" marbling (~15 swirls across the disc, a lava-lamp ball); closed cellular network outlines (scales); ridged noise at one scale (caustics); H-α veins, a hot rim and false colour; a continuous pink chromosphere ring (reads as the rejected hot rim).
 
-### Prominences (`star/prominences.ts`, `star/prominenceNodes.ts`)
+### Atmosphere and activity
 
-A deliberate departure from broadband physics: in white light prominences are far too faint beside the photosphere. They are drawn because eclipse imagery makes them read as the real Sun's living edge, and because their size and slowness carry scale. Everything else is kept true:
+All of this is far brighter than the real Sun's (whose atmosphere is invisible beside its disc in white light): the star needs a living atmosphere. Shapes follow space-telescope images of the Sun (fibrous, looping, rooted in the surface); scales are true. It is kinematic plasma, not a simulation: closed-form magnetic shapes filled with noise advected along them, summed as optically thin glow.
 
-- Size 40,000–140,000 km (≈3–11° at the limb), hedgerow sheets of near-vertical threads and loop arcades.
-- They rotate with the star and rise over the limb from behind it; the eight nearest the limb occupy GPU slots.
-- Threads stream at ~20 km/s; eruptions climb to ~350 km/s over 40 min (a few degrees per minute) about every 2.5–5 h per prominence.
-- Salmon-pink (Hα, Hβ, He D3), up to ~12 % of the disc mean, optically thin: brighter seen edge-on, capped.
+| Part | Code | Character |
+|---|---|---|
+| Corona | `corona.ts`, `coronaNodes.ts` | Thomson-scattered photosphere light, white. Baumbach–Allen density × dilution, integrated along each sight line (a 1D table: every line runs shell to shell or down to the photosphere). Gentle radial rays, streamers narrowing with height, polar plumes, outflowing blobs |
+| Chromosphere | `coronaNodes.ts` | A burning fringe at the limb: a fire shader in (position angle, height), tongues of spicules advected up at ~250 km/s and thresholded by height, clustered |
+| Loop arcades | `activeLayer.ts` | On the whole visible surface: sparse arcades 15,000–60,000 km across in sky cells (more in the activity belts). Every loop is a 3D field line of a buried dipole (r = L·sin²θ), warped, drawn as a soft tube by ray–curve distance; a bundle of threads, broken into flickering knots siphoning at ~200 km/s, bright gassy footpoints; occasional flares |
+| Prominences, CMEs | `magnetic.ts`, `magneticNodes.ts` | Thick, lacy bodies of cool gas around one arched field line, raymarched: warped envelope, twisted fibres, voids, draining legs; they absorb what lies behind them. Erupting, the apex lifts at up to ~1,600 km/s, swells and unwinds, with a gauzy CME front |
+| Jets and surges | `magnetic.ts`, `magneticNodes.ts` | Columns of ballistic parcels launched up open field at 500–1,400 km/s; noise written in each parcel's launch time is carried with it; turbulence grows with parcel age (a flamethrower's breakup), cooling from white-gold to orange, then falling back |
+
+- **Real time, energetic star.** Nothing is time-lapsed (that is the miniature effect); the caged star's flows run at the Sun's fast end, so activity visibly moves at 700,000 km. Small-scale gas evolves in tens of seconds.
+- **Colour:** a hot-plasma ramp (`plasmaColour.ts`): deep orange in faint plasma, gold, white-gold in the brightest. The corona keeps the star's white.
+- **Rejected:**
+  - flat sheets of near-vertical threads hanging off the limb (they read as aurora curtains);
+  - hydrogen pink-magenta for the star's plasma (that belongs to aurora, which is omitted: it would not be visible in this light);
+  - thin rope tubes and perfect nested arcs (handles, rainbows); a 2D loop belt drawn round the rim (activity must grow from the surface); planar loop sheets (bars seen from above);
+  - corona structure keyed to the closest point's 3D direction (smears into smoke; it must be keyed to position angle);
+  - a mottled "chromospheric fire" over the disc (grey mottles read as stone).
+- **Placement bugs to remember:** cells are probed at most half a cell apart along the ray, and the layer clears the tallest loops; otherwise loops are cut along cell walls or the layer's ceiling. The CME front is masked by height above the curved photosphere (a cut on a local plane shows as a straight edge across the disc).
 
 ## Media: what lies between the city and the far shell
 
@@ -57,7 +74,7 @@ Physics bounds the cavity tightly, and that sets the look:
 | Neutral gas | Scale height ~150 km at 5,000 K: it falls onto the star (it is the chromosphere) |
 | Coronal plasma (1–3 MK) | The only thing that can fill the cavity, but a density that visibly veils the far shell would radiate more power than the star emits |
 
-So the cavity is effectively clear, and crispness is the right message for structure a million km away. **The thin fill** (`fillDepth` 0.01, Thomson, white) is kept as a subtle, deliberate aerial perspective that grows with distance. **Rejected:** a dense corona (optical depth ~1 along a line grazing the star). Its glow hugging the limb, together with the old lens halo, made the star read as a lamp in fog. A/B renders showed the limb sharpen and the far structure gain contrast without it.
+So the cavity is effectively clear, and crispness is the right message for structure a million km away. **The thin fill** (`fillDepth` 0.01, Thomson, white) is kept as a subtle, deliberate aerial perspective that grows with distance. **Rejected:** a dense corona (optical depth ~1 along a line grazing the star). Its glow hugging the limb, together with the old lens halo, made the star read as a lamp in fog. A/B renders showed the limb sharpen and the far structure gain contrast without it. (The star's own corona, `star/corona.ts`, is separate: steep, structured, part of its atmosphere.)
 
 **Habitat air** (`atmosphere/`): ordinary Rayleigh + aerosol air under the Veil at 1.2 km. It veils everything in front of it blue, so the structure reads as beyond the sky (the daytime-Moon effect).
 

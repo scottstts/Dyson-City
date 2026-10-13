@@ -68,12 +68,11 @@ The shell is a fictional refractory alloy: dark, warm metal that mirrors the enc
 
 ## 5. The star
 
-The star must look like a real star seen from 288,000 km: a surface of hot, moving gas, not a light bulb, and *almost uncomfortably* big.
+The star is blinding. Even through the Veil, looking toward it you see brightness swallowing everything: pure white-hot light with no silhouette you can point to and almost no surface texture, its glare engulfing the structure beside it. The world further from it emerges from the blaze.
 
-- **Activity.** It is caged and more active than the Sun. Granulation at its true size carries it (~620,000 granules on the visible disc), with faculae toward the limb, spot groups, flares, and prominences standing off the limb.
-- **Colour.** It comes from temperature (Planck) and per-channel limb darkening. To the eye and camera it is white-hot, with its texture just held, and its glare veils everything near it.
-- **Motion.** Everything runs in real time: the surface drifts ~0.8°/min with the shell's spin, granules live ~8 min, prominences stream and erupt at their true speeds. Fast motion would make it a small object. Flares echo in the far shell's mirrors seconds later.
-- **It is the brightest thing in the frame** and dazzles its surroundings through the eye's glare, with a razor-sharp limb and no halo.
+- **What it is underneath.** A real, caged, more-active-than-the-Sun star at true scale: granulation (~620,000 granules on the visible disc), faculae, spot groups, flares; a corona, a burning chromospheric fringe, loop arcades rooted all over its surface, prominences that erupt as CMEs, and jets. In the normal view almost all of it is lost in the blaze; the telescope, with its own exposure, reveals it.
+- **Colour.** Temperature (Planck) and per-channel limb darkening; a 5,772 K body under a daylight camera reads hot cream-white. The atmosphere's plasma runs orange to gold to white-gold.
+- **Motion.** Real time, never time-lapsed: the surface drifts ~0.8°/min with the shell's spin; the energetic star's jets and eruptions move at hundreds to a few thousand km/s. Flares echo in the far shell's mirrors seconds later.
 
 ## 6. The site (earmarked land)
 
@@ -161,7 +160,7 @@ Its exposure adapts to its narrow field. When it points through a gap in the str
 
 The style is photoreal megastructure: engineering at a scale beyond comprehension, rendered with physical light. The look is derived, not painted.
 
-- A blinding white star whose glare floods the frame; its texture is just visible.
+- A blinding white star whose glare floods the frame and dissolves its own outline.
 - A patchwork of warm metal tiles reflecting real pieces of the enclosure and glowing faintly with heat: gaps dark, the star blazing in the tiles near the limb.
 - Distance shown by content, light and motion (`docs/scale.md`): blue habitat air in front of everything, a crisp cavity behind it.
 
@@ -229,8 +228,8 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
   - temporal anti-aliasing.
 - **Camera:**
   - fixed exposure keyed to the star (the light never changes);
-  - the eye's glare from its point-spread function: exact for the star, screen-space for everything else;
-  - daylight white balance (the Veil supplies the warm cast);
+  - glare: the eye's scatter and a strong camera bloom above a threshold (exact for the star, screen-space for everything else), and halation that spills the clipped disc past its outline;
+  - daylight (D65) white balance: the star's own light carries one warm cast;
   - hue-preserving filmic tone map (overexposed colour runs toward yellow and white, never pastel) and grade;
   - subtle lens response.
 

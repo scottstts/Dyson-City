@@ -5,13 +5,16 @@ import { splitScatterTransmittance, toHalfArray } from './halfFloat';
 import { computeStarGlareTable } from '../render/glare';
 import { STAR_ANGULAR_RADIUS } from '../world/constants';
 import { computePlasmaLut } from '../sky/medium/plasma';
+import { computeCoronaTable } from '../sky/star/corona';
 import { solveEnclosure, sampleSky } from '../sky/structure/enclosure';
 
-/** Boot precompute: local air, star glare, the interior plasma and the shell's light transport. */
+/** Boot precompute: local air, star glare, the corona, the interior plasma and the shell's light transport. */
 export interface AtmosphereWorkerResult {
   skyLocal: { scatter: Uint16Array; transmittance: Uint16Array };
   /** Star glare table (render/glare.ts), RGBA float. */
   starGlare: Float32Array;
+  /** Coronal column table (sky/star/corona.ts), RGBA float. */
+  corona: Float32Array;
   aerial: { scatter: Uint16Array; transmittance: Uint16Array };
   groundIrradiance: [number, number, number];
   skyIrradiance: [number, number, number];
@@ -36,6 +39,7 @@ self.onmessage = () => {
     const result: AtmosphereWorkerResult = {
       skyLocal: splitScatterTransmittance(luts.skyLocal, skyTexels),
       starGlare: computeStarGlareTable((STAR_ANGULAR_RADIUS * 180) / Math.PI),
+      corona: computeCoronaTable(),
       aerial: splitScatterTransmittance(luts.aerial, apTexels),
       groundIrradiance: luts.groundIrradiance,
       skyIrradiance: luts.skyIrradiance,
@@ -48,7 +52,7 @@ self.onmessage = () => {
     };
     const transfer = [result.skyLocal, result.aerial]
       .flatMap((p) => [p.scatter.buffer, p.transmittance.buffer])
-      .concat([result.starGlare.buffer, result.plasma.buffer, result.enclosurePre.buffer, result.enclosurePreMirror.buffer, result.enclosureIrr.buffer]);
+      .concat([result.starGlare.buffer, result.corona.buffer, result.plasma.buffer, result.enclosurePre.buffer, result.enclosurePreMirror.buffer, result.enclosureIrr.buffer]);
     (self as unknown as DedicatedWorkerGlobalScope).postMessage({ ok: true, result }, transfer);
   } catch (error) {
     (self as unknown as DedicatedWorkerGlobalScope).postMessage({ ok: false, error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) });

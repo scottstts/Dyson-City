@@ -7,6 +7,7 @@ import { createAtmosphereNodes, type AtmosphereTextures } from '../atmosphere/lu
 import { StarState } from '../sky/star/starState';
 import { measureStarIlluminant } from '../sky/star/starIlluminant';
 import { createSky, SKY_DEBUG, type Sky } from '../sky/skyNode';
+import { createStarAtmosphere, type StarAtmosphere } from '../sky/star/atmosphere';
 import { createSkyMesh, type SkyMesh } from '../sky/skyMesh';
 import { captureEnvironment, type Environment } from '../sky/environment';
 import { createPlatformGeometry, createDeckGeometry } from '../ground/geometry';
@@ -21,6 +22,8 @@ export interface World {
   readonly sky: Sky;
   readonly skyMesh: SkyMesh;
   readonly environment: Environment;
+  /** The star's atmosphere, composited onto sky pixels by the pipeline. */
+  readonly starAtmosphere: StarAtmosphere;
   update(gameTime: number): void;
 }
 
@@ -65,6 +68,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     sky,
     skyMesh,
     environment,
+    starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame),
     update: (t) => {
       star.update(t);
       (sky.options.frame as unknown as { value: number }).value += 1;

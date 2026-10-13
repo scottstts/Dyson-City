@@ -70,6 +70,7 @@ export class Game {
       toneMapper: debug.toneMapper,
       ao: debug.ao,
       illuminant: world.star.illuminant as unknown as Node<'vec3'>,
+      skyOverlay: world.starAtmosphere,
     });
     const illuminant = world.star.illuminant.value as Vector3;
     // A daylight-balanced photograph exposed for the star (render/exposure.ts).

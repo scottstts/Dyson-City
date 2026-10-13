@@ -2,7 +2,7 @@ import { Matrix3, Vector3, Vector4 } from 'three/webgpu';
 import { uniform } from 'three/tsl';
 import { vec4Array, type Vec4Array } from '../../render/tsl/helpers';
 import { RELATIVE_ROTATION_RATE } from '../../world/constants';
-import { ProminenceState } from './prominences';
+import { MagneticState } from './magnetic';
 import {
   buildStarCatalogue,
   flareEnvelope,
@@ -35,7 +35,7 @@ const dot3 = (a: V3, b: V3): number => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 export class StarState {
   readonly catalogue: StarCatalogue;
   readonly rotation = uniform(new Matrix3());
-  /** Star time (s, game time + epoch): drives granulation, flares and prominences in real time. */
+  /** Star time (s, game time + epoch): drives granulation, flares and the magnetic atmosphere in real time. */
   readonly time = uniform(0);
   /** Sub-observer point on the star (star frame, unit). */
   readonly subObserver = uniform(new Vector3(0, -1, 0));
@@ -59,8 +59,8 @@ export class StarState {
   readonly flares: Vec4Array;
   readonly spotCount: number;
   readonly regionCount: number;
-  /** Prominences at the limb (prominences.ts). */
-  readonly prominences = new ProminenceState();
+  /** Prominences, eruptions and jets at the limb (magnetic.ts). */
+  readonly magnetic: MagneticState;
 
   private readonly flareVecs: Vector4[];
   private readonly rotMatrix = new Matrix3();
@@ -81,6 +81,7 @@ export class StarState {
     this.regionB = vec4Array(pad(regions.map((r) => new Vector4(r.axis[0], r.axis[1], r.axis[2], r.activity)), MAX_REGIONS));
     this.flareVecs = Array.from({ length: FLARE_SLOTS * 3 }, () => new Vector4(0, 0, 0, 0));
     this.flares = vec4Array(this.flareVecs);
+    this.magnetic = new MagneticState();
   }
 
   /** Star-frame rotation angle at game time t (s). */
@@ -99,7 +100,7 @@ export class StarState {
     this.time.value = t;
     (this.subObserver.value as Vector3).set(s, -c, 0);
     this.updateFlares(t, [s, -c, 0]);
-    this.prominences.update(t, [s, -c, 0]);
+    this.magnetic.update(t, [s, -c, 0]);
   }
 
   private updateFlares(t: number, sub: V3): void {

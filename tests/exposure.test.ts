@@ -3,12 +3,12 @@ import { cameraExposure, whiteBalanceGains, STAR_KEY } from '../src/render/expos
 import { STAR_CHROMA, STAR_DISC_MEAN_RADIANCE, luminance } from '../src/world/radiometry';
 
 describe('camera', () => {
-  it('daylight white balance has unit luminance and makes the bare star neutral', () => {
+  it('daylight (D65) white balance has unit luminance and renders the 5,772 K star warm', () => {
     const g = whiteBalanceGains();
     expect(luminance(...g)).toBeCloseTo(1, 9);
     const s = STAR_CHROMA.map((c, i) => c * g[i]);
-    expect(s[0]).toBeCloseTo(s[1], 6);
-    expect(s[2]).toBeCloseTo(s[1], 6);
+    expect(s[0]).toBeGreaterThan(s[1]);
+    expect(s[2]).toBeLessThan(s[1]);
   });
   it('exposes the star disc mean to the key', () => {
     const g = whiteBalanceGains();

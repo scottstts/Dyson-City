@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GLARE_CORE_FRACTION, EYE_SCATTER_SHARE, eyePsf, psfEnergy, screenGlareLobes, starGlareAt } from '../src/render/glare';
+import { BLOOM_THRESHOLD, CAMERA_BLOOM_SHARE, GLARE_CORE_FRACTION, EYE_SCATTER_SHARE, bloomExcess, eyePsf, psfEnergy, screenGlareLobes, starGlareAt } from '../src/render/glare';
 import { LIMB_DARKENING_EXPONENT } from '../src/world/radiometry';
 
 describe('eye glare (CIE 180 disability-glare scatter)', () => {
@@ -27,15 +27,22 @@ describe('eye glare (CIE 180 disability-glare scatter)', () => {
     expect(starGlareAt(0, 45)[1]).toBeGreaterThan(starGlareAt(40, 45)[1]);
   });
 
-  it('dazzles without a halo: ~1 % veil beside the star, falling as a power law, no fixed-size glow', () => {
+  it('floods the frame beside the star and falls off steeply (no fog over the whole frame)', () => {
     const mean = 2 / (LIMB_DARKENING_EXPONENT[1] + 2);
     const veil = (t: number) => starGlareAt(t, 45)[1] / mean;
     expect(EYE_SCATTER_SHARE).toBeGreaterThan(0.15);
     expect(EYE_SCATTER_SHARE).toBeLessThan(0.4);
-    expect(veil(55)).toBeGreaterThan(0.004);
-    expect(veil(55)).toBeLessThan(0.02);
-    // Scale-free: the veil 40° from the limb is still a sizeable share of the veil 10° from it
-    // (a Gaussian halo of a few degrees would have vanished).
-    expect(veil(85) / veil(55)).toBeGreaterThan(0.4);
+    // Strong beside the limb …
+    expect(veil(46)).toBeGreaterThan(0.08);
+    expect(veil(50)).toBeGreaterThan(0.03);
+    // … but a few tenths of a percent toward the horizon, so shadows there stay dark.
+    expect(veil(90)).toBeLessThan(0.01);
+    expect(veil(90) / veil(46)).toBeLessThan(0.1);
+  });
+
+  it('the camera bloom acts only above its threshold', () => {
+    expect(bloomExcess(0.1, BLOOM_THRESHOLD)).toBe(0);
+    expect(bloomExcess(1, BLOOM_THRESHOLD)).toBeCloseTo(1 - BLOOM_THRESHOLD, 9);
+    expect(CAMERA_BLOOM_SHARE + EYE_SCATTER_SHARE).toBeLessThan(1);
   });
 });

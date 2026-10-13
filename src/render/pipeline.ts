@@ -3,10 +3,11 @@
  *
  *   scene pass (MRT: HDR colour, view normal, velocity; reversed depth)
  *     → GTAO (half resolution) applied to geometry only
- *     → aerial perspective on geometry (same atmosphere model as the sky)
+ *     → aerial perspective on geometry (same atmosphere model as the sky); the star's atmosphere
+ *       on the sky (sky/star/atmosphere.ts)
  *     → TRAA (sky pixels carry rotation-only velocity)
- *     → eye: veiling glare from the eye's point-spread function (render/glare.ts) — the star's share
- *       analytic, every other source spread in screen space — then exposure × white balance
+ *     → glare: the eye's scatter and the camera's bloom (render/glare.ts, glarePass.ts) — the star's
+ *       share analytic, every other source spread in screen space — then exposure × white balance
  *     → filmic tone map (once) → grade → grain → sRGB OETF → dither
  *
  * Exposure is the fixed camera exposure (render/exposure.ts). Debug views short-circuit the
@@ -14,22 +15,17 @@
  */
 import { RenderPipeline, type PerspectiveCamera, type Scene, type WebGPURenderer, type DataTexture } from 'three/webgpu';
 import {
-  pass, mrt, output, normalView, velocity, packNormalToRGB, unpackRGBToNormal, sample, screenUV, vec2, vec3, vec4, float, Fn, If, uniform, texture,
+  pass, mrt, output, normalView, velocity, packNormalToRGB, unpackRGBToNormal, sample, screenUV, vec3, vec4, float, Fn, If, uniform, texture,
   getViewPosition, length, normalize, mix, max, pow, smoothstep, sRGBTransferOETF, agxToneMapping,
-  acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, acos,
+  acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, fwidth, exp,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
 import { traa } from 'three/addons/tsl/display/TRAANode.js';
-import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { aerialLutUV, type AtmosphereTextures } from '../atmosphere/luts';
 import { hash12 } from './tsl/noise';
-import { STAR_ANGULAR_RADIUS } from '../world/constants';
-import { STAR_CENTER_RADIANCE } from '../world/radiometry';
 import { hueFilmic } from './tsl/toneMap';
-import { GLARE_CORE_FRACTION, screenGlareLobes } from './glare';
-
-const STAR_COS_ALPHA = Math.cos(STAR_ANGULAR_RADIUS);
+import { createGlarePass, HALATION } from './glarePass';
 
 type TexNode = Node<'vec4'> & { sample(uv: Node<'vec2'>): Node<'vec4'>; value: import('three/webgpu').Texture };
 
@@ -53,7 +49,7 @@ export interface Pipeline {
 
 export type ToneMapper = 'film' | 'agx' | 'aces' | 'neutral';
 
-export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'> }): Pipeline {
+export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'> }): Pipeline {
   const scenePass = pass(scene, cam);
   scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView), velocity }));
   const colorTex = scenePass.getTextureNode('output');
@@ -93,7 +89,9 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   };
   const taaDecode = (e: Node<'vec3'>) => e.div(float(1).sub(luminance(e)).max(1e-3)).div(settings.exposure);
 
-  // --- AO + aerial perspective on geometry -----------------------------------------------------
+  const viewDirAt = (uv: Node<'vec2'>) => normalize(camWorld.mul(vec4(normalize(getViewPosition(uv, float(1.0), projInv)), 0.0)).xyz);
+
+  // --- AO + aerial perspective on geometry; the star's atmosphere on the sky ---------------------
   const apS = atmo.aerialS as DataTexture;
   const apT = atmo.aerialT as DataTexture;
   const aoStrength = uniform(opts.ao ? 1.0 : 0.0);
@@ -114,6 +112,13 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
       const S = texture(apS, apUV).rgb.mul(opts.illuminant);
       const T = texture(apT, apUV).rgb;
       outc.assign(c.rgb.mul(occlusion).mul(T).add(S));
+    }).Else(() => {
+      // Its own pass keeps the sky shader small (sky/star/atmosphere.ts).
+      if (opts.skyOverlay) {
+        const dir = viewDirAt(uv);
+        const overlay = opts.skyOverlay(dir, length(fwidth(dir)).max(1e-6)).toVar();
+        outc.assign(outc.mul(exp(overlay.a.negate())).add(overlay.rgb));
+      }
     });
     return vec4(taaEncode(outc), 1.0);
   })();
@@ -128,40 +133,16 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const hdrTex = (aaPass as unknown as { getTextureNode(): TexNode }).getTextureNode();
   const hdr = { sample: (uv: Node<'vec2'>) => vec4(taaDecode(hdrTex.sample(uv).rgb), 1.0), get rgb() { return taaDecode(hdrTex.rgb); } };
 
-  // --- The eye's glare ------------------------------------------------------------------------
-  // Light scattered inside the eye spreads a fixed fraction of every source over the field
-  // (render/glare.ts). The star's share is exact: a table against the angle from its centre, which
-  // also covers the part of the disc outside the frame. Everything else (lit metal, glints, the
-  // pad) is spread by three Gaussians matched to the PSF's annuli; their σ is in degrees, so the
-  // blur resolution follows the current pixels per degree.
-  const viewDirAt = (uv: Node<'vec2'>) => normalize(camWorld.mul(vec4(normalize(getViewPosition(uv, float(1.0), projInv)), 0.0)).xyz);
-  const nonStar = Fn(() => {
-    const vd = viewDirAt(screenUV);
-    const offDisc = float(1).sub(smoothstep(STAR_COS_ALPHA - 1e-4, STAR_COS_ALPHA + 1e-4, vd.y));
-    return vec4(hdr.sample(screenUV).rgb.mul(offDisc), 1.0);
-  })();
-  type BlurNode = Node<'vec4'> & { resolutionScale: number };
-  const blur = gaussianBlur as unknown as (n: Node, dir: number, sigma: number, o: { resolutionScale: number }) => BlurNode;
-  const lobes = screenGlareLobes();
-  // Kernel σ in texels for a blur node of parameter p is (3 + 2p)/3.
-  const lobeBlurs = lobes.map((l, i) => {
-    const p = i === 0 ? 2 : 4;
-    return { lobe: l, sigmaTexels: (3 + 2 * p) / 3, node: blur(nonStar, 1.0, p, { resolutionScale: 0.25 }) };
-  });
-  const starGlareTex = texture(atmo.starGlare);
-  const starCentre = vec3(...STAR_CENTER_RADIANCE).mul(opts.illuminant);
+  // --- Glare: the eye's scatter and the camera's bloom (render/glare.ts, render/glarePass.ts) ---
+  const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant });
 
   const camera = Fn(() => {
     const uv = screenUV;
-    const scene = hdr.sample(uv).rgb;
     const viewDir = viewDirAt(uv);
-    const theta = acos(clamp(viewDir.y, -1.0, 1.0)).div(Math.PI);
-    const starGlare = starGlareTex.sample(vec2(theta, 0.5)).rgb.mul(starCentre);
-    let otherGlare: Node<'vec3'> = vec3(0);
-    for (const b of lobeBlurs) otherGlare = otherGlare.add(b.node.rgb.mul(b.lobe.weight));
-    const withGlare = scene.mul(GLARE_CORE_FRACTION).add(starGlare).add(otherGlare);
-    const exposed = withGlare.mul(settings.exposure).mul(settings.whiteBalance);
-    const mapped = toneMap(opts.toneMapper, exposed);
+    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir).mul(settings.exposure).mul(settings.whiteBalance);
+    // The clipped disc's halation spills white past its outline (glarePass.ts), screen-blended.
+    const spill = vec3(...HALATION.tint).mul(glare.halation(viewDir));
+    const mapped = float(1).sub(float(1).sub(toneMap(opts.toneMapper, exposed)).mul(float(1).sub(spill)));
     // Grade in display-linear: contrast about mid-grey (in log-ish space) and saturation.
     const lum = luminance(mapped);
     const graded0 = mix(vec3(lum), mapped, settings.saturation);
@@ -205,11 +186,7 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
       })() as unknown as Node<'vec4'>;
       break;
     case 'glare':
-      outputNode = Fn(() => {
-        const vd = viewDirAt(screenUV);
-        const g = starGlareTex.sample(vec2(acos(clamp(vd.y, -1.0, 1.0)).div(Math.PI), 0.5)).rgb.mul(starCentre);
-        return vec4(oetf(clamp(g.mul(settings.exposure).mul(4), 0, 1)), 1);
-      })() as unknown as Node<'vec4'>;
+      outputNode = Fn(() => vec4(oetf(clamp(glare.starShare(viewDirAt(screenUV)).mul(settings.exposure).mul(4), 0, 1)), 1))() as unknown as Node<'vec4'>;
       break;
     case 'nopost':
       outputNode = vec4(oetf(toneMap(opts.toneMapper, colorTex.sample(screenUV).rgb.mul(settings.exposure).mul(settings.whiteBalance))), 1) as unknown as Node<'vec4'>;
@@ -227,8 +204,7 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
     camera: settings,
     render: () => {
       // Glare blurs are specified in degrees: follow the current pixels per degree.
-      const pxPerDeg = renderer.domElement.height / cam.fov;
-      for (const b of lobeBlurs) b.node.resolutionScale = Math.min(1, b.sigmaTexels / (b.lobe.sigmaDeg * pxPerDeg));
+      glare.resize(renderer.domElement.height / cam.fov);
       pipeline.render();
     },
   };

@@ -24,6 +24,6 @@ Code: `src/world/`.
 
 ## The Veil
 
-The shield roofing the habitable band at 6 km. It is a **spectrally neutral** broadband attenuator: its neutral cut is the camera's exposure, and it tints nothing.
+The shield roofing the habitable band at 6 km. It is a **spectrally neutral** broadband attenuator: its neutral cut is the camera's exposure, and it tints nothing. It cuts the light a great deal, but what passes is still overwhelming: the star is blinding from the habitat (`render-pipeline.md`).
 
 **Rejected:** an amber hazard filter, both graded by angle and uniform. It turned the star into an orange ball and set it apart from the structure it lights. The star's own ~5,800 K light is white, and everything it lights must share that light.
