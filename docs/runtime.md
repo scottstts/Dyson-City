@@ -14,12 +14,15 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
   Each stage is logged with its duration.
 - **Ordering constraints:**
   - Noise volumes must be set before any star shader is built.
+  - The space backdrop is baked (and the frame angle set) before the sky is built.
   - The illuminant must be measured before the environment capture.
   - White-balance gains are set when the pipeline is created.
 - **Hidden-tab frames.** `nextFrame` falls back to a 100 ms timeout, because requestAnimationFrame stalls in hidden panes during boot.
 - **GPU errors.** Device-loss and error callbacks are installed before `renderer.init()`, chained to Three's defaults. Any GPU error during boot aborts startup. Fatal runtime errors stop the loop and show the entry screen's error panel.
 - **Viewport.** DPR policy and resize coalescing are in `core/viewport.ts`, following the project rules.
-- **Debug URL parameters** (`debug/params.ts`): `spot`, `view` (incl. `glare`), `sky`, `tm`, `ev`, `time`, `fov`, `look`, `ao`, `probe`, `profile`, `autostart`, `wobble`, `steady`, `manual`. `tools/probe-hdr.mjs` reads back scene radiance at screen points for calibration.
+- **Debug URL parameters** (`debug/params.ts`): `spot`, `view` (incl. `glare`), `sky` (incl. `space`), `tm`, `ev`, `time`, `fov`, `look`, `ao`, `probe`, `profile`, `autostart`, `wobble`, `steady`, `manual`. `tools/probe-hdr.mjs` reads back scene radiance at screen points for calibration.
+  - **Local hosts only** (`isDebugHost`: localhost, loopback, `*.localhost`). On a deployed host every parameter is ignored and `window.__dyson` is not installed, so the review tools only work against a local server.
+  - The sky debug mode is set after the environment capture, so debug views keep the normal lighting.
 - **Headless renders.** `node tools/render.mjs [--query ...] spot…` renders fixed viewpoints (`debug/viewpoints.ts`). It prints exposure, the star illuminant and GPU time (with `profile`). The first render of a batch runs slow (GPU warm-up); profile with a warm-up spot first.
 - **Motion clips.** `node tools/clip.mjs --seconds 20 --query "fov=24&look=20,47" spot` boots once with `?manual`, steps real game time (four TAA sub-frames per captured frame) and encodes an MP4 with ffmpeg (`--speed` scales game time, `--start` jumps the clock).
 - **Frame rate.** `node tools/fps.mjs spot…` counts uncapped frames of the real loop (vsync off, frozen star time). The `?profile` timestamp sum overstates pipelines of many small passes on tile-based GPUs, and costs depend on what is on screen (an erupting prominence, say): compare at a fixed `time`.

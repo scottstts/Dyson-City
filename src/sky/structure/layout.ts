@@ -3,9 +3,12 @@
  * (public/logo.png), modelled as it is drawn.
  *
  *  - The equatorial band: a thick girder ±3.5° wide with twin edge rails — the habitable Girdle.
- *  - Six meridian spines, 60° apart, pole to pole, each with a ring hub where it crosses the band.
+ *    It spins inside everything else (spin.ts), so no part of the frame crosses it:
+ *  - Six meridian spines, 60° apart, from each pole to just short of the band, ending in a hub
+ *    collar: a ring about the spine's crossing point, cut open over the band so the band runs
+ *    through it. Its cut faces bear on the band's rails.
  *  - Open bands just north and south of the band (3.5°–12°), crossed only by short posts and
- *    diagonal braces from the panel corners down to the band.
+ *    diagonal braces from the panel corners down to the band's rails (mitred flush to them).
  *  - Big curved gore panels, one per 60° sector and hemisphere, from 12° to 62° latitude.
  *  - Between panels the gaps alternate: around every other hub a wide opening (±17° of longitude)
  *    crossed by latitude members at ±27° and ±50°; at the other spines a narrow slot.
@@ -34,11 +37,13 @@ export const STRUCTURE = {
   /** The band's twin edge rails. */
   rimWidth: 0.008,
   rimDepth: 0.004,
-  /** Equatorial ring hubs, polar hubs. */
-  hubRadius: 5 * DEG,
+  /** Spines end this far from the equator, buried inside their hub collar. */
+  spineEnd: 6 * DEG,
+  /** Hub collars: a ring (angular radii about the crossing point), cut open over the band. */
+  hubInner: 5 * DEG,
+  hubOuter: 7 * DEG,
   hubDepth: 0.02,
-  hubCrownRadius: 2.6 * DEG,
-  hubCrownDepth: 0.026,
+  /** Polar hubs. */
   poleRadius: 4 * DEG,
   poleDepth: 0.016,
   /** Gore panels: latitude span and thickness. */
@@ -62,11 +67,23 @@ export const STRUCTURE = {
   postDepth: 0.01,
   braceWidth: 0.007,
   braceDepth: 0.007,
-  /** The braces' lower end: this far (longitude) from the hub meridian, on the band's rail. */
-  braceFoot: 6 * DEG,
+  /** The braces' lower end: this far (longitude) from the hub meridian, on the band's rail, clear of the collar. */
+  braceFoot: 9 * DEG,
   /** Target size of a plating module (one flat facet) in the panels. */
   panelModule: 4.8 * DEG,
 } as const;
+
+/**
+ * The plane of a rail's poleward face, as the half-space q·n < c beyond it (q from the centre).
+ * Frame parts that meet the band (collars, posts, braces) are cut by it, flush against the rail.
+ */
+export function railFacePlane(hemi: 1 | -1): { n: [number, number, number]; c: number } {
+  const S = STRUCTURE;
+  const rimLat = S.girdleHalfLatitude - S.rimWidth / 2;
+  const outer = Math.sin(rimLat) + (S.rimWidth / 2) * Math.cos(rimLat);
+  // North (hemi +1) lies at q.z < −outer, south at q.z > outer.
+  return { n: [0, 0, hemi], c: -outer };
+}
 
 /** Unit vector (sphere frame) for latitude/longitude. */
 export function sphereDir(lat: number, lon: number): [number, number, number] {
@@ -102,6 +119,8 @@ export interface Strut {
   b: [number, number, number];
   width: number;
   depth: number;
+  /** Hemisphere (+1 north): the strut's foot is cut flush by that rail’s face (railFacePlane). */
+  hemi: 1 | -1;
 }
 
 const cross = (u: number[], v: number[]): [number, number, number] => [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
@@ -121,16 +140,25 @@ export function struts(): Strut[] {
   S.meridianLongitudes.forEach((lon, k) => {
     if (!isWide(k)) return;
     for (const side of [-1, 1]) {
-      for (const hemi of [-1, 1]) {
+      for (const hemi of [-1, 1] as const) {
         const corner = sphereDir(hemi * S.panelLow, lon + side * S.wideHalf);
         const postFoot = sphereDir(hemi * rail, lon + side * S.wideHalf);
         const braceFoot = sphereDir(hemi * rail, lon + side * S.braceFoot);
-        out.push({ n: norm(cross(postFoot, corner)), a: postFoot, b: corner, width: S.postWidth, depth: S.postDepth });
-        out.push({ n: norm(cross(braceFoot, corner)), a: braceFoot, b: corner, width: S.braceWidth, depth: S.braceDepth });
+        out.push({ n: norm(cross(postFoot, corner)), a: postFoot, b: corner, width: S.postWidth, depth: S.postDepth, hemi });
+        out.push({ n: norm(cross(braceFoot, corner)), a: braceFoot, b: corner, width: S.braceWidth, depth: S.braceDepth, hemi });
       }
     }
   });
   return out;
+}
+
+/**
+ * The half-space that ends a strut square across itself at the panel corner b (q·n < 0 keeps the
+ * arc from b toward its foot); the foot is cut by railFacePlane.
+ */
+export function strutTopCap(s: Strut): { n: [number, number, number]; c: number } {
+  const n = cross(s.b, s.n);
+  return { n: [-n[0], -n[1], -n[2]], c: 0 };
 }
 
 /**

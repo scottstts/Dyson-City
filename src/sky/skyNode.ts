@@ -5,7 +5,7 @@
  *                        beyond the deck mesh), lit by the attenuated star and skylight
  *   star disc          → white-light photosphere
  *   elsewhere          → the far structure (traced, with relief and one traced reflection) or
- *                        open space
+ *                        open space (sky/space/: nebulae and stars, turning with the frame)
  *   then               → the thin interior plasma
  *                        (sky/medium/plasma.ts) and the local air, in that order along the ray.
  *
@@ -25,12 +25,14 @@ import { createStarSurface } from './star/starSurface';
 import type { StarState } from './star/starState';
 import { traceStructure, shadeStructure, MAT, type ShellLight } from './structure/structure';
 import { plasmaSegment } from './medium/plasmaNodes';
-import { spaceRadiance } from './space';
+import { spaceRadiance } from './space/space';
+import type { SpaceBackdrop } from './space/bake';
+import { toFrame } from './structure/spin';
 
 type V3 = Node<'vec3'>;
 
 /** Sky debug modes (?sky=...): isolate one signal of the composition. */
-export const SKY_DEBUG = { off: 0, localS: 1, localT: 2, material: 3, noAtmosphere: 4 } as const;
+export const SKY_DEBUG = { off: 0, localS: 1, localT: 2, material: 3, noAtmosphere: 4, space: 5 } as const;
 
 export interface SkyOptions {
   debug: Node<'float'>;
@@ -50,7 +52,7 @@ export interface Sky {
   options: SkyOptions;
 }
 
-export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
+export function createSky(atmo: AtmosphereNodes, star: StarState, space: SpaceBackdrop): Sky {
   const s = STAR_RADIUS_R;
   const options: SkyOptions = {
     debug: uniform(0) as unknown as Node<'float'>,
@@ -70,7 +72,7 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
       const localRaw = sampleLut(tex.skyLocalS, tex.skyLocalT, lutUV);
       // Scattered light scales with the source: the LUTs are integrated for the reference photosphere.
       const illuminant = star.illuminant as unknown as V3;
-      const light: ShellLight = { illuminant, pre: tex.enclosurePre, preMirror: tex.enclosurePreMirror, irr: tex.enclosureIrr, plasma: tex.plasma, star };
+      const light: ShellLight = { illuminant, pre: tex.enclosurePre, preMirror: tex.enclosurePreMirror, irr: tex.enclosureIrr, plasma: tex.plasma, star, space };
       // The air's LUTs already carry the Veil-filtered sky that lights it (atmosphere/worker.ts).
       const local = { S: localRaw.S.mul(illuminant).toVar(), T: localRaw.T.toVar() };
       const out = vec3(0).toVar();
@@ -96,7 +98,8 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
           mat.assign(hit.mat);
           tEnd.assign(hit.t);
           If(hit.mat.equal(MAT.space).or(hit.mat.equal(MAT.none)), () => {
-            col.assign(spaceRadiance(d, pixelAngle));
+            // The stars keep the frame's orientation (structure/spin.ts).
+            col.assign(spaceRadiance(space, toFrame(d), pixelAngle));
             // Through a gap: out of the shell.
             tEnd.assign(d.y.mul(2.0));
           }).Else(() => {
@@ -118,6 +121,10 @@ export function createSky(atmo: AtmosphereNodes, star: StarState): Sky {
         If(options.debug.equal(SKY_DEBUG.noAtmosphere), () => {
           out.assign(seen);
         });
+      });
+      If(options.debug.equal(SKY_DEBUG.space), () => {
+        // The sky beyond the shell alone, in every direction.
+        out.assign(spaceRadiance(space, toFrame(d), pixelAngle));
       });
       If(options.debug.equal(SKY_DEBUG.localS), () => {
         out.assign(local.S);

@@ -2,17 +2,24 @@
  * Analytic ray tracing of the Dyson structure, for a ray from any origin inside the sphere.
  *
  * Units: shell radii, observer frame (observer at the origin, sphere centre C = (0, 1, 0)). The
- * primary view ray starts at the observer; reflection rays start on structure surfaces.
+ * primary view ray starts at the observer; reflection rays start on structure surfaces. Rays are
+ * given in band coordinates (the observer rides the band) and traced in frame coordinates
+ * (spin.ts); the band's own parts are symmetric about the spin axis, so they trace there too.
+ * Hit normals and axes are returned in band coordinates.
  *
- * A raised part is "slab ∩ layer" or "cone ∩ layer", where the layer is the shell between radius
- * 1 − depth and 1. A ray inside the sphere crosses that layer in up to two intervals: [0, a1]
- * (rising out of the layer near its origin) and [b0, tExit] (descending into it at the far side).
- * Both are tested: hubs and frames near the city are met in the first. The layout is layout.ts.
+ * A raised part is a convex piece ∩ layer, where the layer is the shell between radius 1 − depth
+ * and 1 and the piece is bounded by planes and cones. A ray inside the sphere crosses that layer in
+ * up to two intervals: [0, a1] (rising out of the layer near its origin) and [b0, tExit]
+ * (descending into it at the far side). Both are tested: hubs and frames near the city are met in
+ * the first. Pieces whose ends cut across the observer's path (spines, collars, struts sweep past
+ * the city as the band turns) are bounded exactly, so their end faces exist from every side. The
+ * layout is layout.ts.
  */
-import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, abs, floor, smoothstep, clamp, asin, atan, cos, sin, acos, select, length, cross } from 'three/tsl';
+import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, abs, floor, smoothstep, clamp, asin, atan, cos, sin, acos, select, length } from 'three/tsl';
 import type { Node } from 'three/webgpu';
-import { STRUCTURE, hubAxes, isWide, meridianNormal, sphereDir, struts } from './layout';
+import { STRUCTURE, hubAxes, isWide, meridianNormal, railFacePlane, sphereDir, strutTopCap, struts } from './layout';
 import { marchRelief, RELIEF } from './relief';
+import { toBand, toFrame } from './spin';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -36,10 +43,11 @@ export interface StructureHit {
   normal: V3;
   mat: F;
   /**
-   * Per-material coordinates.
-   *  frame: (signed offset across the centreline, 1 on a side face, member index)
-   *  hub:   (angle from the axis / radius, 1 on a side face, component index)
-   *  panel / panelEdge / girdle: (latitude, longitude, 0)
+   * Per-material coordinates. Face: 0 top, 1 side, 2 end (a cut face across the member).
+   *  frame: (signed offset across the centreline, face, member index)
+   *  hub:   (angle from the axis / outer radius, face, component index)
+   *  panel / panelEdge: (latitude, longitude, 0) in frame coordinates
+   *  girdle: (latitude, longitude, 0) in band coordinates
    */
   aux: V3;
   /** Slab plane normal (frames) or cone axis (hubs). */
@@ -48,7 +56,7 @@ export interface StructureHit {
   occlusion: F;
   /**
    * Member size: frames (half-width in plane-offset units, depth, centre offset of the slab plane);
-   * hubs (angular radius, depth, 0).
+   * hubs (outer angular radius, depth, inner radius / outer radius: 0 for a solid hub).
    */
   size: V3;
 }
@@ -171,6 +179,156 @@ function coneLayer(ctx: Ctx, best: StructureHit, a: [number, number, number], be
 }
 
 // ---------------------------------------------------------------------------------------------
+// Exact convex pieces: an intersection of half-spaces and cones, entered through a real face
+
+/** Ray interval [lo, hi] inside one bound, and the face id it enters through at lo. */
+interface Span {
+  lo: F;
+  hi: F;
+  face: F;
+}
+
+/** Face ids: planes are numbered from 0 in the order given. */
+const FACE_CONE = 20;
+const FACE_BORE = 21;
+const FACE_TOP = 22;
+const FACE_NONE = 23;
+
+/** A cut plane, as the half-space q·n < c the piece keeps (q from the centre). */
+interface Plane {
+  n: [number, number, number];
+  c: number;
+}
+
+function planeSpan(ctx: Ctx, p: Plane, face: number): Span {
+  const nv = vec3(...p.n);
+  const nd = dot(ctx.d, nv);
+  const gap = float(p.c).sub(dot(ctx.oc, nv));
+  const parallel = abs(nd).lessThan(1e-9);
+  const tc = gap.div(select(parallel, float(1e-9), nd));
+  const inside = gap.greaterThan(0.0);
+  return {
+    lo: select(parallel, select(inside, float(-BIG), float(BIG)), select(nd.lessThan(0.0), tc, float(-BIG))),
+    hi: select(parallel, select(inside, float(BIG), float(-BIG)), select(nd.greaterThan(0.0), tc, float(BIG))),
+    face: float(face),
+  };
+}
+
+/** Interval inside the axis-side nappe of the cone of half-angle β about a (empty when missed). */
+function coneSpan(ctx: Ctx, a: [number, number, number], beta: number): { lo: F; hi: F; ok: B } {
+  const av = vec3(...a);
+  const k = Math.cos(beta) ** 2;
+  const m = dot(ctx.d, av);
+  const p = dot(ctx.oc, av);
+  const A = m.mul(m).sub(k);
+  const Bh = p.mul(m).sub(dot(ctx.oc, ctx.d).mul(k));
+  const Cc = p.mul(p).sub(dot(ctx.oc, ctx.oc).mul(k));
+  const disc = Bh.mul(Bh).sub(A.mul(Cc));
+  const sq = sqrt(max(disc, 0.0));
+  const safeA = min(A, -1e-9);
+  const r0 = Bh.negate().sub(sq).div(safeA);
+  const r1 = Bh.negate().add(sq).div(safeA);
+  const e0 = min(r0, r1);
+  const e1 = max(r0, r1);
+  const ok = disc.greaterThan(0.0).and(A.lessThan(0.0)).and(p.add(m.mul(e0.add(e1).mul(0.5))).greaterThan(0.0));
+  return { lo: select(ok, e0, float(BIG)), hi: select(ok, e1, float(-BIG)), ok };
+}
+
+function meet(a: Span, b: Span): Span {
+  return { lo: max(a.lo, b.lo), hi: min(a.hi, b.hi), face: select(b.lo.greaterThan(a.lo), b.face, a.face) };
+}
+
+/**
+ * First entry into (∩ spans) ∩ layer, optionally ∩ (one of `alts`, a union of spans: the outside
+ * of a cone is two intervals). An entry at the ray's origin is not an entry.
+ */
+function pieceEntry(ctx: Ctx, L: { a1: F; b0: F }, spans: Span[], alts?: Span[]): { t: F; face: F; ok: B } {
+  const base = spans.reduce(meet);
+  const layers: Span[] = [
+    { lo: float(0), hi: L.a1, face: float(FACE_NONE) },
+    { lo: L.b0, hi: ctx.tExit, face: float(FACE_TOP) },
+  ];
+  let t: F = float(BIG);
+  let face: F = float(FACE_NONE);
+  for (const l of layers) {
+    for (const alt of alts ?? [null]) {
+      const s = alt ? meet(meet(base, l), alt) : meet(base, l);
+      const better = s.lo.lessThan(s.hi).and(s.lo.greaterThan(1e-6)).and(s.lo.lessThan(t));
+      t = select(better, s.lo, t);
+      face = select(better, s.face, face);
+    }
+  }
+  return { t, face, ok: t.lessThan(BIG * 0.5) };
+}
+
+/** Outward normal of a plane face, by id, among `planes` (or `fallback` for any other face). */
+function planeNormal(face: F, planes: Plane[], fallback: V3): V3 {
+  let n: V3 = fallback;
+  planes.forEach((p, i) => {
+    n = select(face.equal(float(i)), vec3(...p.n), n) as unknown as V3;
+  });
+  return n;
+}
+
+/**
+ * A girder exactly bounded: slab s0 < q·n < s1, cut by `caps` (end faces across the member).
+ * Same hit coordinates as slabLayer.
+ */
+function slabPiece(ctx: Ctx, best: StructureHit, n: [number, number, number], s0: number, s1: number, depth: number, caps: Plane[], mat: number, index: number): void {
+  const planes: Plane[] = [{ n, c: s1 }, { n: [-n[0], -n[1], -n[2]], c: -s0 }, ...caps];
+  const L = layer(ctx, depth);
+  const e = pieceEntry(ctx, L, planes.map((p, i) => planeSpan(ctx, p, i)));
+  If(e.ok.and(e.t.lessThan(best.t)), () => {
+    const q = ctx.oc.add(ctx.d.mul(e.t));
+    const nn = vec3(...n);
+    const top = e.face.equal(float(FACE_TOP));
+    best.t.assign(e.t);
+    best.normal.assign(planeNormal(e.face, planes, normalize(q).negate()));
+    best.mat.assign(float(mat));
+    best.aux.assign(vec3(dot(q, nn).sub((s0 + s1) * 0.5), select(top, float(0), select(e.face.greaterThan(1.5), float(2), float(1))), float(index)));
+    best.axis.assign(nn);
+    best.size.assign(vec3((s1 - s0) / 2, depth, (s0 + s1) / 2));
+  });
+}
+
+/**
+ * A hub collar: the ring between cones of half-angle `inner` and `outer` about the crossing point
+ * a, in one hemisphere, cut flush against that rail's face (the band runs through the ring).
+ */
+function collarPieces(ctx: Ctx, best: StructureHit, a: [number, number, number], inner: number, outer: number, depth: number, index: number): void {
+  const out = coneSpan(ctx, a, outer);
+  If(out.ok, () => {
+    const bore = coneSpan(ctx, a, inner);
+    const L = layer(ctx, depth);
+    // Outside the inner cone: before it, or after it.
+    const alts: Span[] = [
+      { lo: float(-BIG), hi: select(bore.ok, bore.lo, float(BIG)), face: float(FACE_NONE) },
+      { lo: select(bore.ok, bore.hi, float(BIG)), hi: float(BIG), face: float(FACE_BORE) },
+    ];
+    const av = vec3(...a);
+    const kOut = Math.cos(outer) ** 2;
+    const kIn = Math.cos(inner) ** 2;
+    for (const hemi of [1, -1] as const) {
+      const cut = railFacePlane(hemi);
+      const e = pieceEntry(ctx, L, [{ lo: out.lo, hi: out.hi, face: float(FACE_CONE) }, planeSpan(ctx, cut, 0)], alts);
+      If(e.ok.and(e.t.lessThan(best.t)), () => {
+        const q = ctx.oc.add(ctx.d.mul(e.t));
+        const qa = dot(q, av);
+        const coneOut = normalize(q.mul(kOut).sub(av.mul(qa)));
+        const coneIn = normalize(q.mul(kIn).sub(av.mul(qa))).negate();
+        const n = select(e.face.equal(float(FACE_CONE)), coneOut, select(e.face.equal(float(FACE_BORE)), coneIn, select(e.face.equal(float(0)), vec3(...cut.n), normalize(q).negate())));
+        best.t.assign(e.t);
+        best.normal.assign(n);
+        best.mat.assign(float(MAT.hub));
+        best.aux.assign(vec3(acos(clamp(dot(normalize(q), av), -1, 1)).div(outer), select(e.face.equal(float(FACE_TOP)), float(0), select(e.face.equal(float(0)), float(2), float(1))), float(index)));
+        best.axis.assign(av);
+        best.size.assign(vec3(outer, depth, inner / outer));
+      });
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------------------------
 // Collector panels
 
 /** Panel layout at a shell point: signed distance to the panel outline (+ inside) and cell coords. */
@@ -258,9 +416,12 @@ function inGirdle(qn: V3): B {
  * Nearest structure hit along o + t·d (o relative to the observer, d unit). `footprint0` is the
  * angular pixel size, used only to anti-alias panel outlines.
  */
-export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false): StructureHit {
+export function traceStructure(o: V3, dBand: V3, footprint0: F, withRelief = false): StructureHit {
   const S = STRUCTURE;
-  const oc = o.sub(vec3(0, 1, 0)).toVar();
+  const ocBand = o.sub(vec3(0, 1, 0));
+  // Trace in frame coordinates (spin.ts).
+  const oc = toFrame(ocBand).toVar();
+  const d = toFrame(dBand).toVar();
   const b = dot(oc, d);
   const c = dot(oc, oc).sub(1);
   const tExit = b.negate().add(sqrt(max(b.mul(b).sub(c), 0.0))).toVar();
@@ -275,9 +436,13 @@ export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false):
     occlusion: float(1).toVar(),
   };
 
-  // Meridian spines: three planes, each carrying two spines 180° apart (indices 0–2).
+  // Meridian spines: three planes, each carrying two spines 180° apart (indices 0–2), from each pole
+  // to just short of the band, where they end inside their hub collars.
+  const spineEnd = Math.sin(S.spineEnd);
   S.meridianLongitudes.slice(0, 3).forEach((lon, i) => {
-    slabLayer(ctx, best, meridianNormal(lon), -S.spineWidth / 2, S.spineWidth / 2, S.spineDepth, MAT.frame, i);
+    for (const hemi of [1, -1]) {
+      slabPiece(ctx, best, meridianNormal(lon), -S.spineWidth / 2, S.spineWidth / 2, S.spineDepth, [{ n: [0, 0, hemi], c: -spineEnd }], MAT.frame, i);
+    }
   });
   // Latitude slabs (q.z = −sin φ), optionally clipped.
   const zSlab = (lat: number, width: number, depth: number, idx: number, clip?: (qn: V3) => B) => {
@@ -308,22 +473,15 @@ export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false):
     zSlab(lat, S.memberWidth, S.memberDepth, 14 + i * 2, inWideOpening);
     zSlab(-lat, S.memberWidth, S.memberDepth, 15 + i * 2, inWideOpening);
   });
-  // Posts and braces across the open bands (20+): great-circle slabs clipped to their arc.
+  // Posts and braces across the open bands (20+): great-circle slabs from the panel corner (cut
+  // square across the member) down to the rail (cut flush against its face).
   struts().forEach((s, i) => {
-    const nv = vec3(...s.n);
-    const av = vec3(...s.a);
-    const bv = vec3(...s.b);
-    slabLayer(ctx, best, s.n, -s.width / 2, s.width / 2, s.depth, MAT.frame, 20 + i, (qn) =>
-      dot(cross(av, qn), nv).greaterThanEqual(0.0).and(dot(cross(qn, bv), nv).greaterThanEqual(0.0)),
-    );
+    slabPiece(ctx, best, s.n, -s.width / 2, s.width / 2, s.depth, [railFacePlane(s.hemi), strutTopCap(s)], MAT.frame, 20 + i);
   });
 
-  // Hubs: equatorial ring hubs with a crown (0–5, 10–15), polar hubs (40, 41).
+  // Hubs: equatorial hub collars (0–5), polar hubs (40, 41).
   const hubs = hubAxes();
-  hubs.equatorial.forEach((a, i) => {
-    coneLayer(ctx, best, a, S.hubRadius, S.hubDepth, MAT.hub, i);
-    coneLayer(ctx, best, a, S.hubCrownRadius, S.hubCrownDepth, MAT.hub, 10 + i);
-  });
+  hubs.equatorial.forEach((a, i) => collarPieces(ctx, best, a, S.hubInner, S.hubOuter, S.hubDepth, i));
   hubs.poles.forEach((a, i) => coneLayer(ctx, best, a, S.poleRadius, S.poleDepth, MAT.hub, 40 + i));
 
   // Collector panels (top faces at radius 1 − panelDepth, edges down to the shell) and the band.
@@ -372,7 +530,8 @@ export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false):
           best.t.assign(tExit);
           best.normal.assign(qShell.negate());
           best.mat.assign(float(MAT.girdle));
-          const ll = latLon(qShell);
+          // The band turns with the observer: its coordinates are band coordinates.
+          const ll = latLon(toBand(qShell));
           best.aux.assign(vec3(ll.lat, ll.lon, 0));
         })
         .Else(() => {
@@ -381,5 +540,7 @@ export function traceStructure(o: V3, d: V3, footprint0: F, withRelief = false):
     });
   });
 
+  best.normal.assign(toBand(best.normal));
+  best.axis.assign(toBand(best.axis));
   return best;
 }

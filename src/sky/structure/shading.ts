@@ -31,6 +31,9 @@ import type { StarState } from '../star/starState';
 import { MAT, type StructureHit } from './trace';
 import { plasmaSegment } from '../medium/plasmaNodes';
 import { FINISHES, type SurfaceSample } from './surfaces';
+import { toFrame } from './spin';
+import { spaceBackdropRadiance } from '../space/space';
+import type { SpaceBackdrop } from '../space/bake';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -45,10 +48,14 @@ export interface ShellLight {
   plasma: DataTexture;
   /** The star's features, for flares seen in reflection (light echoes). */
   star: StarState;
+  /** The sky beyond the shell, seen in mirrors that look out through a gap. */
+  space: SpaceBackdrop;
 }
 
 const { preWidth: PW, preHeight: PH, irrWidth: IW } = ENCLOSURE_LUT;
 const HALF_PI = Math.PI / 2;
+/** Backdrop level for reflected space (~0.35° texels): mirror lobes and their jitter blur finer detail. */
+const REFLECTED_SPACE_LOD = 2;
 
 /** Effective roughness of a finish whose facets spread by σ (radians): α² ⊕ 2σ². */
 export function effectiveRoughness(roughness: F | number, spread: F): F {
@@ -140,6 +147,11 @@ function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V
       const hp = pos.add(r.mul(hit.t));
       const upHit = normalize(vec3(0, 1, 0).sub(hp));
       out.assign(structureRadiance(light, asin(clamp(dot(r.negate(), upHit), -1, 1)).abs()));
+    }).Else(() => {
+      // Out through a gap: the (lifted) sky beyond, whose light is not the star's, so it is divided
+      // out of the illuminant the shading applies at the end. Diffuse only: the lobe's jitter would
+      // smear point stars, and the blurred level matches it.
+      out.assign(spaceBackdropRadiance(light.space, toFrame(r), float(REFLECTED_SPACE_LOD)).div(light.illuminant.max(1e-3)));
     });
   });
   const seg = plasmaSegment(light.plasma, oc, r, float(0), tEnd);

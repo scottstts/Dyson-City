@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildRopes, eruptionLift, jetEvent, jetHead, jetLifetime, ERUPTION_DURATION, KM, ROPE_COUNT } from '../src/sky/star/magnetic';
+import { buildRopes, MagneticState, ROPE_COUNT, ROPE_SLOTS } from '../src/sky/star/magnetic';
 import { subObserverAt } from '../src/sky/star/features';
 
 const dot = (a: number[], b: number[]) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
@@ -19,28 +19,18 @@ describe('prominences', () => {
     }
   });
 
-  it('erupt at energetic but solar speeds and leave the limb within the eruption', () => {
-    const v = (8 * KM * ERUPTION_DURATION) / KM; // km/s at the end
-    expect(v).toBeGreaterThan(1000);
-    expect(v).toBeLessThan(3000);
-    expect(eruptionLift(ERUPTION_DURATION)).toBeGreaterThan(0.2);
-    expect(eruptionLift(-1)).toBe(0);
-  });
-});
-
-describe('jets', () => {
-  it('start near the limb as seen at launch, rise and fall back within their life', () => {
-    for (let k = 1; k < 40; k++) {
-      const j = jetEvent(k);
-      const theta = Math.acos(dot(j.site, subObserverAt(j.start)));
-      expect(Math.abs(theta - Math.PI / 4)).toBeLessThan(0.25);
-      const apex = j.speed / j.decel;
-      expect(jetHead(j, apex)).toBeGreaterThan(jetHead(j, apex * 0.5));
-      expect(jetHead(j, 2 * apex)).toBeCloseTo(0, 9);
-      expect(jetLifetime(j)).toBeGreaterThan(2 * apex);
-      // Launch speeds of 500–1,400 km/s.
-      expect(j.speed / KM).toBeGreaterThan(450);
-      expect(j.speed / KM).toBeLessThan(1500);
+  it('fill their slots with ones standing near the limb', () => {
+    const state = new MagneticState();
+    const sub = subObserverAt(1000);
+    state.update(sub);
+    let filled = 0;
+    for (let k = 0; k < ROPE_SLOTS; k++) {
+      const v = state.ropes.values[k * 3];
+      if (state.ropes.values[k * 3 + 2].y === 0) continue;
+      filled++;
+      const theta = Math.acos(dot([v.x, v.y, v.z], sub));
+      expect(Math.abs(theta - Math.PI / 4)).toBeLessThan(0.6);
     }
+    expect(filled).toBeGreaterThan(0);
   });
 });

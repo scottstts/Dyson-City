@@ -21,8 +21,8 @@ Pillars:
 | Star | A Sun-like G2 star, radius **696,000 km** | A blinding white photosphere: countless granules, faculae, spots, flares, prominences at the limb |
 | Shell | Inner radius **984,000 km** from the star's centre (288,000 km above its surface) | The star is **90° across**. Its limb sits **45° above the horizon** in every direction |
 | Gravity | Spin gravity, **1 g** at the equator (17.5 h rotation). The star's own pull and Coriolis are ignored | Walking and falling feel like Earth |
-| Location | The city sits **on the equatorial band, just west of a hub** (the circular joint where a meridian frame crosses the band, as in the logo) | Only there does "down" point straight down. The hub drum rises on the eastern horizon |
-| Spin | The shell turns under a star that does not turn with it | The star's surface drifts **east → west at ~0.83° per minute**. This is the only clock |
+| Location | The city sits **on the equatorial band**, which at spawn runs through a hub collar 20° to the east (where a meridian frame meets the band, as in the logo) | Only there does "down" point straight down. At spawn the hub collar rises on the eastern horizon |
+| Spin | **Only the band turns**, inside a static frame (spines, hub collars, gores) that keeps the stars' orientation. One turn every **2 hours** relative to the frame (a game rate, not the 1 g rate). The star's surface keeps its own drift | The frame and the stars beyond it sweep **east → west at 3° per minute**: they sink toward the eastern horizon and rise out of the western one, and the hub collars travel along the band, passing round the city every 20 minutes. The star's surface drifts ~0.83° per minute |
 | Light | **Eternal day.** One fixed lighting setup | Variation comes from star drift, flares and viewpoint |
 
 ### Seeing at this scale
@@ -41,7 +41,7 @@ The facts below decide most of the image. They are the main corrections to the f
 - **The ground does not visibly curve upward near the city.** From eye height, the deck crosses eye level about 60 km away, and the whole deck beyond ~5 km compresses into a pixel-thin strip at the horizon. The shell only rises measurably at hundreds of thousands of km. **No surface ever rises steeply near the city.** The concept image is wrong about this: its walls climb right behind the buildings. Its *feel* is right: warm blazing star, vast structure climbing into glare.
 - **Anything visible on the far shell is continent-sized.** A readable structural member is thousands to tens of thousands of km wide. The habitable city is invisible from anywhere else on the sphere.
 - **Everything outside is lit by the same star.** The far shell receives exactly the light the ground at your feet receives. Brightness differences up there come from material (dark collectors versus bright deck), geometry (faces turned toward or away from the star), occlusion, atmosphere and glare. They never come from "distance darkness".
-- **A daylight exposure hides the stars.** Space seen through gaps in the structure is black, veiled by the air in front of it. Stars appear only at very different exposures (a future telescope).
+- **Space is lifted to be seen.** A real daylight exposure would show space through the gaps as black. Here the stars, the Milky Way and large nebulae are far brighter than physical, so the sky outside reads through the air and the openings, and its motion shows the band turning (`docs/sky.md`). The telescope still reveals much more.
 - **Scale must come from content.** Seeing a sphere from a point on it is a stereographic projection, so its silhouettes cannot tell 200 m from 1,000,000 km. What tells it:
   - the local air, which veils the lowest structure;
   - detail with no countable elements at any scale (a regular rhythm a few degrees apart reads as human-scale architecture);
@@ -52,7 +52,7 @@ The facts below decide most of the image. They are the main corrections to the f
 
 ## 3. The Dyson structure
 
-The sphere is the project logo (`public/logo.png`), modelled as drawn: an equatorial band with ring hubs, six meridian spines, big curved gore panels in each sector, open bands beside the band, alternating wide openings and narrow slots between the gores, and polar collars. The city is on the band, 20° west of a hub. The full specification is in `docs/sky.md`.
+The sphere is the project logo (`public/logo.png`), modelled as drawn: an equatorial band with ring hubs, six meridian spines, big curved gore panels in each sector, open bands beside the band, alternating wide openings and narrow slots between the gores, and polar collars. The band spins inside the rest, so nothing of the frame crosses it: the spines end in hub collars that the band runs through. At spawn the city is 20° west of a hub. The full specification is in `docs/sky.md`.
 
 The shell is a fictional refractory alloy: dark, warm metal that mirrors the enclosure and glows faintly with the heat it collects. Its hottest coolant channels run as thin orange-gold lines along panel borders, girders and hub rims: the logo's lines. Details are in `docs/sky.md`.
 
@@ -70,9 +70,9 @@ The shell is a fictional refractory alloy: dark, warm metal that mirrors the enc
 
 The star is blinding. Even through the Veil, looking toward it you see brightness swallowing everything: pure white-hot light with no silhouette you can point to and almost no surface texture, its glare engulfing the structure beside it. The world further from it emerges from the blaze.
 
-- **What it is underneath.** A real, caged, more-active-than-the-Sun star at true scale: granulation (~620,000 granules on the visible disc), faculae, spot groups, flares; a corona, a burning chromospheric fringe, loop arcades rooted all over its surface, prominences that erupt as CMEs, and jets. In the normal view almost all of it is lost in the blaze; the telescope, with its own exposure, reveals it.
+- **What it is underneath.** A real, caged, more-active-than-the-Sun star at true scale: granulation (~620,000 granules on the visible disc), faculae, spot groups, flares; a corona, a burning chromospheric fringe, loop arcades rooted all over its surface, prominences, and gas bursts erupting off the limb. In the normal view almost all of it is lost in the blaze; the telescope, with its own exposure, reveals it.
 - **Colour.** Temperature (Planck) and per-channel limb darkening; a 5,772 K body under a daylight camera reads hot cream-white. The atmosphere's plasma runs orange to gold to white-gold.
-- **Motion.** Real time, never time-lapsed: the surface drifts ~0.8°/min with the shell's spin; the energetic star's jets and eruptions move at hundreds to a few thousand km/s. Flares echo in the far shell's mirrors seconds later.
+- **Motion.** Real time, never time-lapsed: the surface drifts ~0.8°/min with the shell's spin; the energetic star's flows run at hundreds to a few thousand km/s. The gas bursts alone are time-lapsed, so they visibly billow. Flares echo in the far shell's mirrors seconds later.
 
 ## 6. The site (earmarked land)
 
@@ -150,9 +150,9 @@ A single **"Press E to …"** prompt. No menus, inventories or multi-step mechan
 - granulation, spot fine structure, flare ribbons, prominences;
 - the far structure's plates, lights and hubs.
 
-Its exposure adapts to its narrow field. When it points through a gap in the structure, the stars and a faint band of the galaxy appear. This is the game's quiet discovery.
+Its exposure adapts to its narrow field. Through a gap in the structure it resolves the nebulae's filaments and dust, faint stars and the galaxy's star clouds beyond what the eye sees.
 
-**Movement:** WASD + mouse look, sprint, jump, crouch. Grounded and slightly unhurried.
+**Movement:** WASD + mouse look, sprint (Shift), jump, crouch. Grounded and slightly unhurried; the view moves as a walking or running person's head does (`docs/player.md`).
 
 ## 9. Visual style
 
@@ -161,7 +161,7 @@ Its exposure adapts to its narrow field. When it points through a gap in the str
 The style is photoreal megastructure: engineering at a scale beyond comprehension, rendered with physical light. The look is derived, not painted.
 
 - A blinding white star whose glare floods the frame and dissolves its own outline.
-- A patchwork of warm metal tiles reflecting real pieces of the enclosure and glowing faintly with heat: gaps dark, the star blazing in the tiles near the limb.
+- A patchwork of warm metal tiles reflecting real pieces of the enclosure and glowing faintly with heat, the star blazing in the tiles near the limb; through the gaps, a starry sky with nebulae, turning slowly past the band.
 - Distance shown by content, light and motion (`docs/scale.md`): blue habitat air in front of everything, a crisp cavity behind it.
 
 ### The city: Solar Neoclassical
@@ -212,7 +212,7 @@ Interiors are daylit through openings and feel cooler and calmer.
 
 ## 12. Rendering scope
 
-Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
+Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
 
 - **Physically based radiometry.** One radiance scale for the star, the far structure, the atmosphere and local materials. Exposure is a camera, never a fix for wrong ratios.
 - **Star:**

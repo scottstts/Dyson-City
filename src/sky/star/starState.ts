@@ -59,7 +59,7 @@ export class StarState {
   readonly flares: Vec4Array;
   readonly spotCount: number;
   readonly regionCount: number;
-  /** Prominences, eruptions and jets at the limb (magnetic.ts). */
+  /** Quiescent prominences at the limb (magnetic.ts). */
   readonly magnetic: MagneticState;
 
   private readonly flareVecs: Vector4[];
@@ -100,7 +100,7 @@ export class StarState {
     this.time.value = t;
     (this.subObserver.value as Vector3).set(s, -c, 0);
     this.updateFlares(t, [s, -c, 0]);
-    this.magnetic.update(t, [s, -c, 0]);
+    this.magnetic.update([s, -c, 0]);
   }
 
   private updateFlares(t: number, sub: V3): void {

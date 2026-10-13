@@ -1,31 +1,23 @@
 /**
- * Shader side of the star's prominences, eruptions and jets (magnetic.ts; the loops along the limb
- * are limbLoops.ts): kinematic plasma, raymarched only
- * inside each structure's bounds, summed as optically thin glow (plus the absorption of cool,
- * dense prominence material).
+ * Shader side of the star's quiescent prominences (magnetic.ts): kinematic plasma, raymarched only
+ * inside each prominence's bounds, summed as optically thin glow plus the absorption of its cool,
+ * dense material.
  *
- * Every structure has its own field-aligned coordinates, and its plasma is noise written in those
- * coordinates, so it always looks threaded along the field and moves along it:
- *
- *  - Rope (prominence): a thick, lacy body of gas around one arched field line of a buried dipole
- *    (r = L·sin²θ): a domain-warped, churning envelope, fibres along the field wound round its
- *    axis and draining down its legs, voids and knots. Erupting, its apex lifts (the feet stay
- *    anchored), it swells and unwinds, and a gauzy CME front runs ahead.
- *  - Jet: a column of ballistic parcels launched up open field. A point in the column is labelled
- *    by the launch time of the parcel there, and the noise is written in that label, so the gas is
- *    carried with the parcels; turbulence grows with parcel age, so the column widens, curls and
- *    breaks up like a flamethrower's, cooling from white-gold to deep orange, then falls back.
+ * Every prominence has its own field-aligned coordinates, and its plasma is noise written in those
+ * coordinates, so it always looks threaded along the field and moves along it: a thick, lacy body
+ * of gas around one arched field line of a buried dipole (r = L·sin²θ), a domain-warped, churning
+ * envelope, fibres along the field wound round its axis and draining down its legs, voids and knots.
  *
  * Steps are jittered per pixel and frame (temporal AA integrates them) and every pattern fades to
  * its mean below the pixel footprint. Units: star radii, seconds; radiance relative to the disc
  * mean (× STAR_DISC_MEAN_RADIANCE at the end).
  */
-import { float, vec3, vec4, If, abs, atan, dot, length, max, min, normalize, sqrt, smoothstep, exp, cross, pow, select, sin, mix, clamp } from 'three/tsl';
+import { float, vec3, vec4, If, abs, atan, dot, length, max, min, normalize, sqrt, smoothstep, exp, cross, pow, select, sin, mix } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { vNoise4 } from '../../render/tsl/volumeNoise';
 import { loop } from '../../render/tsl/helpers';
 import { STAR_DISC_MEAN_RADIANCE } from '../../world/radiometry';
-import { CME_FRONT_LEAD, ERUPTION_ACCELERATION, ERUPTION_DURATION, JET_SLOTS, KM, ROPE_SLOTS, type MagneticState } from './magnetic';
+import { KM, ROPE_SLOTS, type MagneticState } from './magnetic';
 import { plasmaColour } from './plasmaColour';
 import type { StarState } from './starState';
 
@@ -33,7 +25,6 @@ type F = Node<'float'>;
 type V3 = Node<'vec3'>;
 
 const ROPE_STEPS = 16;
-const JET_STEPS = 14;
 /** Drainage down a prominence's legs (star radii/s). */
 const DRAIN = 150 * KM;
 /** Opacity of cool prominence material (per star radius at unit density). */
@@ -75,15 +66,15 @@ function boxInterval(f: Frame, lo: V3, hi: V3, tMax: F): { t0: F; t1: F } {
 }
 
 /**
- * Emission (rgb, scene radiance) and optical depth (a) of the magnetic structures along a view ray
- * `d` (observer frame) up to tEnd (shell units). `jitter` ∈ [0, 1) per pixel and frame.
+ * Emission (rgb, scene radiance) and optical depth (a) of the prominences along a view ray `d`
+ * (observer frame) up to tEnd (shell units). `jitter` ∈ [0, 1) per pixel and frame.
  */
 export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd: F, pixelAngle: F, starRadius: number, jitter: F): Node<'vec4'> {
   const out = vec3(0).toVar();
   const tau = float(0).toVar();
   const toC = vec3(0, 1, 0);
   const b = length(toC.sub(d.mul(dot(d, toC)))).div(starRadius);
-  // Only rays passing within ~0.45 star radii of the limb can meet a structure.
+  // Only rays passing within ~0.45 star radii of the limb can meet a prominence.
   If(b.greaterThan(0.75).and(b.lessThan(1.5)), () => {
     const time = star.time as unknown as F;
     const R = star.rotation;
@@ -91,27 +82,19 @@ export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd:
     const dir = R.mul(d).toVar();
     const tMax = tEnd.div(starRadius).toVar();
 
-    // --- Prominences: twisted flux ropes, and their eruptions -------------------------------------
     loop('ropeK', ROPE_SLOTS, (k) => {
-      const v0 = mag.ropes.slots.at(k.mul(4)).toVar();
-      const v1 = mag.ropes.slots.at(k.mul(4).add(1)).toVar();
-      const v2 = mag.ropes.slots.at(k.mul(4).add(2)).toVar();
-      const v3 = mag.ropes.slots.at(k.mul(4).add(3)).toVar();
+      const v0 = mag.ropes.at(k.mul(3)).toVar();
+      const v1 = mag.ropes.at(k.mul(3).add(1)).toVar();
+      const v2 = mag.ropes.at(k.mul(3).add(2)).toVar();
       const B = v2.y;
-      If(B.greaterThan(0.0).and(v3.x.greaterThan(0.01)), () => {
+      If(B.greaterThan(0.0), () => {
         const f = localFrame(o, dir, v0.xyz, v1.xyz);
         const D = v0.w;
         const La = v1.w;
+        const w = v2.x;
         const seed = v2.z;
-        const age = v2.w;
-        const erupting = age.greaterThanEqual(0.0);
-        const lift = select(erupting, age.mul(age).mul(ERUPTION_ACCELERATION * 0.5), float(0)).toVar();
-        const fade = select(erupting, exp(age.div(ERUPTION_DURATION * -0.45)), v3.x).toVar();
-        const swell = lift.div(La).mul(1.2).add(1).toVar();
-        const w = v2.x.mul(swell).toVar();
-        const twist = select(erupting, float(1).sub(age.div(ERUPTION_DURATION)).mul(0.8).add(0.2), float(1));
-        const top = La.sub(D).add(lift).mul(swell);
-        const xr = La.mul(0.42).mul(swell).add(w.mul(2));
+        const top = La.sub(D);
+        const xr = La.mul(0.42).add(w.mul(2));
         const box = boxInterval(f, vec3(xr.negate(), -0.004, w.mul(2).negate()), vec3(xr, top.add(w.mul(2)), w.mul(2)), tMax);
         If(box.t1.greaterThan(box.t0), () => {
           const dt = box.t1.sub(box.t0).div(ROPE_STEPS).toVar();
@@ -120,15 +103,11 @@ export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd:
           loop('ropeS', ROPE_STEPS, (j) => {
             const t = box.t0.add(j.toFloat().add(jitter).mul(dt));
             const P = f.ol.add(f.dl.mul(t));
-            // The apex lifts and the whole rope swells; the feet stay anchored.
-            const Y0 = P.y.add(D);
-            const s0 = Y0.div(max(sqrt(P.x.mul(P.x).add(Y0.mul(Y0))), 1e-5));
-            const x = P.x.div(swell);
-            const Y = P.y.sub(lift.mul(s0.mul(s0))).div(swell).add(D);
-            const r = sqrt(x.mul(x).add(Y.mul(Y)));
-            const theta = atan(Y, x);
+            const Y = P.y.add(D);
+            const r = sqrt(P.x.mul(P.x).add(Y.mul(Y)));
+            const theta = atan(Y, P.x);
             const sn = sin(theta);
-            const u = r.sub(La.mul(sn).mul(sn)).mul(swell);
+            const u = r.sub(La.mul(sn).mul(sn));
             const vz = P.z;
             const d0 = sqrt(u.mul(u).add(vz.mul(vz)));
             If(d0.lessThan(w.mul(1.9)).and(P.y.greaterThan(-0.002)), () => {
@@ -139,9 +118,9 @@ export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd:
               const th = theta.add(warp.z.mul(0.12));
               const dn = sqrt(uw.mul(uw).add(vw.mul(vw))).div(w);
               const body = smoothstep(1.05, 0.3, dn);
-              // Fibres along the field, wound round the axis (unwinding as it erupts) and draining
-              // down both legs: noise long along θ, fine across the rope.
-              const ang = th.mul(2.5).mul(twist);
+              // Fibres along the field, wound round the axis and draining down both legs: noise
+              // long along θ, fine across the rope.
+              const ang = th.mul(2.5);
               const cu = uw.mul(sin(ang.add(Math.PI / 2))).sub(vw.mul(sin(ang))).div(w);
               const cv = uw.mul(sin(ang)).add(vw.mul(sin(ang.add(Math.PI / 2)))).div(w);
               const drain = time.mul(DRAIN).div(La).mul(select(th.lessThan(Math.PI / 2), float(-1), float(1)));
@@ -153,7 +132,7 @@ export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd:
               const voids = smoothstep(0.28, 0.6, lace.x);
               const knots = smoothstep(0.55, 0.85, lace.y).mul(1.6).add(0.6);
               const legs = exp(P.y.div(-0.02)).mul(0.8).add(1);
-              const dens = body.mul(fibres.add(0.1)).mul(voids).mul(knots).mul(legs).mul(fade);
+              const dens = body.mul(fibres.add(0.1)).mul(voids).mul(knots).mul(legs);
               // Cool, dense plasma: it glows orange-gold and absorbs.
               acc.addAssign(plasmaColour(dens).mul(dens));
               depth.addAssign(dens);
@@ -161,115 +140,6 @@ export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd:
           });
           out.addAssign(acc.mul(dt.div(w)).mul(B).mul(4.0));
           tau.addAssign(depth.mul(dt).mul(ROPE_KAPPA));
-        });
-
-        // CME front: a thin, bright, filamentary shell expanding ahead of the erupting rope.
-        If(erupting, () => {
-          const Rf = La.add(lift.mul(CME_FRONT_LEAD)).mul(1.1).toVar();
-          const cf = vec3(0, Rf.mul(0.5).sub(D), 0);
-          const rel = f.ol.sub(cf);
-          const tca = dot(rel, f.dl).negate();
-          const p2 = dot(rel, rel).sub(tca.mul(tca));
-          If(tca.greaterThan(0.0).and(tca.lessThan(tMax)).and(p2.lessThan(Rf.mul(Rf))), () => {
-            const delta = Rf.mul(0.3);
-            const ri = Rf.sub(delta);
-            const col = sqrt(max(Rf.mul(Rf).sub(p2), 0.0)).sub(sqrt(max(ri.mul(ri).sub(p2), 0.0))).mul(2);
-            const peak = sqrt(Rf.mul(Rf).sub(ri.mul(ri))).mul(2);
-            // Height of the closest point above the curved photosphere (a cut on the local plane shows as
-            // a straight edge across the disc).
-            const yc = length(o.add(dir.mul(tca))).sub(1.0);
-            const dirF = normalize(f.ol.add(f.dl.mul(tca)).sub(cf));
-            // Gauzy: a thick shell broken into filaments, brightest along its leading edge.
-            const fn = vNoise4(dirF.mul(9.0).add(vec3(seed, age.div(120.0), 0.0)));
-            const fil = ridges(fn.x, 3).mul(1.3).add(ridges(fn.y, 5).mul(0.6)).mul(smoothstep(0.25, 0.6, fn.z));
-            const strength = col.div(peak).mul(fil).mul(smoothstep(0.0, 0.08, yc)).mul(fade).mul(La.div(Rf)).mul(0.35);
-            out.addAssign(vec3(1.0, 0.93, 0.82).mul(strength).mul(B));
-          });
-        });
-      });
-    });
-
-    // --- Jets and surges ---------------------------------------------------------------------------
-    loop('jetK', JET_SLOTS, (k) => {
-      const v0 = mag.jets.slots.at(k.mul(4)).toVar();
-      const v1 = mag.jets.slots.at(k.mul(4).add(1)).toVar();
-      const v2 = mag.jets.slots.at(k.mul(4).add(2)).toVar();
-      const v3 = mag.jets.slots.at(k.mul(4).add(3)).toVar();
-      const B = v2.w;
-      If(B.greaterThan(0.0), () => {
-        const site = v0.xyz;
-        const w0 = v0.w;
-        const a = v1.xyz;
-        const v = v1.w;
-        const g = v2.x;
-        const age = v2.y;
-        const seed = v2.z;
-        const spread = v3.x;
-        // Parcels launched continuously for tOn seconds, each ballistic: the column runs from the
-        // last parcel (bottom) to the first (top).
-        const tOn = v.div(g).mul(0.45);
-        const hAt = (tt: F) => max(v.mul(tt).sub(g.mul(0.5).mul(tt).mul(tt)), 0.0);
-        const H = hAt(age).toVar();
-        const Bt = hAt(max(age.sub(tOn), 0.0)).toVar();
-        const hMax = v.mul(v).div(g.mul(2));
-        // Bounds hold the widest gas: width up to 2× with age, plus its swirl (≤ 0.7 of the width).
-        const wMax = w0.add(hMax.mul(spread)).mul(3.6);
-        // Ray against the column's bounding cylinder, clipped to the column's length.
-        const rel = o.sub(site);
-        const ra = dot(rel, a);
-        const da = dot(dir, a);
-        const q0 = rel.sub(a.mul(ra));
-        const qd = dir.sub(a.mul(da));
-        const A2 = max(dot(qd, qd), 1e-8);
-        const B2 = dot(q0, qd);
-        const disc = B2.mul(B2).sub(A2.mul(dot(q0, q0).sub(wMax.mul(wMax))));
-        If(disc.greaterThan(0.0).and(H.greaterThan(Bt)), () => {
-          const sq = sqrt(disc);
-          const tc0 = B2.negate().sub(sq).div(A2);
-          const tc1 = B2.negate().add(sq).div(A2);
-          const sLo = Bt.sub(wMax);
-          const sHi = H.add(wMax);
-          const tsa = sLo.sub(ra).div(safe(da));
-          const tsb = sHi.sub(ra).div(safe(da));
-          const t0 = max(max(tc0, min(tsa, tsb)), 0.0).toVar();
-          const t1 = min(min(tc1, max(tsa, tsb)), tMax).toVar();
-          If(t1.greaterThan(t0), () => {
-            const dt = t1.sub(t0).div(JET_STEPS).toVar();
-            const acc = vec3(0).toVar();
-            const e1 = normalize(cross(a, vec3(0.0, 0.0, 1.0)));
-            const e2 = cross(a, e1);
-            loop('jetS', JET_STEPS, (j) => {
-              const t = t0.add(j.toFloat().add(jitter).mul(dt));
-              const P = rel.add(dir.mul(t));
-              const s = dot(P, a);
-              const qv = P.sub(a.mul(s));
-              // Which parcel is here: the column is ordered by launch time, top first.
-              const qn = clamp(s.sub(Bt).div(max(H.sub(Bt), 1e-5)), 0.0, 1.0);
-              const tLaunch = min(age, tOn).mul(float(1).sub(qn));
-              const pAge = age.sub(tLaunch);
-              // Turbulence grows with the parcel's age: the column widens, curls and breaks up.
-              const width = w0.add(max(s, 0.0).mul(spread)).mul(min(pAge.div(120.0).add(1), 2.0));
-              const wob = vNoise4(vec3(tLaunch.div(20.0), seed, pAge.div(45.0)));
-              const swirl = e1.mul(wob.x.sub(0.5)).add(e2.mul(wob.y.sub(0.5))).mul(width).mul(min(pAge.div(50.0), 1.4));
-              const qs = qv.sub(swirl);
-              const rr = length(qs).div(width);
-              // Gas carried with the parcels: noise in launch time and in the cross-section.
-              const ang = atan(dot(qs, e2), dot(qs, e1));
-              const gas = vNoise4(vec3(tLaunch.div(5.0), sin(ang).mul(1.2).add(seed), rr.mul(1.8)));
-              const breakup = smoothstep(pAge.div(260.0), pAge.div(260.0).add(0.45), gas.x.mul(0.7).add(gas.y.mul(0.3)));
-              const body = smoothstep(1.0, 0.2, rr.add(gas.z.sub(0.5).mul(0.6)));
-              // Streaks along the flow: long in launch time, fine across.
-              const streak = ridges(vNoise4(vec3(tLaunch.div(18.0), sin(ang).mul(3.0).add(seed), rr.mul(3.5))).x, 4);
-              const inside = smoothstep(Bt.sub(w0), Bt, s).mul(smoothstep(H.add(width.mul(0.5)), H.sub(width.mul(0.3)), s));
-              const thin = w0.div(width).pow(1.2);
-              // Hot at launch, cooling as each parcel ages; a flash at the footpoint at ignition.
-              const heat = exp(pAge.div(-70.0)).mul(3.0).add(0.45);
-              const flash = exp(age.div(-25.0)).mul(exp(max(s, 0.0).div(w0.mul(-2.0)))).mul(3.0);
-              const i = body.mul(inside).mul(breakup.mul(streak.mul(1.2).add(0.4)).mul(thin).mul(heat).add(flash));
-              acc.addAssign(plasmaColour(i).mul(i));
-            });
-            out.addAssign(acc.mul(dt.div(w0.mul(2.0))).mul(B).mul(2.5));
-          });
         });
       });
     });

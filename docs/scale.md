@@ -18,7 +18,8 @@ The standing test for every sky render is whether the star reads as a 1.4-millio
 
 - **Countless parts at every distance.** About 620,000 granules on the disc, and plating tiles at a power-law spread of sizes. Detail per pixel grows with distance and never smooths out.
 - **Perspective.** The disc's texture shrinks and foreshortens toward the limb (centre 288,000 km, limb 696,000 km). The shell is seen at a grazing angle equal to its elevation, so relief and occlusion show in the lower sky.
-- **Physical angular speeds.** The surface drifts 0.8°/min, prominence threads stream ~0.1°/min, and eruptions climb a few degrees per minute.
+- **Physical angular speeds.** The surface drifts 0.8°/min, prominence threads stream ~0.1°/min. Gas bursts are the exception: time-lapsed, they rise and billow in seconds (`star-gas.md`).
+  - The one exception is the band's spin. The frame and the stars sweep 3°/min, faster than the 1 g rate, so the turning reads. It stays slow enough for calm motion; much faster would read as a turntable.
 - **Light that takes time.** Flares echo in the far mirrors 3–6 s after they flash on the disc.
 - **Media in the right places.** Blue habitat air in front of everything (the structure is beyond the sky). The cavity is crisp, with only a faint white fill.
 - **Overwhelming light.** The star is a blaze too bright to have an outline; its glare engulfs the structure beside it, which emerges only further away.

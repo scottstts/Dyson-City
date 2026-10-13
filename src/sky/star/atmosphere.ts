@@ -1,7 +1,7 @@
 /**
  * The star's atmosphere as seen from the city: the corona and chromosphere (coronaNodes.ts), the
- * loop arcades of its active layer (activeLayer.ts) and the prominences, eruptions and jets
- * (magneticNodes.ts), attenuated by the habitat air.
+ * loop arcades of its active layer (activeLayer.ts), the prominences (magneticNodes.ts) and the
+ * erupting gas (gas/), attenuated by the habitat air.
  *
  * It is composited onto sky pixels in its own post pass (render/pipeline.ts) rather than inside
  * the sky shader: folded into the sky's structure trace, the combined shader's register pressure
@@ -18,6 +18,8 @@ import { sampleLut, skyLutUV, type AtmosphereNodes } from '../../atmosphere/luts
 import { coronaEmission } from './coronaNodes';
 import { magneticPlasma } from './magneticNodes';
 import { activeLayer } from './activeLayer';
+import { gasEmission } from './gas/gasNodes';
+import type { CoronalGas } from './gas/solver';
 import type { StarState } from './starState';
 
 type F = Node<'float'>;
@@ -29,7 +31,7 @@ type V3 = Node<'vec3'>;
  */
 export type StarAtmosphere = (d: V3, pixelAngle: F) => Node<'vec4'>;
 
-export function createStarAtmosphere(star: StarState, atmo: AtmosphereNodes, frame: Node<'float'>): StarAtmosphere {
+export function createStarAtmosphere(star: StarState, atmo: AtmosphereNodes, frame: Node<'float'>, gas: CoronalGas): StarAtmosphere {
   const s = STAR_RADIUS_R;
   return (d, pixelAngle) => {
     const out = vec4(0).toVar();
@@ -45,7 +47,7 @@ export function createStarAtmosphere(star: StarState, atmo: AtmosphereNodes, fra
       const o = star.rotation.mul(vec3(0, -1 / s, 0));
       const dirStar = star.rotation.mul(d);
       const loops = activeLayer(star, o, dirStar, tEnd.div(s), pixelAngle);
-      const emission = coronaEmission(star, atmo.tex.corona, d, pixelAngle).add(plasma.rgb).add(loops);
+      const emission = coronaEmission(star, atmo.tex.corona, d, pixelAngle).add(plasma.rgb).add(loops).add(gasEmission(gas, d, pixelAngle, jitter));
       const air = sampleLut(atmo.tex.skyLocalS, atmo.tex.skyLocalT, skyLutUV(d)).T;
       out.assign(vec4(emission.mul(star.illuminant as unknown as V3).mul(air), plasma.a));
     });

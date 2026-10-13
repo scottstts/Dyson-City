@@ -1,11 +1,11 @@
 /**
- * URL debug parameters (development and headless renders):
+ * URL debug parameters (development and headless renders; local hosts only, see isDebugHost):
  *   ?view=final|hdr|ao|normal|depth|velocity|aerial|nopost|glare   pipeline stage
  *   ?spot=<viewpoint>                                        fixed camera (see viewpoints.ts)
  *   ?time=<seconds>                                          freeze game time (star rotation, flares)
  *   ?tm=film|agx|aces|neutral                                tone mapper (film = hue-preserving)
  *   ?ev=<number>                                             override the fixed camera exposure (EV)
- *   ?sky=localS|localT|material|noAtmosphere   sky composition signal
+ *   ?sky=localS|localT|material|noAtmosphere|space   sky composition signal (space: the sky beyond the shell alone)
  *   ?fov=<deg>&look=<yawDeg,pitchDeg>                         review framing (vertical FOV, view direction)
  *   ?profile                                                 GPU timestamp profiling (window.__dyson.gpuMs)
  *   ?noao                                                    disable GTAO
@@ -37,8 +37,18 @@ export interface DebugParams {
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare'];
 
-export function readDebugParams(search = window.location.search): DebugParams {
-  const q = new URLSearchParams(search);
+/**
+ * Debug modes are a development tool: they work only when the page is served from this machine
+ * (localhost, a loopback address or a *.localhost name). On any deployed host every parameter is
+ * ignored and the debug hooks (window.__dyson) are not installed.
+ */
+export function isDebugHost(hostname = window.location.hostname): boolean {
+  const h = hostname.toLowerCase();
+  return h === 'localhost' || h.endsWith('.localhost') || h === '[::1]' || h === '::1' || /^127(\.\d{1,3}){3}$/.test(h);
+}
+
+export function readDebugParams(search = window.location.search, hostname = window.location.hostname): DebugParams {
+  const q = new URLSearchParams(isDebugHost(hostname) ? search : '');
   const view = (q.get('view') ?? 'final') as DebugView;
   const tm = q.get('tm');
   const time = q.get('time');

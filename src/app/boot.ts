@@ -9,7 +9,7 @@ import { computeAtmosphereTextures } from '../atmosphere/luts';
 import { generateNoiseVolumes, setNoiseVolumes } from '../render/tsl/volumeNoise';
 import { buildWorld } from './world';
 import { Game } from './game';
-import { readDebugParams } from '../debug/params';
+import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 
 let stageStart = performance.now();
@@ -70,5 +70,6 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   if (!debug.manual) game.start();
   if (debug.autostart) entry.hide();
   else entry.showReady(() => game.enter());
-  (window as unknown as { __dyson?: unknown }).__dyson = { game, world, atmosphere, ready: true };
+  // Review tooling hooks (tools/*.mjs), on local hosts only.
+  if (isDebugHost()) (window as unknown as { __dyson?: unknown }).__dyson = { game, world, atmosphere, ready: true };
 }

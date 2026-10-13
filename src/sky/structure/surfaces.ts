@@ -24,6 +24,7 @@ import { hash33, valueNoise3 } from '../../render/tsl/noise';
 import { STRUCTURE } from './layout';
 import { MAT, panelField, type StructureHit } from './trace';
 import { plating, gridLines, resolved, eastAt, northAt, axisFootprint, type PlatingSpec, type PlatingSample } from './plating';
+import { frameSpin, rotateZ } from './spin';
 import { COLLECTOR_DIFFUSE, COLLECTOR_F0, STRUCTURE_DIFFUSE, STRUCTURE_F0, VEIL_F0 } from './materials';
 import { COLLECTOR_TEMPERATURE, HEADER_TEMPERATURE, OFFLINE_SHARE, OFFLINE_TEMPERATURE, STRUCTURE_TEMPERATURE, glowNode } from './thermal';
 
@@ -93,6 +94,24 @@ const COLLECTOR_PLATING: PlatingSpec = {
   mullion: 0.025,
 };
 
+/**
+ * The band's mirror panes (the Veil's top): the collector's patchwork of pane sizes, but set like
+ * a precision mirror (~0.1–0.2°). With the collector's 1–2° set errors, panes near the rails sent
+ * their reflections off the band, out through the gap beside it, and mirrored black space: a
+ * mosaic of dark rectangles along both rails.
+ */
+const VEIL_PLATING: PlatingSpec = {
+  ...COLLECTOR_PLATING,
+  mirrorSigma: 0.0005,
+  rogueShare: 0,
+  rogueTilt: 0,
+  pillow: 0.002,
+  moduleSigma: 0.002,
+  tileSigma: 0.003,
+  activeShare: 0,
+  activeSigma: 0,
+};
+
 const DECK_PLATING: PlatingSpec = {
   splitUp: 0,
   splitChance: [0],
@@ -116,7 +135,11 @@ const DECK_PLATING: PlatingSpec = {
  */
 const PANEL_HEADER = { offset: 0.0026, halfWidth: 0.00055 };
 const GIRDER_HEADER = { at: 0.86, halfWidth: 0.0006 };
-const HUB_HEADER = { outer: 0.9, inner: 0.2, halfWidth: 0.00055 };
+/**
+ * Hub header rings, as fractions of the outer radius: the rim, inset by outerInset plus a share of
+ * the ring's width; the shaft lip (solid hubs) or the bore rim plus a share of the width (collars).
+ */
+const HUB_HEADER = { outerInset: 0.04, outerWidthShare: 0.06, shaft: 0.2, boreShare: 0.12, halfWidth: 0.00055 };
 
 /** Coverage of a line of half-width hw at signed distance x, filtered by the pixel footprint. */
 export function lineCoverage(x: F, hw: F | number, footprint: F): F {
@@ -218,9 +241,30 @@ function sideFace(out: SurfaceSample, along: F, height: F, depth: F, fpAlongFace
   out.emission.assign(glowNode(T).mul(float(1).sub(deck.mul(0.3))));
 }
 
-export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): SurfaceSample {
+/**
+ * The rounded top edge of a wall: dressed and matte, its normal tilted at most ~16° toward the
+ * star. Walls face the city as the frame sweeps past; a polished edge turning further would mirror
+ * the overhead star into a thin bright line along every wall (an LED strip, not a girder).
+ */
+function roundedTopEdge(out: SurfaceSample, wallNormal: V3, qn: V3, height: F, resolvedShare: F): void {
+  const edge = smoothstep(0.96, 0.995, height).mul(resolvedShare);
+  out.normal.assign(normalize(mix(out.normal, wallNormal.add(qn.negate()).normalize(), edge.mul(0.35))));
+  out.roughness.assign(mix(out.roughness, float(0.6), edge));
+}
+
+export function structureSurface(hitBand: StructureHit, pos: V3, fpcBand: Footprint): SurfaceSample {
   const S = STRUCTURE;
-  const q = pos.sub(vec3(0, 1, 0));
+  // Each part is laid out in its own coordinates: the band and its rails (frame members 10, 11) in
+  // band coordinates, everything else in frame coordinates (spin.ts), so detail stays on the part.
+  const member = hitBand.aux.z;
+  const onBand = hitBand.mat.equal(float(MAT.girdle)).or(hitBand.mat.equal(float(MAT.frame)).and(member.greaterThan(9.5)).and(member.lessThan(11.5)));
+  const rc = select(onBand, float(1), frameSpin.x as unknown as F).toVar();
+  const rs = select(onBand, float(0), frameSpin.y as unknown as F).toVar();
+  const into = (v: V3): V3 => rotateZ(v, rc, rs);
+  const back = (v: V3): V3 => rotateZ(v, rc, rs.negate());
+  const hit: StructureHit = { ...hitBand, normal: into(hitBand.normal).toVar(), axis: into(hitBand.axis).toVar() };
+  const fpc: Footprint = { ...fpcBand, d: into(fpcBand.d), n: into(fpcBand.n) };
+  const q = into(pos.sub(vec3(0, 1, 0))).toVar();
   const qn = normalize(q).toVar();
   const out: SurfaceSample = {
     f0: vec3(...STRUCTURE_F0).toVar(),
@@ -345,18 +389,23 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       out.emission.assign(mix(out.emission, glowNode(float(HEADER_TEMPERATURE).mul(drift)), header));
     }).Else(() => {
       const height = float(1).sub(length(q)).div(depth);
-      sideFace(out, along, height, depth, fpAlong(fpc, alongDir), fpAlong(fpc, qn.negate()), idx);
+      // Side walls run along the girder; end faces (cut across it) run across it.
+      const end = hit.aux.y.greaterThan(1.5);
+      sideFace(out, select(end, across, along), height, depth, fpAlong(fpc, select(end, acrossDir, alongDir)), fpAlong(fpc, qn.negate()), idx);
       // The rounded top edge of the girder.
-      const edge = smoothstep(0.96, 0.995, height);
-      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7).mul(resolved(depth.mul(0.035), fpAlong(fpc, qn.negate()))))));
+      roundedTopEdge(out, hit.normal, qn, height, resolved(depth.mul(0.035), fpAlong(fpc, qn.negate())));
     });
   });
 
   If(hit.mat.equal(MAT.hub), () => {
-    // Hubs: plated concentric terraces, radial spokes, a dark central shaft, hot header rings.
+    // Hubs: plated concentric terraces, radial spokes and hot header rings; the polar hubs have a
+    // dark central shaft, the equatorial collars an open bore (the band runs through it).
     const idx = hit.aux.z;
     const beta = hit.size.x;
     const r = hit.aux.x;
+    const rIn = hit.size.z;
+    const collar = rIn.greaterThan(0.0);
+    const width = float(1).sub(rIn);
     const rArc = r.mul(beta);
     const axis = hit.axis;
     const e1 = normalize(cross(axis, select(abs(axis.z).lessThan(0.9), vec3(0, 0, 1), vec3(1, 0, 0))));
@@ -370,19 +419,21 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       const fR = fpAlong(fpc, radial);
       const p = plating(vec2(az.mul(rArc), rArc) as unknown as V2, vec2(beta.mul(0.16), beta.mul(0.16)) as unknown as V2, tangent, radial, hit.normal, vec2(fT, fR) as unknown as V2, DECK_PLATING, idx.add(300.0));
       // Terraces of irregular width (each hub its own), alternate ones carrying collector plating.
-      const rw = r.add(valueNoise3(vec3(r.mul(5.0), idx, 13.0)).sub(0.5).mul(0.09));
-      const terrace = floor(rw.div(0.16));
+      // Three terraces across a collar's ring; a solid hub steps every 0.16 of its radius.
+      const pitch = select(collar, width.div(3), float(0.16));
+      const rw = r.sub(rIn).add(valueNoise3(vec3(r.mul(5.0), idx, 13.0)).sub(0.5).mul(pitch.mul(0.56)));
+      const terrace = floor(rw.div(pitch));
       const sector = floor(az.div(Math.PI / 6).add(terrace.mul(0.37)));
       const collecting = step(0.45, hash33(vec3(terrace, sector, idx.add(41.0))).x);
       const fin = applyPlating(p, select(collecting.greaterThan(0.5), DECK_COLLECTOR, STRUCTURAL_DECK), 0.7);
-      // Terrace steps every 0.16 of the radius: a dark riser line and a sloped lip.
-      const tr = fract(rw.div(0.16));
-      const riser = lineCoverage(tr.sub(0.5).abs().sub(0.5).abs(), 0.025, fR.div(beta.mul(0.16)));
+      // Terrace steps: a dark riser line and a sloped lip.
+      const tr = fract(rw.div(pitch));
+      const riser = lineCoverage(tr.sub(0.5).abs().sub(0.5).abs(), 0.025, fR.div(beta.mul(pitch)));
       out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.7), riser));
       out.roughness.assign(mix(out.roughness, float(0.6), riser));
       const spokes = gridLines(az.mul(rArc), rArc.mul(Math.PI / 8).max(1e-4), beta.mul(0.012), fT);
       out.f0.assign(mix(out.f0, vec3(...STRUCTURE_F0).mul(0.45), spokes.mul(0.7)));
-      const shaft = smoothstep(0.17, 0.14, r);
+      const shaft = smoothstep(0.17, 0.14, r).mul(select(collar, float(0), float(1)));
       out.f0.assign(mix(out.f0, vec3(0.03), shaft));
       out.albedo.assign(mix(out.albedo, vec3(0.005), shaft));
       out.mirror.mulAssign(float(1).sub(max(riser, shaft)));
@@ -390,11 +441,17 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       out.mix.mulAssign(float(1).sub(shaft));
       const chamfer = smoothstep(0.955, 0.99, r).mul(resolved(beta.mul(0.035), fR));
       out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.add(radial)), chamfer.mul(0.8))));
+      // A collar's bore rim, chamfered toward the open bore.
+      const boreChamfer = smoothstep(rIn.add(0.035), rIn.add(0.01), r).mul(select(collar, float(1), float(0))).mul(resolved(beta.mul(0.035), fR));
+      out.normal.assign(normalize(mix(out.normal, normalize(hit.normal.sub(radial)), boreChamfer.mul(0.8))));
       const base = mix(float(STRUCTURE_TEMPERATURE), float(COLLECTOR_TEMPERATURE), collecting);
       applyGlow(p, fin, base, float(1));
       out.emission.mulAssign(float(1).sub(max(riser.mul(0.5), max(shaft, spokes.mul(0.3)))));
-      // Header rings: the rim and the shaft lip, where the hub gathers the heat of its spines.
-      const ring = max(lineCoverage(rArc.sub(beta.mul(HUB_HEADER.outer)), HUB_HEADER.halfWidth, fR), lineCoverage(rArc.sub(beta.mul(HUB_HEADER.inner)), HUB_HEADER.halfWidth * 0.7, fR));
+      // Header rings: the rim and the shaft lip (a collar's bore rim), where the hub gathers the
+      // heat of its spines.
+      const outerHeader = float(1 - HUB_HEADER.outerInset).sub(width.mul(HUB_HEADER.outerWidthShare));
+      const innerHeader = select(collar, rIn.add(width.mul(HUB_HEADER.boreShare)), float(HUB_HEADER.shaft));
+      const ring = max(lineCoverage(rArc.sub(beta.mul(outerHeader)), HUB_HEADER.halfWidth, fR), lineCoverage(rArc.sub(beta.mul(innerHeader)), HUB_HEADER.halfWidth * 0.7, fR));
       const drift = valueNoise3(vec3(az.mul(3.0), idx, 5.0)).sub(0.5).mul(0.04).add(1);
       out.emission.assign(mix(out.emission, glowNode(float(HEADER_TEMPERATURE).mul(drift)), ring));
     }).Else(() => {
@@ -402,9 +459,10 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
       const height = float(1).sub(length(q)).div(hDepth);
       const fT = fpAlong(fpc, tangent);
       const fUp = fpAlong(fpc, qn.negate());
-      sideFace(out, az.mul(beta), height, hDepth, fT, fUp, idx);
-      const edge = smoothstep(0.96, 0.995, height);
-      out.normal.assign(normalize(mix(out.normal, hit.normal.add(qn.negate()).normalize(), edge.mul(0.7).mul(resolved(hDepth.mul(0.035), fUp)))));
+      // Walls run around the hub; a collar's cut faces (against the rails) run across its ring.
+      const cut = hit.aux.y.greaterThan(1.5);
+      sideFace(out, select(cut, rArc, az.mul(beta)), height, hDepth, select(cut, fpAlong(fpc, radial), fT), fUp, idx);
+      roundedTopEdge(out, hit.normal, qn, height, resolved(hDepth.mul(0.035), fUp));
     });
   });
 
@@ -477,7 +535,7 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
     const a = vec2(lon.mul(cos(lat)), lat) as unknown as V2;
     const fE = fpAlong(fpc, eastAt(qn));
     const fN = fpAlong(fpc, northAt(qn));
-    const p = plating(a, vec2(0.042, 0.042) as unknown as V2, eastAt(qn), northAt(qn), hit.normal, vec2(fE, fN) as unknown as V2, COLLECTOR_PLATING, float(500.0));
+    const p = plating(a, vec2(0.042, 0.042) as unknown as V2, eastAt(qn), northAt(qn), hit.normal, vec2(fE, fN) as unknown as V2, VEIL_PLATING, float(500.0));
     applyPlating(p, vec4(1, 0, 0, 0), 0.85);
     out.f0.assign(mix(vec3(...VEIL_F0), vec3(...STRUCTURE_F0), max(p.mullion, p.seam)));
     out.roughness.assign(mix(float(0.05), float(0.34), p.mullion));
@@ -487,5 +545,8 @@ export function structureSurface(hit: StructureHit, pos: V3, fpc: Footprint): Su
     out.emission.assign(glowNode(float(STRUCTURE_TEMPERATURE)).mul(p.mullion));
   });
 
+  out.normal.assign(back(out.normal));
+  out.mixNormal.assign(back(out.mixNormal));
+  out.rogueNormal.assign(back(out.rogueNormal));
   return out;
 }

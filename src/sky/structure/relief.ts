@@ -50,7 +50,11 @@ export interface PanelFrame {
 function panelArc(qn: V3, fr: PanelFrame): V2 {
   const lat = asin(clamp(qn.z.negate(), -1, 1));
   const lon = atan(qn.x, qn.y.negate());
-  return vec2(lon.sub(fr.lon0).mul(fr.cosLat), abs(lat).sub(fr.latLow)) as unknown as V2;
+  // Wrapped to (−π, π] about the cell's bound: the cell may straddle atan's cut at λ = ±π, which the
+  // frame's spin brings into view.
+  const dl = lon.sub(fr.lon0);
+  const wrapped = dl.sub(floor(dl.add(Math.PI).div(Math.PI * 2)).mul(Math.PI * 2));
+  return vec2(wrapped.mul(fr.cosLat), abs(lat).sub(fr.latLow)) as unknown as V2;
 }
 
 /** Depth below the rib tops (0 on a rib, up to bayDepth on a bay floor) at arc coordinates a. */
