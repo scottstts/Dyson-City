@@ -11,6 +11,7 @@ Code: `src/ground/`. Dimensions are in `site.ts`.
   - Courses every 24 m are offset half a bay from the survey axes, so they never overlap the inlays.
   - Inlays are satin bronze.
   - Normal perturbation must build from `normalWorldGeometry` / `normalViewGeometry`. Reading `normalWorld` inside a `normalNode` is circular and shades the inlays black.
+- **Apron variant.** `createPadMaterial({ inlays: 'axis' })` is the same stone with only the Spinward axis inlay (ticked every 10 m), for the West Gate's apron.
 - **Pad, sealer.** A clear coat over the honed stone, worn on some slabs and absent in joints and on bronze. It follows each slab's lippage, so the sky's reflection breaks slab by slab.
 - **Deck (`deckMaterial.ts`).**
   - Dark glass-ceramic plates (albedo ≈ 0.07) with a polished glazed top (clear coat): the deck mirrors the sky, receivers and the star's glow, broken plate by plate by a few-milliradian set error.

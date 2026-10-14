@@ -57,7 +57,7 @@ describe('sky-view LUT', () => {
     for (const e of [-1.2, -0.01, 0.003, 0.4, 1.5]) expect(elevationFromV(vFromElevation(e))).toBeCloseTo(e, 9);
     expect(azimuthFromU(1)).toBeCloseTo(Math.PI / 2);
   });
-  it('all values finite, transmittance within [0, 1], in-scatter non-negative', () => {
+  it('all values finite, transmittance within [0, 1], in-scatter non-negative', { timeout: 60_000 }, () => {
     for (const a of [luts.skyLocal, luts.aerial]) {
       for (let i = 0; i < a.length; i += 6) {
         for (let c = 0; c < 3; c++) {

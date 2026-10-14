@@ -85,7 +85,8 @@ export const HALATION = { near: 0.97, nearDeg: 5.0, far: 0.45, farDeg: 16.0, tin
 
 export interface GlarePass {
   /** The image with glare, given its HDR value at a pixel and its world view direction. */
-  apply(scene: V3, viewDir: V3): V3;
+  /** `sky` is 1 where the pixel shows the sky (nothing opaque in front), 0 on geometry. */
+  apply(scene: V3, viewDir: V3, sky: Node<'float'>): V3;
   /** Halation of the clipped disc in this direction (display units, 0..1; 1 over the disc). */
   halation(viewDir: V3): Node<'float'>;
   /** The star's analytic share alone (debug view). */
@@ -101,8 +102,20 @@ export function createGlarePass(opts: {
   viewDirAt: (uv: Node<'vec2'>) => V3;
   starGlare: DataTexture;
   illuminant: V3;
+  /** 1 where the pixel at a screen UV shows the sky, 0 on geometry. */
+  skyAt: (uv: Node<'vec2'>) => Node<'float'>;
+  /**
+   * Share of the star's disc the eye can see (1 in the open, a little less under the Dome's frame,
+   * 0 under a roof): scales the star's analytic glare and halation.
+   */
+  starVisibility: Node<'float'>;
+  /**
+   * Transmission of glass in front of the star (the Dome's tint): scales its glare, not the
+   * halation, which is the sensor's response to the still-clipped disc.
+   */
+  starTransmission: Node<'float'>;
 }): GlarePass {
-  const { hdr, viewDirAt, illuminant } = opts;
+  const { hdr, viewDirAt, illuminant, skyAt, starVisibility, starTransmission } = opts;
   const threshold = float(BLOOM_THRESHOLD * lum3(...STAR_DISC_MEAN_RADIANCE)).mul(luminance(illuminant));
   const excess = (c: V3): V3 => c.mul(max(float(1).sub(threshold.div(max(luminance(c), 1e-6))), 0.0)) as unknown as V3;
 
@@ -111,7 +124,9 @@ export function createGlarePass(opts: {
   // pixels. A bilinear tap at the centre of a half-res texel is an exact 2×2 box filter, so nothing
   // aliases; the bloom's input is derived from that at quarter resolution. (Two full-resolution
   // masked inputs and the first stages reading them cost ~2.5 ms at 1080p.)
-  const source = rtt(Fn(() => vec4(hdr(screenUV).mul(offDisc(viewDirAt(screenUV))), 1.0))(), null, null, { resolutionScale: SOURCE_SCALE });
+  // Only sky pixels on the disc are the analytic star's; geometry in that direction (a vault, a
+  // frame member, a lamp) is an ordinary source.
+  const source = rtt(Fn(() => vec4(hdr(screenUV).mul(float(1).sub(float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV)))), 1.0))(), null, null, { resolutionScale: SOURCE_SCALE });
   const sourceExcess = rtt(Fn(() => vec4(excess(source.sample(screenUV).rgb as unknown as V3), 1.0))(), null, null, { resolutionScale: EXCESS_SCALE });
 
   const eye = blurChain(source as unknown as Node<'vec4'>, screenGlareLobes());
@@ -119,15 +134,16 @@ export function createGlarePass(opts: {
 
   const starTex = texture(opts.starGlare);
   const starCentre = vec3(...STAR_CENTER_RADIANCE).mul(illuminant);
-  const starShare = (vd: V3): V3 => starTex.sample(vec2(acos(clamp(vd.y, -1.0, 1.0)).div(Math.PI), 0.5)).rgb.mul(starCentre) as unknown as V3;
+  const starShare = (vd: V3): V3 => starTex.sample(vec2(acos(clamp(vd.y, -1.0, 1.0)).div(Math.PI), 0.5)).rgb.mul(starCentre).mul(starVisibility).mul(starTransmission) as unknown as V3;
 
   return {
-    apply(scene, vd) {
+    apply(scene, vd, sky) {
       // The smooth limb-darkened disc in this direction (zero off the disc).
       const sinPsi = sqrt(max(float(1).sub(vd.y.mul(vd.y)), 0.0));
       const mu = sqrt(max(float(1).sub(sinPsi.div(STAR_SIN_ALPHA).pow(2)), 0.0));
-      const disc = starCentre.mul(pow(vec3(mu), vec3(...LIMB_DARKENING_EXPONENT)));
-      const onDisc = float(1).sub(offDisc(vd));
+      // The disc as it arrives (through the Dome's tint, if any): the bloom's loss is taken from it.
+      const disc = starCentre.mul(pow(vec3(mu), vec3(...LIMB_DARKENING_EXPONENT))).mul(starTransmission);
+      const onDisc = float(1).sub(offDisc(vd)).mul(sky);
       const source = scene.mul(onDisc.oneMinus()).add(disc.mul(onDisc)) as unknown as V3;
       const kept = scene.mul(GLARE_CORE_FRACTION).sub(excess(source).mul(CAMERA_BLOOM_SHARE)).max(0.0);
       return kept.add(starShare(vd)).add(weightedSum(eye)).add(weightedSum(camera)) as unknown as V3;
@@ -135,7 +151,7 @@ export function createGlarePass(opts: {
     starShare,
     halation(vd) {
       const outside = acos(clamp(vd.y, -1.0, 1.0)).sub(STAR_ANGULAR_RADIUS).max(0.0).mul(180 / Math.PI);
-      return exp(outside.div(-HALATION.nearDeg)).mul(HALATION.near).add(exp(outside.div(-HALATION.farDeg)).mul(HALATION.far)).min(1.0) as unknown as Node<'float'>;
+      return exp(outside.div(-HALATION.nearDeg)).mul(HALATION.near).add(exp(outside.div(-HALATION.farDeg)).mul(HALATION.far)).min(1.0).mul(starVisibility) as unknown as Node<'float'>;
     },
     resize(pxPerDeg) {
       sizeChain(eye, pxPerDeg * SOURCE_SCALE);

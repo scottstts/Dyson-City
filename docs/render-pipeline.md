@@ -7,8 +7,9 @@ Code: `src/render/`.
 ```text
 scene MRT (output, packed normal, velocity)
   → GTAO (half res, contact only: faded 25–60 m)
-  → geometry: aerial perspective (explicit camera uniforms; inscatter × star illuminant)
-    sky: the star's atmosphere (sky/star/atmosphere.ts): rgb emission over exp(−τ) of what is behind
+  → sky: the star's atmosphere (sky/star/atmosphere.ts): rgb emission over exp(−τ) of what is behind
+  → composites, farthest first: the Dome's glass (city/dome/glass.ts), the gate chamber's mist (city/gate/mist.ts)
+  → geometry: aerial perspective over the result (explicit camera uniforms; inscatter × star illuminant)
   → TRAA (resolved on x/(1+x) of exposed luminance and expanded after)
   → glare: eye scatter + camera bloom (glare.ts, glarePass.ts) → exposure × D65 white balance
   → lens vignette → film look (black point, high contrast) → hue-preserving filmic → halation of the clipped disc (screen blend) → grade → grain → OETF → dither
@@ -27,13 +28,17 @@ The star must engulf the frame: a white blaze whose glare floods the structure b
   - Beside the star the veil is ~12 % of the disc mean 1° out, ~6 % at 5°, ~3 % at 10°, ~0.5 % at the horizon.
   - **Rejected:** a 35° lobe, and blooming every source linearly. Both spread an even veil over the frame that lifts every shadow: it reads as fog or a dirty lens, not blinding light.
 - **The star's share is exact:** a 1D table against the angle from the star's centre (eye + thresholded bloom over the limb-darkened disc). Over the disc, the bloom's loss is taken from the smooth disc, not per pixel.
+- **Only where the star is seen.** The smooth disc replaces sky pixels only (depth 0): geometry in the star's direction (a vault, a frame member, a lamp) keeps its own radiance and feeds the screen-space blur like any source. The star's table and its halation are scaled by `starVisibility`, the share of the disc the eye sees from where it stands (city/visibility.ts: 1 in the open, ~0.85 under the Dome, 0 under a roof). The table (and the smooth disc the bloom's loss is taken from) is also scaled by `starTransmission`, the glass in between (the Dome's tint, 0.5); halation is not.
 - **Other sources:** chained screen-space blurs (each stage adds the σ still missing, in quadrature, so every stage downsamples an already-smooth input; blurring the sharp image straight to a few texels aliased into flicker), from a half-resolution source (bloom input at quarter resolution).
 
 ## Halation (`glarePass.ts`)
 
 Energy-conserving glare cannot hide the limb: just outside it, at most half the kernel sees the (limb-darkened) disc, so the glare tops out near 20 % of the disc and the clipped disc keeps a hard outline. A photographed sun loses its outline through the sensor's response to saturation, so the clipped disc spills white past its edge after the tone curve: near full white for ~5°, a fainter spill over ~16° (`HALATION`). The star has no edge you can point to.
 
-## Exposure and colour (`exposure.ts`, `tsl/toneMap.ts`)
+## Exposure and colour (`exposure.ts`, `adaptation.ts`, `tsl/toneMap.ts`)
+
+- **Eye adaptation** (`adaptation.ts`): a multiplier on the star-keyed exposure, floor 1 (outdoors and under the Dome nothing changes), ceiling 16. A 64 × 36 centre-weighted log-luminance meter of the post-TAA scene is read back asynchronously every 4 frames; target = clamp(0.12 / log-average). Opens with τ = 1.4 s, clamps down with τ = 0.3 s. Disabled when `?ev` fixes the exposure.
+  - The meter stores ln L offset and scaled into [0, 1]: the material's output is clamped on the way into the target, and raw negative logs read back as 0 (adaptation then never moved).
 
 - **The star is blinding.** The Veil cuts the light a great deal, but what passes is still overwhelming. Looking toward the star you see brightness swallowing everything: no surface texture, no silhouette. The disc mean maps to `STAR_KEY` (~4.6 stops over mid-grey), so the disc clips to white and sunlit stone facing it burns near white. Its surface (granulation, spots, activity) is there for the telescope, with its own exposure.
   - **Rejected:** local adaptation that held the disc's texture and limb gradient visible. It read as a lamp or as a stone ball (grey mottles on off-white), not as blinding light.

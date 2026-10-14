@@ -7,6 +7,7 @@ import { Euler, MathUtils, Vector3, type PerspectiveCamera } from 'three/webgpu'
 import { GRAVITY, EYE_HEIGHT } from '../world/constants';
 import { groundHeight, SITE } from '../ground/site';
 import type { Input } from './input';
+import type { CollisionWorld } from './collision';
 import { HeadMotion } from './headMotion';
 
 const WALK = 2.0;
@@ -18,6 +19,15 @@ const JUMP_SPEED = 3.9;
 const STEP_UP = 0.45;
 const CROUCH_EYE = 1.05;
 const LOOK_RAD_PER_PX = 0.0021;
+
+/** The walkable world: surface height and walls (default: the bare site, no walls). */
+export interface Walkable {
+  ground(x: number, z: number): number;
+  walls?: CollisionWorld;
+}
+
+/** Radius of the walker's body for wall collisions. */
+const BODY_RADIUS = 0.3;
 
 export interface Spawn {
   position: [number, number];
@@ -41,15 +51,17 @@ export class PlayerController {
 
   private readonly camera: PerspectiveCamera;
   private readonly input: Input;
+  private readonly world: Walkable;
 
-  constructor(camera: PerspectiveCamera, input: Input) {
+  constructor(camera: PerspectiveCamera, input: Input, world: Walkable = { ground: groundHeight }) {
     this.camera = camera;
     this.input = input;
+    this.world = world;
   }
 
   spawn(s: Spawn): void {
     this.feet.set(s.position[0], 0, s.position[1]);
-    this.feet.y = groundHeight(this.feet.x, this.feet.z);
+    this.feet.y = this.world.ground(this.feet.x, this.feet.z);
     this.yaw = s.yaw;
     this.pitch = s.pitch;
     this.velocity.set(0, 0, 0);
@@ -92,15 +104,16 @@ export class PlayerController {
       this.grounded = false;
     }
 
-    // Horizontal move with a soft bound.
-    const nx = this.feet.x + this.velocity.x * dt;
-    const nz = this.feet.z + this.velocity.z * dt;
+    // Horizontal move: slide along walls, then a soft bound.
+    let nx = this.feet.x + this.velocity.x * dt;
+    let nz = this.feet.z + this.velocity.z * dt;
+    if (this.world.walls) [nx, nz] = this.world.walls.move(this.feet.x, this.feet.z, this.velocity.x * dt, this.velocity.z * dt, BODY_RADIUS);
     const r = Math.hypot(nx, nz);
     const limit = SITE.walkRadius;
     const scale = r > limit ? limit / r : 1;
     const tx = nx * scale;
     const tz = nz * scale;
-    const target = groundHeight(tx, tz);
+    const target = this.world.ground(tx, tz);
 
     if (this.grounded) {
       const rise = target - this.feet.y;
@@ -127,7 +140,7 @@ export class PlayerController {
     if (!this.grounded) {
       this.velocity.y -= GRAVITY * dt;
       this.feet.y += this.velocity.y * dt;
-      const floor = groundHeight(this.feet.x, this.feet.z);
+      const floor = this.world.ground(this.feet.x, this.feet.z);
       if (this.feet.y <= floor) {
         this.stepOffset += this.feet.y - floor;
         this.feet.y = floor;

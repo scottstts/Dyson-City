@@ -2,6 +2,8 @@
 
 Code: `src/player/`. The controller (`controller.ts`) owns the walk (2 m/s), run (Shift, 5.6 m/s), crouch, jump and the step-up ease. The head's motion on top of it is `headMotion.ts`.
 
+- **The walkable world is injected** (`Walkable`): a surface height (the site, plus the city's raised floors) and walls (`collision.ts`): plan segments in a grid, resolved against a 0.3 m body in sub-steps of half its radius, so it slides along walls and cannot tunnel. Dynamic walls (the gate's leaves) switch by tag.
+
 ## Head motion
 
 The eye moves as a walking or running person's head does: real gait, kept small. The eyes stabilise the gaze, so a person barely perceives their own head turning. Exaggerated game bob reads as a camera on a stick.

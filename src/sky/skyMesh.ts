@@ -27,7 +27,11 @@ export function viewDirectionNode(): Node<'vec3'> {
   return normalize(cameraWorldMatrix.mul(vec4(dirView, 0.0)).xyz) as unknown as Node<'vec3'>;
 }
 
-export function createSkyMesh(sky: Sky, opts: { velocity: boolean }): SkyMesh {
+/**
+ * `transmittance` scales the sky for captures taken behind glass (the Dome's interior
+ * environment); the main view composites the glass in post instead.
+ */
+export function createSkyMesh(sky: Sky, opts: { velocity: boolean; transmittance?: number }): SkyMesh {
   const geometry = new BufferGeometry();
   geometry.setAttribute('position', new Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
   const material = new NodeMaterial();
@@ -56,7 +60,7 @@ export function createSkyMesh(sky: Sky, opts: { velocity: boolean }): SkyMesh {
     const vel = cur.xy.div(cur.w).sub(prev.xy.div(prev.w));
     material.mrtNode = mrt({ velocity: vec4(vel, 0.0, 1.0) });
   } else {
-    material.colorNode = vec4(sky.radiance(dir), 1.0);
+    material.colorNode = vec4(sky.radiance(dir).mul(opts.transmittance ?? 1), 1.0);
   }
 
   const mesh = new Mesh(geometry, material);

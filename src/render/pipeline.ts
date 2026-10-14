@@ -19,7 +19,7 @@ import { RenderPipeline, type PerspectiveCamera, type Scene, type WebGPURenderer
 import {
   pass, mrt, output, normalView, velocity, packNormalToRGB, unpackRGBToNormal, sample, screenUV, vec3, vec4, float, Fn, If, uniform, texture,
   getViewPosition, length, normalize, mix, pow, dot, smoothstep, sRGBTransferOETF, agxToneMapping,
-  acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, fwidth, exp,
+  acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, fwidth, exp, select,
 } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { ao } from 'three/addons/tsl/display/GTAONode.js';
@@ -41,17 +41,33 @@ export interface CameraSettings {
   whiteBalance: Node<'vec3'>;
   saturation: Node<'float'>;
   grain: Node<'float'>;
+  /** Eye adaptation: a multiplier on the exposure (1 outdoors; render/adaptation.ts). */
+  adaptation: Node<'float'>;
+  /** Share of the star's disc the eye sees (scales its analytic glare and halation; glarePass.ts). */
+  starVisibility: Node<'float'>;
+  /** Transmission of glass between the eye and the star (scales its glare only). */
+  starTransmission: Node<'float'>;
 }
 
 export interface Pipeline {
   readonly pipeline: RenderPipeline;
   readonly camera: CameraSettings;
+  /** Scene luminance (before exposure) at a screen UV, after TAA: the eye-adaptation meter's input. */
+  readonly sceneLuminance: (uv: Node<'vec2'>) => Node<'float'>;
   render(): void;
 }
 
 export type ToneMapper = 'film' | 'agx' | 'aces' | 'neutral';
 
-export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'> }): Pipeline {
+/**
+ * A thin transparent layer composited analytically before aerial perspective (the Dome's glass, the
+ * gate chamber's mist):
+ * given the camera position, view direction, distance to the opaque scene (or ~∞ for sky) and the
+ * radiance behind, it returns what the eye sees through it.
+ */
+export type TransparencyComposite = (origin: Node<'vec3'>, dir: Node<'vec3'>, dist: Node<'float'>, color: Node<'vec3'>) => Node<'vec3'>;
+
+export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'>; composites?: TransparencyComposite[] }): Pipeline {
   const scenePass = pass(scene, cam);
   scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView), velocity }));
   const colorTex = scenePass.getTextureNode('output');
@@ -82,6 +98,9 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
     whiteBalance: uniform(vec3(1.0, 1.0, 1.0)) as unknown as Node<'vec3'>,
     saturation: uniform(1.08) as unknown as Node<'float'>,
     grain: uniform(0.012) as unknown as Node<'float'>,
+    adaptation: uniform(1) as unknown as Node<'float'>,
+    starVisibility: uniform(1) as unknown as Node<'float'>,
+    starTransmission: uniform(1) as unknown as Node<'float'>,
   };
 
   const taaEncode = (c: Node<'vec3'>) => {
@@ -96,31 +115,40 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const apS = atmo.aerialS as DataTexture;
   const apT = atmo.aerialT as DataTexture;
   const aoStrength = uniform(opts.ao ? 1.0 : 0.0);
+  const camPos = camWorld.mul(vec4(0, 0, 0, 1)).xyz;
   const lit = Fn(() => {
     const uv = screenUV;
     const c = colorTex.sample(uv).toVar();
     const d = depthTex.sample(uv).r;
-    const outc = c.rgb.toVar();
+    // What lies behind any glass, and the air in front of it (none for the sky: it carries its own).
+    const behind = c.rgb.toVar();
+    const transmit = vec3(1).toVar();
+    const inscatter = vec3(0).toVar();
+    const dist = float(1e9).toVar();
+    const dirW = viewDirAt(uv).toVar();
     // Reversed depth: 0 = cleared (sky).
     If(d.greaterThan(0.0), () => {
       const vp = getViewPosition(uv, d, projInv);
-      const dist = length(vp);
-      const dirW = normalize(camWorld.mul(vec4(normalize(vp), 0.0)).xyz);
+      dist.assign(length(vp));
+      dirW.assign(normalize(camWorld.mul(vec4(normalize(vp), 0.0)).xyz));
       // Contact occlusion only: beyond a few tens of metres a pixel spans more than the AO radius.
       const aoFade = float(1).sub(smoothstep(25.0, 60.0, dist));
       const occlusion = mix(float(1), aoTex.sample(uv).r, aoStrength.mul(aoFade));
       const apUV = aerialLutUV(dirW.y, dist);
-      const S = texture(apS, apUV).rgb.mul(opts.illuminant);
-      const T = texture(apT, apUV).rgb;
-      outc.assign(c.rgb.mul(occlusion).mul(T).add(S));
+      inscatter.assign(texture(apS, apUV).rgb.mul(opts.illuminant));
+      transmit.assign(texture(apT, apUV).rgb);
+      behind.assign(c.rgb.mul(occlusion));
     }).Else(() => {
       // Its own pass keeps the sky shader small (sky/star/atmosphere.ts).
       if (opts.skyOverlay) {
-        const dir = viewDirAt(uv);
-        const overlay = opts.skyOverlay(dir, length(fwidth(dir)).max(1e-6)).toVar();
-        outc.assign(outc.mul(exp(overlay.a.negate())).add(overlay.rgb));
+        const overlay = opts.skyOverlay(dirW, length(fwidth(dirW)).max(1e-6)).toVar();
+        behind.assign(behind.mul(exp(overlay.a.negate())).add(overlay.rgb));
       }
     });
+    // Thin layers in front of the opaque scene, farthest first (the Dome's glass, then the mist in the gate's chamber).
+    let seen: Node<'vec3'> = behind;
+    for (const c of opts.composites ?? []) seen = c(camPos as unknown as Node<'vec3'>, dirW, dist, seen);
+    const outc = seen.mul(transmit).add(inscatter);
     return vec4(taaEncode(outc), 1.0);
   })();
 
@@ -135,7 +163,8 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const hdr = { sample: (uv: Node<'vec2'>) => vec4(taaDecode(hdrTex.sample(uv).rgb), 1.0), get rgb() { return taaDecode(hdrTex.rgb); } };
 
   // --- Glare: the eye's scatter and the camera's bloom (render/glare.ts, render/glarePass.ts) ---
-  const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant });
+  const skyAt = (uv: Node<'vec2'>) => select(depthTex.sample(uv).r.greaterThan(0.0), float(0), float(1)) as unknown as Node<'float'>;
+  const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant, skyAt, starVisibility: settings.starVisibility, starTransmission: settings.starTransmission });
 
   // The optical axis, for the lens vignette (the camera looks down its local −Z).
   const camAxis = normalize(camWorld.mul(vec4(0, 0, -1, 0)).xyz);
@@ -143,7 +172,7 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const camera = Fn(() => {
     const uv = screenUV;
     const viewDir = viewDirAt(uv);
-    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir).mul(settings.exposure).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
+    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir, skyAt(uv)).mul(settings.exposure).mul(settings.adaptation).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
     // The look sits before the display transform, in scene-linear exposure (render/tsl/look.ts).
     const looked = filmLook(exposed) as unknown as Node<'vec3'>;
     // The clipped disc's halation spills white past its outline (glarePass.ts), screen-blended.
@@ -206,6 +235,7 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   return {
     pipeline,
     camera: settings,
+    sceneLuminance: (uv) => luminance(hdr.sample(uv).rgb) as unknown as Node<'float'>,
     render: () => {
       // Glare blurs are specified in degrees: follow the current pixels per degree.
       glare.resize(renderer.domElement.height / cam.fov);

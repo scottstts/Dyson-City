@@ -61,9 +61,23 @@ function surveyInlays(p: V2, fp: F): F {
   return m;
 }
 
-export function createPadMaterial(): MeshPhysicalNodeMaterial {
+/** Bronze inlay on the West Gate's apron: the Spinward axis carried out from the threshold, ticked. */
+function apronInlays(p: V2, fp: F): F {
+  const hwAxis = SITE.axisInlayWidth / 2;
+  const along = p.x;
+  const d10 = abs(fract(along.div(10).add(0.5)).sub(0.5)).mul(10);
+  const tick = band(d10, 0.04, fp).mul(smoothstep(0.47, 0.43, abs(p.y)));
+  return max(band(p.y, hwAxis, fp), tick);
+}
+
+export interface PadMaterialOptions {
+  /** 'platform': the survey inlays of the Garden Deck; 'axis': the Spinward axis only (the apron). */
+  inlays?: 'platform' | 'axis';
+}
+
+export function createPadMaterial(opts: PadMaterialOptions = {}): MeshPhysicalNodeMaterial {
   const mat = new MeshPhysicalNodeMaterial();
-  mat.name = 'GardenDeck.stone';
+  mat.name = opts.inlays === 'axis' ? 'WestGate.apron' : 'GardenDeck.stone';
 
   const wp = positionWorld;
   const geoN = normalWorldGeometry;
@@ -110,7 +124,7 @@ export function createPadMaterial(): MeshPhysicalNodeMaterial {
   const tilt2 = select(dxEdge.lessThan(dyEdge), vec2(towardX, 0), vec2(0, towardY)).mul(arrisZone).mul(0.55).add(lippage);
 
   // Inlays on the platform top only.
-  const inlay = select(isTop.and(r.lessThan(SITE.padRadius - 0.05)), surveyInlays(wp.xz, fp), float(0)).toVar();
+  const inlay = (opts.inlays === 'axis' ? select(isTop, apronInlays(wp.xz, fp), float(0)) : select(isTop.and(r.lessThan(SITE.padRadius - 0.05)), surveyInlays(wp.xz, fp), float(0))).toVar();
 
   // Border courses on the platform top (not inside the datum).
   // Courses sit half a bay off the survey axes so they never run under the bronze inlays.

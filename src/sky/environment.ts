@@ -10,7 +10,7 @@
  * (render/pmremSlices.ts), in place, so materials keep their environment binding. Consecutive
  * captures differ by far less than the lighting resolves, so a refresh never shows.
  */
-import { CubeCamera, CubeRenderTarget, HalfFloatType, PMREMGenerator, Scene, type PerspectiveCamera, type RenderTarget, type WebGPURenderer } from 'three/webgpu';
+import { CubeCamera, CubeRenderTarget, HalfFloatType, PMREMGenerator, Scene, type Object3D, type PerspectiveCamera, type RenderTarget, type Texture, type WebGPURenderer } from 'three/webgpu';
 import type { Sky } from './skyNode';
 import { createSkyMesh } from './skyMesh';
 import { frameAngle } from './structure/spin';
@@ -29,21 +29,37 @@ export interface Environment {
 
 const FACES = 6;
 
-export function createEnvironment(renderer: WebGPURenderer, sky: Sky, eyeHeight: number, gameTime: number): Environment {
+export interface EnvironmentOptions {
+  /** Local geometry rendered into the capture with the sky (e.g. the Dome's frame seen from inside). */
+  extras?: Object3D[];
+  /** Environment that lights the extras inside the capture. */
+  extrasEnvironment?: Texture;
+  /** Scale on the sky radiance: glass between the capture point and the sky. */
+  transmittance?: number;
+  /** Capture point (default: the platform centre at eye height). */
+  position?: [number, number, number];
+  name?: string;
+}
+
+export function createEnvironment(renderer: WebGPURenderer, sky: Sky, eyeHeight: number, gameTime: number, opts: EnvironmentOptions = {}): Environment {
   const scene = new Scene();
-  const skyMesh = createSkyMesh(sky, { velocity: false });
+  const skyMesh = createSkyMesh(sky, { velocity: false, transmittance: opts.transmittance });
   scene.add(skyMesh.mesh);
-  const cube = new CubeRenderTarget(ENVIRONMENT_SIZE, { type: HalfFloatType, generateMipmaps: false, depthBuffer: false });
+  for (const o of opts.extras ?? []) scene.add(o);
+  if (opts.extrasEnvironment) scene.environment = opts.extrasEnvironment;
+  const withGeometry = (opts.extras?.length ?? 0) > 0;
+  const cube = new CubeRenderTarget(ENVIRONMENT_SIZE, { type: HalfFloatType, generateMipmaps: false, depthBuffer: withGeometry });
   cube.texture.name = 'environment.cube';
-  const cubeCamera = new CubeCamera(0.05, 10, cube);
-  cubeCamera.position.set(0, eyeHeight, 0);
+  const cubeCamera = new CubeCamera(0.05, withGeometry ? 4000 : 10, cube);
+  const at = opts.position ?? [0, eyeHeight, 0];
+  cubeCamera.position.set(at[0], at[1], at[2]);
   cubeCamera.updateMatrixWorld();
   const pmrem = new PMREMGenerator(renderer);
 
   // Boot capture: all faces and the prefilter at once (this also compiles both shaders).
   cubeCamera.update(renderer, scene);
   const target = pmrem.fromCubemap(cube.texture);
-  target.texture.name = 'environment.sky';
+  target.texture.name = opts.name ?? 'environment.sky';
   const prefilter = createPmremSlicer(renderer, pmrem, cube.texture, target);
 
   const faceCameras = cubeCamera.children as PerspectiveCamera[];

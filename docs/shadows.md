@@ -51,6 +51,7 @@ How:
   - **In daylight:** horizon-based visibility from GTAO. Cap visibility in a slice is the part of the 45° cap above that slice's horizon: exact and nearly free. It also corrects today's uniform-hemisphere AO, which darkens for blocked low-sky directions that carry little of the star's light.
   - **Under lamps:** real-time shadow maps, but only for the few lamps that light a moving part.
 
-## Order of work
+## Status
 
-Nothing changes until buildings exist. The open site's only occluders are the platform's steps, which contact AO covers.
+- **Built:** the Dome's even dimming (its frame is in the interior environment capture); the West Gate chamber's light (lamps without shadow maps, daylight through the openings by solid angle, `docs/gate.md`); the star's glare scaled by its visibility at the eye.
+- **Not built yet:** the outdoor star-visibility field (the gatehouse and plinths cast no foot darkening yet beyond contact AO), baked interior light, and lamp shadow maps for the gate's moving leaves.

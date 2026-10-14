@@ -17,6 +17,7 @@ import { addLightingProbes } from '../debug/probes';
 import type { AtmosphereTextures } from '../atmosphere/luts';
 import { loadSettings, PauseMenu, type PlayerSettings } from '../ui/pauseMenu';
 import type { EntryScreen } from '../ui/entryScreen';
+import { EyeAdaptation } from '../render/adaptation';
 
 /** Frames per period of the debug yaw wobble (?wobble). */
 export const WOBBLE_PERIOD = 37;
@@ -38,6 +39,8 @@ export class Game {
   private readonly debug: DebugParams;
   private readonly entry: EntryScreen;
   private readonly spawnLook: Spawn;
+  /** Null when the exposure is overridden for review (?ev). */
+  private readonly adaptation: EyeAdaptation | null;
   private frameIndex = 0;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
@@ -55,7 +58,7 @@ export class Game {
     });
 
     this.input = new Input(handle.renderer.domElement);
-    this.player = new PlayerController(this.camera, this.input);
+    this.player = new PlayerController(this.camera, this.input, world.city.walk);
     this.player.sensitivity = this.settings.sensitivity;
     const base = VIEWPOINTS[debug.spot ?? DEFAULT_VIEWPOINT] ?? VIEWPOINTS[DEFAULT_VIEWPOINT];
     const spawn = debug.look ? { ...base, yaw: (debug.look[0] * Math.PI) / 180, pitch: (debug.look[1] * Math.PI) / 180 } : base;
@@ -71,6 +74,7 @@ export class Game {
       ao: debug.ao,
       illuminant: world.star.illuminant as unknown as Node<'vec3'>,
       skyOverlay: world.starAtmosphere,
+      composites: world.composites,
     });
     const illuminant = world.star.illuminant.value as Vector3;
     // A daylight-balanced photograph exposed for the star (render/exposure.ts).
@@ -78,6 +82,9 @@ export class Game {
     (this.pipeline.camera.whiteBalance as unknown as { value: Vector3 }).value.set(wb[0], wb[1], wb[2]);
     const star: [number, number, number] = [STAR_DISC_MEAN_RADIANCE[0] * illuminant.x, STAR_DISC_MEAN_RADIANCE[1] * illuminant.y, STAR_DISC_MEAN_RADIANCE[2] * illuminant.z];
     (this.pipeline.camera.exposure as unknown as { value: number }).value = debug.ev !== null ? Math.pow(2, debug.ev) : cameraExposure(star, wb);
+
+    this.adaptation = debug.ev === null ? new EyeAdaptation(handle.renderer, this.pipeline.sceneLuminance) : null;
+    if (debug.gate) world.city.gate.airlock.hold(debug.gate);
 
     this.pause = new PauseMenu(host, this.settings, (s) => {
       this.player.sensitivity = s.sensitivity;
@@ -146,6 +153,7 @@ export class Game {
     if (this.debug.time === null) this.gameTime += dt;
     this.world.update(this.gameTime);
     if (this.playing) this.player.update(dt);
+    this.world.city.update(dt, this.player.feet);
     if (this.debug.wobble !== null) {
       // Flicker review: a yaw sweep that returns to the same view every period, with a different
       // amplitude (so a different motion history and speed) each time; the period is prime so the
@@ -159,7 +167,11 @@ export class Game {
     this.camera.updateMatrixWorld();
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
+    const star = this.world.city.starVisibility(this.camera.position);
+    (this.pipeline.camera.starVisibility as unknown as { value: number }).value = star.visible;
+    (this.pipeline.camera.starTransmission as unknown as { value: number }).value = star.transmission;
     this.pipeline.render();
+    if (this.adaptation) (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);
     if (this.debug.profile) this.profileFrame();
   }
 }

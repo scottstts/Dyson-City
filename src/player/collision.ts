@@ -1,0 +1,108 @@
+/**
+ * Walls for the walker: vertical barriers as 2D segments in plan (x, z), resolved against the
+ * player's circle. The walker moves in short sub-steps and is pushed out of every segment it
+ * overlaps, so it slides along walls and cannot tunnel through thin ones.
+ *
+ * Segments live in a uniform grid; dynamic sets (a gate's leaf) are switched by tag.
+ */
+
+interface Segment {
+  ax: number;
+  az: number;
+  bx: number;
+  bz: number;
+  tag: string | null;
+}
+
+const CELL = 8;
+
+export class CollisionWorld {
+  private readonly grid = new Map<string, Segment[]>();
+  private readonly disabled = new Set<string>();
+
+  addSegment(ax: number, az: number, bx: number, bz: number, tag: string | null = null): void {
+    const s: Segment = { ax, az, bx, bz, tag };
+    const x0 = Math.floor(Math.min(ax, bx) / CELL);
+    const x1 = Math.floor(Math.max(ax, bx) / CELL);
+    const z0 = Math.floor(Math.min(az, bz) / CELL);
+    const z1 = Math.floor(Math.max(az, bz) / CELL);
+    for (let i = x0; i <= x1; i++) {
+      for (let j = z0; j <= z1; j++) {
+        const k = `${i},${j}`;
+        let list = this.grid.get(k);
+        if (!list) this.grid.set(k, (list = []));
+        list.push(s);
+      }
+    }
+  }
+
+  /** A closed polygon of segments (a solid's footprint). */
+  addPolygon(pts: [number, number][], tag: string | null = null): void {
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      this.addSegment(a[0], a[1], b[0], b[1], tag);
+    }
+  }
+
+  addBox(x0: number, z0: number, x1: number, z1: number, tag: string | null = null): void {
+    this.addPolygon([[x0, z0], [x1, z0], [x1, z1], [x0, z1]], tag);
+  }
+
+  setEnabled(tag: string, enabled: boolean): void {
+    if (enabled) this.disabled.delete(tag);
+    else this.disabled.add(tag);
+  }
+
+  /**
+   * Moves a circle of radius r from (x, z) by (dx, dz), sliding along walls. Returns the new
+   * position.
+   */
+  move(x: number, z: number, dx: number, dz: number, r: number): [number, number] {
+    const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (r * 0.5)));
+    let px = x;
+    let pz = z;
+    for (let s = 0; s < steps; s++) {
+      px += dx / steps;
+      pz += dz / steps;
+      [px, pz] = this.resolve(px, pz, r);
+    }
+    return [px, pz];
+  }
+
+  /** Pushes a circle out of every segment it overlaps. */
+  resolve(x: number, z: number, r: number): [number, number] {
+    let px = x;
+    let pz = z;
+    for (let iter = 0; iter < 4; iter++) {
+      let moved = false;
+      const ci = Math.floor(px / CELL);
+      const cj = Math.floor(pz / CELL);
+      const seen = new Set<Segment>();
+      for (let i = ci - 1; i <= ci + 1; i++) {
+        for (let j = cj - 1; j <= cj + 1; j++) {
+          const list = this.grid.get(`${i},${j}`);
+          if (!list) continue;
+          for (const s of list) {
+            if (seen.has(s) || (s.tag && this.disabled.has(s.tag))) continue;
+            seen.add(s);
+            const ex = s.bx - s.ax;
+            const ez = s.bz - s.az;
+            const len2 = ex * ex + ez * ez;
+            const t = len2 > 0 ? Math.min(Math.max(((px - s.ax) * ex + (pz - s.az) * ez) / len2, 0), 1) : 0;
+            const cx = s.ax + ex * t;
+            const cz = s.az + ez * t;
+            const d = Math.hypot(px - cx, pz - cz);
+            if (d < r && d > 1e-9) {
+              px = cx + ((px - cx) / d) * r;
+              pz = cz + ((pz - cz) / d) * r;
+              moved = true;
+            }
+          }
+        }
+      }
+      if (!moved) break;
+    }
+    return [px, pz];
+  }
+}

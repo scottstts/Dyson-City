@@ -14,6 +14,7 @@
  *   ?wobble=<deg>                                            periodic yaw sweep (±deg, 37-frame period) for flicker checks
  *   ?steady                                                  with ?wobble: the same amplitude every period (isolates aliasing from TAA motion softening)
  *   ?manual                                                  no animation loop: frames are stepped via __dyson.game.renderFrame
+ *   ?gate=closed|outer|inner                                 hold the West Gate's airlock in a state (both shut, outer or inner open)
  */
 import type { DebugView, ToneMapper } from '../render/pipeline';
 
@@ -33,6 +34,7 @@ export interface DebugParams {
   wobble: number | null;
   steady: boolean;
   manual: boolean;
+  gate: 'closed' | 'outer' | 'inner' | null;
 }
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare'];
@@ -69,5 +71,6 @@ export function readDebugParams(search = window.location.search, hostname = wind
     wobble: q.get('wobble') !== null && Number.isFinite(Number(q.get('wobble'))) ? Number(q.get('wobble')) : null,
     steady: q.has('steady'),
     manual: q.has('manual'),
+    gate: ((g) => (g === 'closed' || g === 'outer' || g === 'inner' ? g : null))(q.get('gate')),
   };
 }

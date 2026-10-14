@@ -166,4 +166,5 @@ The stars, the Milky Way and nebulae, in frame coordinates. Their brightness is 
 - **One cube face per frame**, then the prefilter one face of one level per step (`render/pmremSlices.ts`), in place: ~28 steps of at most ~1.5 ms each.
 - **Rejected:** the one-call `fromCubemap`. Its ~9 ms GGX convolution was a visible hitch every 2 s.
 - The slicer drives PMREMGenerator internals (three 0.186.1) and fails boot if they change. WebGPURenderer applies a target's scissor only under the renderer's own scissor test.
+- **A second capture, inside the Dome** (`createEnvironment` with `extras`): the same refresh, with the frame, platform and deck rendered into the cube (depth buffer on, far plane 4 km) and the sky scaled by the glass's transmission. It lights everything under the Dome; see `docs/dome.md`.
 - The capture renders through a CubeCamera. **Rejected:** `PMREMGenerator.fromScene`, which in this three version mirrored the environment east–west.

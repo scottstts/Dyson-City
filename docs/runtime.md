@@ -12,6 +12,7 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
   - first frame;
   - running.
   Each stage is logged with its duration.
+- **The city** (`src/city/`): built inside the environment stage (geometry on the main thread, ~1–2 s); its interior environment capture needs the frame, so it follows the open-sky capture. `Game` runs `city.update(dt, feet)` every frame (the gate's airlock; the player's walls follow the leaves) and sets the glare's star visibility at the eye.
 - **Ordering constraints:**
   - Noise volumes must be set before any star shader is built.
   - The space backdrop is baked (and the frame angle set) before the sky is built.
@@ -20,6 +21,7 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
 - **Hidden-tab frames.** `nextFrame` falls back to a 100 ms timeout, because requestAnimationFrame stalls in hidden panes during boot.
 - **GPU errors.** Device-loss and error callbacks are installed before `renderer.init()`, chained to Three's defaults. Any GPU error during boot aborts startup. Fatal runtime errors stop the loop and show the entry screen's error panel.
 - **Viewport.** DPR policy and resize coalescing are in `core/viewport.ts`, following the project rules.
+- **Default spawn** is the `gate` viewpoint (design §7.4). `?gate=closed|outer|inner` holds the West Gate's airlock in a state for review. Gate review viewpoints: `portal`, `chamber`, `court`; Dome: `drum`, `inside`, `ringwalk`. `tools/render.mjs --one-boot` reuses one boot for several spots (spots may also be `x,z,yawDeg,pitchDeg`), `--verbose` prints the page's log.
 - **Debug URL parameters** (`debug/params.ts`): `spot`, `view` (incl. `glare`), `sky` (incl. `space`), `tm`, `ev`, `time`, `fov`, `look`, `ao`, `probe`, `profile`, `autostart`, `wobble`, `steady`, `manual`. `tools/probe-hdr.mjs` reads back scene radiance at screen points for calibration.
   - **Local hosts only** (`isDebugHost`: localhost, loopback, `*.localhost`). On a deployed host every parameter is ignored and `window.__dyson` is not installed, so the review tools only work against a local server.
   - The sky debug mode is set after the environment capture, so debug views keep the normal lighting.

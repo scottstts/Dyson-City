@@ -102,56 +102,58 @@ The star is blinding. Even through the Veil, looking toward it you see brightnes
 |---|---|---|---|---|---|---|
 | Radius | 502.4 m | 500 m | 480 m | 384 m | 192 m | 0 |
 
-**Coupling with the rim.** The frame's outer faces land on the **lowest step, flush with its riser** (r = 502.4 m): the riser continues straight up into the Dome. The drum posts stand across the two lower treads with stepped feet; the glass is set back to the platform's top edge (r = 500 m), so between posts the stepped rim stays visible from outside, as a colonnade stands on a stepped base. Inside, the paving runs flat to the glass.
+**Coupling with the rim.** The frame's outer faces land on the **lowest step, a 20 mm reveal inside its riser** (r = 502.4 m): the riser continues straight up into the Dome. Every foot (drum posts, collar legs, band rails) stands on a dressed plinth seated across the two lower treads; the glass is set back to the platform's top edge (r ≈ 500 m) in a bronze sill channel, so between posts the stepped rim stays visible from outside, as a colonnade stands on a stepped base. Inside, the paving runs flat to the glass.
 
-**Structure: bands, coffers and collars.** Few, heavy members, in a clear hierarchy. Nothing radiates from the crown and nothing is triangulated. **The frame stands entirely outside the glass:** the pressure presses the glass outward against it, so from inside the glass is one clean surface with the frame beyond it.
+**Structure: bands, coffers and collars.** Few, heavy members, in a clear hierarchy. Nothing radiates from the crown and nothing is triangulated. **The frame stands entirely outside the glass:** the pressure presses the glass outward against the members' inner faces (a 50 mm gasket line), so from inside the glass is one clean surface with the frame beyond it. Members meet at cast bronze nodes.
 
 | Part | What it is |
 |---|---|
-| **Axis Bands** | Two bands over the survey axes, the heaviest members: twin rails 24 m apart (over the pad's first border courses), glazed between, crossing at the crown. Each runs down the Dome to the sill and passes through a collar. The logo's band with its twin edge rails |
+| **Axis Bands** | Two bands over the survey axes, the heaviest members: twin rails 24 m apart (over the pad's first border courses), glazed between, crossing at the crown. Each runs down the Dome through a collar to the sill (at the west, onto the gatehouse's piers). The logo's band with its twin edge rails |
 | **Coffer ribs** | Ribs parallel to the axes every 96 m (four pad bays), in vertical planes, forming a two-way grid of coffers in each quadrant. Ribs end on the band rails, with a cross-tie spanning the band at each junction (the logo's posts across the open bands). Nothing crosses a band |
 | **Eave Ring** | The hoop at 74 m (r = 480 m). The ribs at 288 m and 384 m meet it at shared nodes (288² + 384² = 480²), so the edge coffers close as clean triangles and quads with an arc side, never clipped slivers |
 | **Drum** | Below the eave, 24 posts carry the rib nodes down to the sill, glazed between |
-| **Collars** | A 96 m ring at each cardinal point, standing in the drum, cut open at the bottom where it meets the sill (as the logo's hub collars are cut open over the band). The band passes through its ring and lands on the sill; the Eave Ring frames into its flanks. West: the Gate. North: the Crown Car. East: the Archive's window. South: the Engine House's air intakes |
+| **Collars** | A 96 m round arch at each cardinal point standing in the drum: a semicircle (radius 48 m, crown at 90 m) on two vertical legs down to the sill, the ring cut open at the bottom (as the logo's hub collars are cut open over the band). The band passes through it; the Eave Ring frames into its flanks. West: the Gate. North: the Crown Car. East: the Archive's window. South: the Engine House's air intakes |
 | **Crown** | The crossing of the two bands at 251 m: a lantern hung beneath it, a telescope turret above it, and a ring balcony outside (§7.6) |
 
-- **Mostly transparent.** About **90 % of the Dome is clear glass**; from anywhere in the city the frame and glazing bars cover about a tenth of the sky. Members are sized to read as solid but no larger: band rails ~4 m wide, ribs ~2.5 m, glazing bars ~0.2 m.
-- **Glazing.** Neutral low-iron glass, anti-reflection coated (~97 % transmission, faint reflections from inside), in near-square panes of ~12 m measured on the surface. Slim satin-bronze glazing bars outside the glass hold each pane against the pressure. Panes are set a few milliradians apart, so reflections seen from outside break pane by pane (as the deck's plates do).
-- **Materials.** The frame is honed warm-white ceramic composite (albedo ~0.6) dressed like stone: arrises, joints, coursing. Nodes, shoes, collar rims and glazing bars are satin bronze. In the blaze every face toward the star washes out near white, as intended; the frame reads by its modelling, edges and silhouette, not its colour. The glass is spectrally neutral, never tinted: a tint would split the light into a warm inside and a white outside, for the same reason the amber Veil was rejected (`docs/world.md`).
+- **Mostly transparent.** About **90 % of the Dome is clear glass**; from anywhere in the city the frame covers roughly a tenth of the sky. Members are sized to read as solid but no larger: band rails 5 m wide × 8 m deep, ribs 3.5 × 5 m, collars 6 × 8 m, the Eave Ring 4.5 × 7 m, drum posts 4 m wide.
+- **Glazing: no bars.** Each coffer (and each drum bay between verticals) is **one monolithic curved pane** of transparent ceramic, pressed against the frame: the glass itself carries no pattern. Anti-reflection coated (faint reflections from inside) and **tinted neutral grey like sunglasses, ~50 % transmission**: from outside the Dome reads dark (two passes, ~25 %); from inside the city is a stop darker, the star still clips white, and its glare and bloom are halved. Each pane is set a milliradian or two off its neighbours, so reflections seen from outside break pane by pane (as the deck's plates do).
+  - *Rejected:* a 12 m grid of glazing bars. From inside it read as graph paper over the whole sky.
+- **Materials.** The frame is honed warm-white ceramic composite (albedo ~0.6) dressed like stone: arrises and block joints. It is bound in **glazed black ceramic** for contrast: black linings inlaid in every member's shadow groove (two on the bands, collars and Eave Ring), and black **binding collars**, real sleeves 7 cm proud of the member, a pair flanking every joint and more spaced ~18 m between. Nodes and the sill are satin bronze. In the blaze every face toward the star washes out near white, as intended; the frame reads by its modelling, edges and silhouette, not its colour. The glass is spectrally neutral, never tinted: a tint would split the light into a warm inside and a white outside, for the same reason the amber Veil was rejected (`docs/world.md`).
 - **From outside.** On the plain it is the only made thing. Tops facing the star burn near white; vertical faces receive under a fifth of the light a horizontal one does (the star is overhead), so the drum models strongly; undersides see only the dark deck. The shoulders mirror the star, broken pane by pane: the Dome's brightest feature.
 - **From inside.** The entire sky through clear glass: the star, the far structure climbing out of the haze on every side, the open bands and the stars. The frame is a sparse drawing over it: bars near the zenith dissolve into the glare, those lower down stand out lit by bounce from the pale city. The frame and the stars turn slowly past the fixed ribs: the coffers are a reference grid that makes the band's spin legible.
-- **Light inside.** The frame, bars and glass take ~12 % of the star's light, under a quarter stop. Bounce from pale stone makes the city brighter in its shadows than the dark deck outside.
+- **Light inside.** The frame and glass take ~10–15 % of the star's light, about a quarter stop. Bounce from pale stone makes the city brighter in its shadows than the dark deck outside.
 - **Rejected:**
   - ribs radiating from the crown with concentric rings, and triangulated geodesic or cable nets: both read as webs;
   - a shallow cap: it meets the step at an angle and pushes outward, needing buttresses or a thrust ring outside the step;
   - a full hemisphere (500 m): it walls off half the sky from the arrival point;
   - opaque gores with openings (the logo taken literally): the city would sit in shade and lose the sky;
   - a frame inside the glass: the pressure would pull the glass off it, and from inside the glass would read as a second, reflective layer over the structure;
-  - tinted or gold-coated glass (above).
+  - coloured (amber, gold) glass: it would split the light into a warm inside and a white outside. The tint is neutral grey.
 
 ### 7.3 The West Gate
 
 The only way in or out, on the Spinward axis, facing west along the band. It is an **airlock**: an outer gate, a chamber and an inner gate, which never stand open together.
 
-- **The West Collar** is a cathedral front at Dome scale: the collar ring above, the Spinward Band descending through it and landing on the two gate piers, the outer gate between them, glazing filling the ring.
-- **Both gates are sector gates**, as on a dam spillway: a curved leaf ~20 m wide and ~14 m tall on two radial arm frames that pivot on bronze trunnions. Each leaf's convex face meets the higher pressure it holds back, so the load runs down the arms into the trunnions. Opening, a leaf lifts and rotates up about its trunnions, sweeping along its own circle, so it needs almost no clearance.
-  - **Outer gate:** it holds the chamber's 1 bar against the band, so its skin faces the chamber and its arms, trunnions and hoists stand **outside, on the collar front**: the mechanism faces you on arrival. It lifts up into a hood on the front.
+- **The gatehouse** passes through the Dome's skin inside the West Collar: two massive piers (7 m thick, 31 m tall) running 48 m from the trunnion piers outside to the Gate Court inside, the outer gate's hood slung between them outside, the chamber's vault between them inside. The Spinward Band descends through the collar and lands on the piers; the glass stops on a bronze trim round the gatehouse.
+- **Both gates are sector gates**, as on a dam spillway: a curved leaf 18 m wide and 14 m tall (radius 16 m) on two radial arm frames that pivot on bronze trunnions. Each leaf's convex face meets the higher pressure it holds back, so the load runs down the arms into the trunnions. Opening, a leaf lifts and rotates up about its trunnions, sweeping along its own circle, so it needs almost no clearance.
+  - **Outer gate:** it holds the chamber's 1 bar against the band, so its skin faces the chamber and its arms, trunnions and hoists stand **outside, between the trunnion piers**: the mechanism faces you on arrival. It lifts up under the hood.
   - **Inner gate:** it holds the city's 1 bar against the vented chamber, so its smooth convex skin faces the Gate Court and its arms are in the chamber. It lifts up into the chamber vault.
-- **Mechanism, all visible:** locking bolts at each sill and jamb, inflatable edge seals, paired hydraulic hoists, trunnion hubs ~3 m across. Dark bronze and machined steel.
-- **The chamber** is a sealed vault ~30 m long behind the collar: equalising vents in its walls, and a large brass pressure dial, the only gauge you need.
+- **Mechanism, all visible:** floor bolts rising from each bronze sill into keepers on the leaf's lip, side-seal tracks on the jambs, paired telescoping hydraulic hoists, trunnion hubs ~3 m across in bolted bearing housings. Dark steel, chrome and bronze. (Jamb bolts are impossible: the leaf's edges sweep the jambs.)
+- **The chamber** is a sealed vault 26 m long between the leaves, on a basalt floor: equalising vents in its walls, two long pendant luminaires under the vault (downlight and uplight), slim wall luminaires along both piers, and a large brass pressure dial (0.5–1.05 bar), the only gauge you need.
+- **Sealed shut.** Black rubber seals close every edge of a shut leaf: a lip seal bearing into the bronze sill, side seals running in the jambs' seal tracks, and a fixed top seal under each head that the skin bears on.
 - **The threshold is the stair.** The platform's three steps run through the outer opening up to the chamber floor.
 - **Behaviour (automatic, no prompt).** Going in:
-  1. Approaching within ~18 m, the outer gate opens (bolts ~1 s, lift ~6 s). If the chamber is at city pressure, it vents first.
+  1. Approaching within ~9 m, the outer gate opens (bolts ~1 s, lift ~6 s). If the chamber is at city pressure, it vents first.
   2. Once the player is in the chamber and clear of the leaf's sweep, the outer gate closes (~6 s).
   3. The chamber fills to 1 bar (~5 s): a rising rush from the vents, the dial's needle climbing.
   4. The inner gate opens onto the city.
 
   Going out runs in reverse. **Venting cools the chamber's humid garden air by expansion, so it fills with a brief mist** that clears as the outer gate opens onto the dry deck. Going in, there is none. A gate never sweeps through the player; walking back before a gate closes reopens it.
-- **Outside**, a pale stone apron set into the deck (not laid on it) carries the Spinward axis inlay out from the threshold.
+- **Outside**, a pale stone apron (a 15 mm slab on the deck, arrised) carries the Spinward axis inlay out from the threshold between and in front of the piers.
 
 ### 7.4 Arrival
 
-- **Spawn:** on the deck outside the West Gate, ~120 m out on the Spinward axis, facing east at the closed gate, the view pitched a little up. The Dome rises to ~34° above the horizon, the star blazes above it, and the band's eastern sky (the logo's front face and the nearest hub collar) shows over it and through its glass. Exact position and pitch are set from headless renders.
+- **Spawn:** on the apron ~30 m in front of the West Gate's piers, facing the closed gate, the view pitched a little up: the whole gatehouse front with the collar arches either side. The gate opens as you walk up to it (within ~9 m).
 - **Why west:** the gate faces anti-spinward, so the arrival view looks east, the established first-impression direction. The plan (§7.5) is laid out from the gate: the Spinward axis is the processional route from it.
 - **The reveal:** walk to the gate; it opens onto the Spinward axis: the Gate Court, the avenue, the Mirror Basin and the Archive's portico ~750 m away, under the coffered sky with the Spinward Band running overhead along the axis.
 
@@ -310,7 +312,7 @@ Outdoor shadows are very dim and short: a soft darkening at the foot of each bui
 
 ## 12. Rendering scope
 
-Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/shadows.md`, `docs/render-pipeline.md`, `docs/runtime.md`).
+Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/shadows.md`, `docs/render-pipeline.md`, `docs/runtime.md`, `docs/dome.md`, `docs/gate.md`).
 
 - **Physically based radiometry.** One radiance scale for the star, the far structure, the atmosphere and local materials. Exposure is a camera, never a fix for wrong ratios.
 - **Star:**
@@ -334,14 +336,14 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
 
 ### What the city adds
 
-- **Shadows** (`docs/shadows.md`): outdoors, a cheap baked field of how much of the star each point sees, giving the dim, short darkening at the feet of buildings; indoors, ordinary shadows from openings and lamps.
-- **The star's exact glare follows what the eye sees of it.** It is scaled by the star's visibility at the eye: slightly less under the Dome, none under a roof. Today it assumes an unobstructed disc.
-- **Eye adaptation.** A metered, global exposure: a weighted average of scene luminance, never local.
+- **Shadows** (`docs/shadows.md`): outdoors, a cheap baked field of how much of the star each point sees, giving the dim, short darkening at the feet of buildings; indoors, ordinary shadows from openings and lamps. *Not built yet* (see shadows.md for what exists).
+- **The star's exact glare follows what the eye sees of it** (built): scaled by the star's visibility at the eye (less under the Dome, none under a roof), and the disc replaces only sky pixels.
+- **Eye adaptation** (built). A metered, global exposure: a weighted average of scene luminance, never local.
   - **Floor:** pinned at the star key, so outdoors and under the Dome nothing changes.
   - **Ceiling:** about +4 stops, so dim rooms stay dim.
   - **Speed:** asymmetric, as an eye. Going in it opens over ~4 s; going out it clamps down in ~1 s after a moment of overexposure.
-- **Bounce light.** The pale city lights the Dome's underside, the stoas and every interior. Indirect light (star, sky and lamps) is baked for the static city; the environment capture inside the Dome includes the Dome.
-- **The Dome's glass** is one thin neutral layer over the sky. Only the primary frame is geometry; the glazing bars are drawn in the glass shader with footprint-filtered coverage, so a 12 m grid seen from hundreds of metres never shimmers.
+- **Bounce light.** The pale city lights the Dome's underside, the stoas and every interior. Indirect light (star, sky and lamps) is to be baked for the static city; the environment capture inside the Dome includes the Dome (built).
+- **The Dome's glass** (built) is one thin neutral layer composited analytically in post over the sky and the scene behind it.
 - **Local reflections** for water and glass (the Mirror Basin, the canals, the Dome seen in the glazed deck), with the environment capture as fallback.
 - **Altitude.** The Crown is 0.26 km up a 1.2 km air column: the sky and aerial perspective tables need the eye's altitude.
 

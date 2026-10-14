@@ -12,6 +12,7 @@ export default defineConfig({
       'three/addons/tsl/display/TRAANode.js',
       'three/addons/tsl/display/BloomNode.js',
       'three/addons/tsl/display/GaussianBlurNode.js',
+      'three/addons/lights/RectAreaLightTexturesLib.js',
     ],
   },
   build: {
