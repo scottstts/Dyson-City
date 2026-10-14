@@ -83,7 +83,7 @@ export function computeAtmosphereTextures(): Promise<AtmosphereTextures> {
         plasma: makeTexture(r.plasma, PLASMA_LUT.width, PLASMA_LUT.height, 'plasma.lines'),
         enclosurePre: makeTexture(r.enclosurePre, ENCLOSURE_LUT.preWidth, ENCLOSURE_LUT.preHeight, 'enclosure.pre'),
         enclosurePreMirror: makeTexture(r.enclosurePreMirror, ENCLOSURE_LUT.preWidth, ENCLOSURE_LUT.preHeight, 'enclosure.preMirror'),
-        enclosureIrr: makeTexture(r.enclosureIrr, ENCLOSURE_LUT.irrWidth, 2, 'enclosure.irradiance'),
+        enclosureIrr: makeTexture(r.enclosureIrr, ENCLOSURE_LUT.irrWidth, ENCLOSURE_LUT.irrRows, 'enclosure.irradiance'),
         shellMean: new Vector3(...r.shellMean),
       });
     };

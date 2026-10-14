@@ -4,8 +4,8 @@
  *
  *  - specular: the prefiltered enclosure about the reflected direction's elevation — a Gaussian
  *    facet lobe for mirrors (their normal spread: micro-roughness ⊕ unresolved tilts), GGX for rough
- *    finishes. Every tile's mirrors are domed and individually tilted, so no tile shows a sharp image
- *    of the structure: the prefiltered enclosure is exact for them;
+ *    finishes. Resolved mirror tiles and the band trace their reflection instead (jittered within
+ *    the lobe), meeting the star, open space or a structure region (reflected.ts);
  *  - diffuse: the enclosure's irradiance for the face's tilt (horizon-clipped);
  *  - pixels covering many tiles mix the finishes' reflections in the shares of the sample under them
  *    (plating.ts), about the sample's mean normal;
@@ -19,11 +19,12 @@
  * Tables are in reference-photosphere units; everything scales by the star's measured illuminant.
  * There is no ambient term.
  */
-import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, mix, clamp, asin, acos, exp, texture, length, select, cross, abs, log, cos, sin } from 'three/tsl';
+import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, mix, clamp, asin, acos, exp, texture, length, select, cross, abs, log, cos, sin, smoothstep } from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 import { STAR_CENTER_RADIANCE, LIMB_DARKENING_EXPONENT } from '../../world/radiometry';
 import { STAR_RADIUS_R } from '../../world/constants';
-import { ENCLOSURE_LUT, MIRROR_MICRO_SIGMA } from './enclosure';
+import { ENCLOSURE_LUT, MIRROR_MICRO_SIGMA, REFLECTION_CLASSES } from './enclosure';
+import { reflectedRegion } from './reflected';
 import { COLLECTOR_F0 } from './materials';
 import { SHELL_LIGHT_SECONDS } from '../../world/constants';
 import { flareBrightening } from '../star/starSurface';
@@ -52,7 +53,7 @@ export interface ShellLight {
   space: SpaceBackdrop;
 }
 
-const { preWidth: PW, preHeight: PH, irrWidth: IW } = ENCLOSURE_LUT;
+const { preWidth: PW, preHeight: PH, irrWidth: IW, irrRows: IR } = ENCLOSURE_LUT;
 const HALF_PI = Math.PI / 2;
 /** Backdrop level for reflected space (~0.35° texels): mirror lobes and their jitter blur finer detail. */
 const REFLECTED_SPACE_LOD = 2;
@@ -81,13 +82,15 @@ export function prefilteredMirror(light: ShellLight, er: F, sigma: F): V3 {
 /** Irradiance on a face whose normal is tilted by `tilt` (radians) from the radial direction. */
 export function irradiance(light: ShellLight, tilt: F): V3 {
   const u = tilt.div(Math.PI).clamp(0, 1).mul((IW - 1) / IW).add(0.5 / IW);
-  return texture(light.irr, vec2(u, 0.25)).rgb as unknown as V3;
+  return texture(light.irr, vec2(u, 0.5 / IR)).rgb as unknown as V3;
 }
 
-/** Radiance of a structure surface seen at elevation eps (the shell's covered-part mean). */
-export function structureRadiance(light: ShellLight, eps: F): V3 {
+/** Light each reflection class reflects when seen at elevation eps, weighted (enclosure.ts REFLECTION_CLASSES). */
+export function classRadiance(light: ShellLight, eps: F, weights: Node<'vec4'>): V3 {
   const u = eps.div(HALF_PI).clamp(0, 1).mul((IW - 1) / IW).add(0.5 / IW);
-  return texture(light.irr, vec2(u, 0.75)).rgb as unknown as V3;
+  const row = (i: number) => texture(light.irr, vec2(u, (i + 1.5) / IR)).rgb as unknown as V3;
+  const w = [weights.x, weights.y, weights.z, weights.w];
+  return REFLECTION_CLASSES.map((_, i) => row(i).mul(w[i])).reduce((a, b) => a.add(b)) as unknown as V3;
 }
 
 /** Karis' analytic approximation of the split-sum environment BRDF. */
@@ -117,12 +120,12 @@ function starRadianceToward(pos: V3, dir: V3): V3 {
 }
 
 /**
- * What a reflection ray from `pos` along `r` meets: the star, a structure surface (at the
- * enclosure's covered-shell radiance for the elevation it is seen at), or open space — with the
- * plasma along the way. Mirror tiles are not mean reflectors: each shows its own piece of the real
- * enclosure, gaps (dark) and all.
+ * What a reflection ray from `pos` along `r` meets: the star, a structure region (reflected.ts:
+ * its classes' light at the elevation it is seen at, and its glow), or open space — with the plasma
+ * along the way. Mirror tiles are not mean reflectors: each shows its own piece of the real
+ * enclosure, gaps (dark) and all. `pixelAngle` sizes the ray's footprint where it lands.
  */
-function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V3) => StructureHit): V3 {
+function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V3) => StructureHit, pixelAngle: F): V3 {
   const oc = pos.sub(vec3(0, 1, 0));
   const b = dot(oc, r);
   const cS = dot(oc, oc).sub(STAR_RADIUS_R * STAR_RADIUS_R);
@@ -146,7 +149,8 @@ function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V
     If(hit.mat.notEqual(MAT.space).and(hit.mat.notEqual(MAT.none)), () => {
       const hp = pos.add(r.mul(hit.t));
       const upHit = normalize(vec3(0, 1, 0).sub(hp));
-      out.assign(structureRadiance(light, asin(clamp(dot(r.negate(), upHit), -1, 1)).abs()));
+      const region = reflectedRegion(hit, pixelAngle.mul(length(pos).add(hit.t)));
+      out.assign(classRadiance(light, asin(clamp(dot(r.negate(), upHit), -1, 1)).abs(), region.weights).add(region.emission));
     }).Else(() => {
       // Out through a gap: the (lifted) sky beyond, whose light is not the star's, so it is divided
       // out of the illuminant the shading applies at the end. Diffuse only: the lobe's jitter would
@@ -158,7 +162,7 @@ function tracedReflection(pos: V3, r: V3, light: ShellLight, trace: (o: V3, d: V
   return out.mul(seg.T).add(seg.S) as unknown as V3;
 }
 
-export function shadeSurface(d: V3, pos: V3, s: SurfaceSample, light: ShellLight, trace: (o: V3, dir: V3) => StructureHit, noise: V2): V3 {
+export function shadeSurface(d: V3, pos: V3, s: SurfaceSample, light: ShellLight, trace: (o: V3, dir: V3) => StructureHit, noise: V2, pixelAngle: F): V3 {
   const up = normalize(vec3(0, 1, 0).sub(pos));
   const v = d.negate();
 
@@ -181,10 +185,13 @@ export function shadeSurface(d: V3, pos: V3, s: SurfaceSample, light: ShellLight
     const ang = noise.y.mul(Math.PI * 2);
     const rj = normalize(r.add(t1.mul(cos(ang).mul(rad).mul(sigma))).add(t2.mul(sin(ang).mul(rad).mul(sigma))));
     If(dot(rj, s.normal).greaterThan(0.0), () => {
-      env.assign(mix(env, tracedReflection(pos.add(n.mul(2e-5)), rj, light, trace), sharpW));
+      env.assign(mix(env, tracedReflection(pos.add(n.mul(2e-5)), rj, light, trace, pixelAngle), sharpW));
     });
   });
-  const own = envBRDFApprox(s.f0, mix(rough, float(0.08), s.mirror), nov).mul(env).add(s.albedo.mul(irradiance(light, acos(clamp(dot(n, up), -1, 1)))).mul(s.occlusion).div(Math.PI));
+  // A rough lobe gathers the star's whole cap, so it loses what the relief hides of it, as the
+  // diffuse part does; a mirror's narrow lobe looks elsewhere.
+  const specOcc = mix(float(1), s.occlusion, smoothstep(0.1, 0.4, rough).mul(s.mirror.oneMinus()));
+  const own = envBRDFApprox(s.f0, mix(rough, float(0.08), s.mirror), nov).mul(env).mul(specOcc).add(s.albedo.mul(irradiance(light, acos(clamp(dot(n, up), -1, 1)))).mul(s.occlusion).div(Math.PI));
 
   // Unresolved tiles: their finishes' reflections in area shares, about the module facet.
   const col = own.toVar();

@@ -19,5 +19,5 @@ type V3 = Node<'vec3'>;
 export function shadeStructure(hit: StructureHit, d: V3, pixelAngle: F, light: ShellLight, noise: Node<'vec2'>): V3 {
   const pos = d.mul(hit.t).toVar();
   const surf = structureSurface(hit, pos, { d, t: hit.t, pixelAngle, n: hit.normal });
-  return shadeSurface(d, pos, surf, light, (o, dir) => traceStructure(o, dir, pixelAngle), noise);
+  return shadeSurface(d, pos, surf, light, (o, dir) => traceStructure(o, dir, pixelAngle), noise, pixelAngle);
 }

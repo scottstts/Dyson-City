@@ -22,7 +22,8 @@
  * measured illuminant):
  *   - prefiltered environment Lpre(ε_r, roughness): split-sum GGX convolution of L_in about a
  *     reflected direction at elevation ε_r — the specular light of any surface on the shell;
- *   - L_m(ε) per surface class: the radiance of a traced reflection hit;
+ *   - L_m(ε) per surface class, reflected light only (REFLECTION_CLASSES): what a traced reflection
+ *     hit returns for the class it meets, with that surface's own glow added in the shader;
  *   - irradiance E(tilt) for diffuse parts, with horizon clipping;
  *   - the shell's mean radiance (lights the plasma).
  */
@@ -64,7 +65,7 @@ export const SURFACES = {
   collector: { area: 0.34, cls: { f0: COLLECTOR_F0, albedo: COLLECTOR_DIFFUSE, roughness: 0.08, sigma: 0.045, emission: collectorGlow } },
   satin: { area: 0.1, cls: { f0: COLLECTOR_F0, albedo: COLLECTOR_DIFFUSE, roughness: 0.32, emission: collectorGlow } },
   structure: { area: 0.07, cls: { f0: STRUCTURE_F0, albedo: STRUCTURE_DIFFUSE, roughness: 0.18, sigma: 0.05, emission: meanGlowRadiance(STRUCTURE_TEMPERATURE, 0.03) } },
-  veil: { area: 0.06, cls: { f0: VEIL_F0, albedo: [0.002, 0.002, 0.002], roughness: 0.05, sigma: 0.02 } },
+  veil: { area: 0.06, cls: { f0: VEIL_F0, albedo: [0.0057, 0.0057, 0.0057], roughness: 0.05, sigma: 0.02 } },
   open: { area: 0.43, cls: null },
 } as const satisfies Record<string, { area: number; cls: SurfaceClass | null }>;
 
@@ -75,7 +76,12 @@ export const ENCLOSURE_LUT = {
   mirrorSigmaMax: 0.25,
   /** Irradiance: u = tilt/180°. */
   irrWidth: 64,
+  /** Rows of the irradiance table: irradiance by tilt, then one per REFLECTION_CLASSES entry. */
+  irrRows: 5,
 } as const;
+
+/** The classes a traced reflection can meet, in their rows (1..) of the irradiance table. */
+export const REFLECTION_CLASSES = ['collector', 'satin', 'structure', 'veil'] as const satisfies readonly (keyof typeof SURFACES)[];
 
 const S = STAR_RADIUS_R;
 const SIN_A = Math.sin(STAR_ANGULAR_RADIUS);
@@ -230,7 +236,7 @@ export interface EnclosureResult {
   pre: Float32Array;
   /** Lpre for Gaussian-facet mirrors, RGBA (a = 1). */
   preMirror: Float32Array;
-  /** Row 0: irradiance by normal tilt from the radial direction. Row 1: structure radiance by view elevation. RGBA. */
+  /** Row 0: irradiance by normal tilt from the radial direction. Rows 1..: each reflection class's reflected radiance by view elevation. RGBA. */
   irr: Float32Array;
   /** Shell mean radiance (cosine-weighted over the hemisphere of chords). */
   shellMean: RGB;
@@ -331,9 +337,10 @@ export function solveEnclosure(plasmaLut: PlasmaLut, surfaces: Record<string, { 
   }
 
   // Irradiance on a surface whose normal is tilted β from the radial direction (horizon-clipped).
-  // Row 0: irradiance by face tilt. Row 1: radiance of a structure surface seen at elevation ε
-  // (0..90°), the shell's mean over its covered part — what a traced reflection meets.
-  const irr = new Float32Array(IW * 2 * 4);
+  // Row 0: irradiance by face tilt. Rows 1..: the light each class reflects when seen at elevation
+  // ε (0..90°), without its own glow — what a traced reflection meets (the shader adds the glow of
+  // the region it hits).
+  const irr = new Float32Array(IW * ENCLOSURE_LUT.irrRows * 4);
   const NT = 96;
   const NP = 96;
   for (let i = 0; i < IW; i++) {
@@ -363,13 +370,22 @@ export function solveEnclosure(plasmaLut: PlasmaLut, surfaces: Record<string, { 
     for (let c = 0; c < 3; c++) sky[i * 3 + c] = incoming(inc, Math.cos(theta), c);
   }
 
-  const covered = 1 - (surfaces.open?.area ?? 0);
-  for (let i = 0; i < IW; i++) {
-    const x = i / (IW - 1);
-    const o = (IW + i) * 4;
-    for (let c = 0; c < 3; c++) irr[o + c] = interp(shell[c], Math.min(x, 0.5)) / covered;
-    irr[o + 3] = 1;
-  }
+  REFLECTION_CLASSES.forEach((name, row) => {
+    const cls = surfaces[name]?.cls;
+    const L = [0, 1, 2].map(() => new Float64Array(N_EPS + 1));
+    if (cls) {
+      for (let i = 0; i <= N_EPS; i++) {
+        classRadiance(cls, Math.min((i / N_EPS) * (Math.PI / 2), Math.PI / 4), inc, smp, tmp);
+        for (let c = 0; c < 3; c++) L[c][i] = tmp[c] - (cls.emission?.[c] ?? 0);
+      }
+    }
+    for (let i = 0; i < IW; i++) {
+      const x = i / (IW - 1);
+      const o = ((row + 1) * IW + i) * 4;
+      for (let c = 0; c < 3; c++) irr[o + c] = interp(L[c], Math.min(x, 0.5));
+      irr[o + 3] = 1;
+    }
+  });
 
   return { pre, preMirror, irr, shellMean, plasma, shell, sky };
 }

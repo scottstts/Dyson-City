@@ -15,7 +15,7 @@ scene MRT (output, packed normal, velocity)
 ```
 
 - **Post camera uniforms.** Post passes need their own `projInv`/`camWorld` uniforms. TSL camera nodes inside a post pass refer to the quad camera.
-- **Sky velocity.** The sky writes a rotation-only velocity (it is at infinity), so TRAA does not smear it.
+- **Sky velocity.** The sky is at infinity, so camera rotation alone moves it. What a pixel shows can also move on its own: the frame turns about the spin axis (through the sphere's centre, not the observer), carrying its structure and the stars. The sky shader reports what it hit (`radianceMotion`: band-fixed, frame structure at distance t, or the sky at infinity), and the velocity undoes the frame's last step for it, so TRAA does not soften the occlusion edges and fine detail that carry the motion. The motion is tiny per frame (~0.015 px at a 60° field) but TRAA's history accumulates it.
 - **The star's atmosphere is its own pass.** Folded into the sky shader, it pushed the structure trace's register pressure up and slowed the whole sky by several milliseconds (costs were non-additive: removing either half restored the frame). It needs nothing from that trace: every sight line ends at the photosphere or the shell, and the atmosphere lies inside the shell.
 
 ## Glare (`glare.ts`, `glarePass.ts`)

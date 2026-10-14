@@ -108,24 +108,11 @@ Only the band turns: the Girdle, its edge rails and the city, inside a static fr
 - **Walls facing the city.** As members sweep close, their walls face the observer. Rounded top edges are matte and tilt at most ~16°; a polished edge mirrored the overhead star into a thin white line along every wall.
 - **Wrap.** Longitude cuts (atan at ±180°) that were behind the star now come into view; the relief march wraps longitude about its cell.
 
-### Relief (`relief.ts`)
+### Organisation, relief and plating
 
-The shell is seen at a grazing angle equal to its elevation, so the lower sky shows the panels nearly edge-on, where flat shading reads as plastic. A height field is ray-marched inside the panel layer for primary rays: primary ribs on the module lattice, lower secondary ribs on an irregular per-module quadtree, each bay at its own depth (≈1,500 km). It fades to flat where the ribs fall below a pixel.
+How the collectors, the band and the panel edges are laid out — the collection network, the band's courses, the relief, the edge cross-section and the plating statistics — is in `structure-organisation.md`. In short: every visible division is an engineered region holding more construction than the eye resolves, and nothing large is a flat pane.
 
-- **Rejected:** a regular quarter-module sub-grid, which reads as a tiled roof (a countable, human-scale rhythm).
-- **Rib walls are dressed and matte** (tilt held under ~20°). Sheer polished walls mirror the star into thin bright slits that read as lit windows and crawl in motion.
-
-### Plating (`plating.ts`)
-
-The shell is a patchwork with no single countable size.
-
-| Level | Behaviour |
-|---|---|
-| **Divisions** | An irregular quadtree from ~19° down to ~2.4°. Its leaves are flat facets with set errors |
-| **Tiles** | A second irregular quadtree inside each facet: a power-law spread of sizes, each with its own finish, set error and shallow dome |
-| **Facets** | Always sub-pixel; a rare few are rogue (failed actuators) and glint |
-
-Resolved tiles trace their reflection (jittered within the lobe, integrated by TAA). Unresolved tiles are sampled, not averaged: their mean tilt deviates by σ/√N and their finish mix varies binomially per world-anchored cell.
+- **Walls are dressed and matte** (tilt held under ~20°). Sheer polished walls mirror the star into thin bright slits that read as lit windows and crawl in motion.
 
 ### Materials and heat (`materials.ts`, `thermal.ts`, `surfaces.ts`)
 
@@ -136,11 +123,12 @@ The shell is one **fictional refractory alloy**. Physics is used where it shapes
 | Collector plating | Warm polished metal, F0 ≈ 0.2 (slightly warm), polished and satin tiles, ~3 % offline. Glows dark bronze at ~2,600 K (~0.6 % of the star) |
 | Structure (frames, hubs, rails) | The same alloy, a little brighter and rougher, running cooler (~2,350 K): it reads dark |
 | Headers | The hottest coolant (~3,450 K, ~6 % of the star): continuous orange-gold lines along panel borders, both edges of every girder and the hub rims. These are the logo's lines |
-| The band (the Veil's top) | A true mirror of precisely set panes (~0.1–0.2°); it does not glow |
+| The band (the Veil's top) | A precision mirror shield (panes set to ~0.1–0.2°) whose coating, haze and precision change by section; it does not glow |
 
-- **Heat is the detail.** Visible glow is steep in temperature (5 % hotter is 1.6× brighter), so a temperature map does the work. Tiles run hot in the middle and cool at their seams, coolant warms across each facet, and regional loads vary. Bay floors near rib walls run cooler, and offline tiles are dark. Unresolved, it blends to the sample's mean, including glow's convexity in temperature.
+- **Heat is the detail.** Visible glow is steep in temperature (5 % hotter is 1.6× brighter), so a temperature map does the work. It follows the collection network: basins at their own loads, coolant warming toward each district's drain, channels hotter by what they collect; tiles hot in the middle and cool at their seams; offline tiles dark. Unresolved, it blends to the sample's mean, including glow's convexity in temperature.
 - **The band is a precision mirror.** With the collectors' 1–2° pane set errors, panes near the rails reflected off the band, out through the gap beside it, into black space: a mosaic of dark rectangles. Now only its true mirror image remains: being concave, the band's outer strips reflect the open band further along, stepped by the panes.
 - **Reflections give the metal** and brighten the shell toward the star. Near the limb the tiles mirror the star into the mosaic.
+- **In this light, rough is bright and polished is dark.** A rough lobe gathers the 45° star cap; a polished one mirrors the dim enclosure. Matte features (channel floors, walls, hazed band sections) therefore read lighter than the plating around them, and occlusion has to darken a rough lobe's specular as well as its diffuse (`shading.ts`).
 - **Nothing on the structure emits above the star** (`tests/thermal.test.ts`). The removed receivers were lines at 12–24× the star's radiance, 0.2–3 px wide. They saturated at any coverage into constant-width neon, read as LED strips and lane dashes, and crawled under camera motion. Their glare pumped with them. They were also impossible: under a source 45° in half-angle, étendue caps concentration at 2×.
 - **Rejected:** black chrome (F0 0.13). It made every reflection chain die, so the shell was a uniform dark that the glare veil flattened to grey. Also rejected: bright aluminium mirrors and white ceramic (grey CG), and any meaningful diffuse share.
 
@@ -152,8 +140,11 @@ The shell is one **fictional refractory alloy**. Physics is used where it shapes
 |---|---|
 | Prefiltered environment by reflected elevation (GGX and Gaussian-mirror tables) | Specular light of every finish |
 | Irradiance by face tilt (horizon-clipped) | Diffuse light (× relief occlusion) |
+| Each class's reflected light by the elevation it is seen at (collector, satin, structure, veil) | A traced reflection's hit, with the region's own glow (`reflected.ts`) |
 | Shell mean radiance | Lights the plasma |
 | Sky by zenith angle | Lights the air |
+
+**Traced reflections see regions.** A resolved mirror (the band, a resolved polished tile) traces its reflection. A hit on the structure returns that region's look, not the enclosure's average: a coarse evaluation of the collection network's basins (polished or satin, their loads), the manifolds, rims and hot perimeter headers, and the girders' cooler alloy. The band therefore shows the enclosure reflecting itself. It is deliberately coarse: finer detail is below the reflection's own blur.
 
 **Light echoes.** A traced reflection that meets the star evaluates the star's flares at its retarded time. The extra path through the reflector, divided by c, is 3–6 s for tiles near the limb (`SHELL_LIGHT_SECONDS` = 3.28 s per shell radius). A flare's impulsive bursts flash on the disc and then, seconds later, in the far shell's mirrors.
 

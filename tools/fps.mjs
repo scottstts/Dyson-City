@@ -3,9 +3,10 @@
  * Uncapped frame rate per viewpoint (not part of the game build): the real animation loop with
  * vsync and the frame-rate limit off, frozen star time, frames counted over a few seconds.
  *
- *   node tools/fps.mjs [--url http://localhost:5174] [--size 1920x1080] [--seconds 4] [--query "..."] spot…
+ *   node tools/fps.mjs [--url http://localhost:5174 | --dist <vite build dir>] [--size 1920x1080] [--seconds 4] [--query "..."] spot…
  */
 import { chromium } from 'playwright-core';
+import { DIST_ORIGIN, serveDist } from './serveDist.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -17,7 +18,8 @@ const opt = (name, fallback) => {
   }
   return fallback;
 };
-const base = opt('url', 'http://localhost:5174');
+const dist = opt('dist', '');
+const base = dist ? DIST_ORIGIN : opt('url', 'http://localhost:5174');
 const [w, h] = opt('size', '1920x1080').split('x').map(Number);
 const seconds = Number(opt('seconds', '4'));
 const query = opt('query', '');
@@ -30,7 +32,9 @@ const browser = await chromium.launch({
 });
 try {
   for (const spot of spots) {
-    const page = await browser.newPage({ viewport: { width: w, height: h } });
+    const context = await browser.newContext({ viewport: { width: w, height: h } });
+    if (dist) await serveDist(context, dist);
+    const page = await context.newPage();
     await page.goto(`${base}/?autostart&time=600&spot=${encodeURIComponent(spot)}${query ? `&${query}` : ''}`);
     await page.waitForFunction(() => window.__dyson?.ready === true, null, { timeout: 120_000 });
     const ms = await page.evaluate(
@@ -49,7 +53,7 @@ try {
       seconds,
     );
     console.log(`${spot}: ${ms.toFixed(2)} ms/frame (${(1000 / ms).toFixed(0)} fps)`);
-    await page.close();
+    await context.close();
   }
 } finally {
   await browser.close();

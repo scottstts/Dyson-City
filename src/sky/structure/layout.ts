@@ -69,8 +69,6 @@ export const STRUCTURE = {
   braceDepth: 0.007,
   /** The braces' lower end: this far (longitude) from the hub meridian, on the band's rail, clear of the collar. */
   braceFoot: 9 * DEG,
-  /** Target size of a plating module (one flat facet) in the panels. */
-  panelModule: 4.8 * DEG,
 } as const;
 
 /**

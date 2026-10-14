@@ -14,7 +14,7 @@
  *
  * Units: shell radii for geometry, scene radiance for colour (see world/radiometry.ts).
  */
-import { Fn, vec3, float, fract, If, normalize, sqrt, dot, length, fwidth, max, select, uniform } from 'three/tsl';
+import { Fn, vec3, vec4, float, fract, If, normalize, sqrt, dot, length, fwidth, max, select, uniform } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { screenCoordinate } from 'three/tsl';
 import { hash33 } from '../render/tsl/noise';
@@ -30,6 +30,14 @@ import type { SpaceBackdrop } from './space/bake';
 import { toFrame } from './structure/spin';
 
 type V3 = Node<'vec3'>;
+type V4 = Node<'vec4'>;
+
+/**
+ * How what a sky pixel shows moves (the w of radianceMotion): it is fixed to the band (the ground,
+ * the band and its rails, the star), part of the frame at distance w (shell units), or the sky
+ * beyond the shell at infinity, which turns with the frame (SKY_MOTION_INFINITY).
+ */
+export const SKY_MOTION_INFINITY = -1;
 
 /** Sky debug modes (?sky=...): isolate one signal of the composition. */
 export const SKY_DEBUG = { off: 0, localS: 1, localT: 2, material: 3, noAtmosphere: 4, space: 5 } as const;
@@ -49,6 +57,8 @@ export interface SkyOptions {
 export interface Sky {
   /** Builds a fresh radiance graph (one per material that renders the sky). */
   radiance: (dir: V3) => V3;
+  /** The same, with the motion of what the pixel shows in w (SKY_MOTION_INFINITY). */
+  radianceMotion: (dir: V3) => V4;
   options: SkyOptions;
 }
 
@@ -76,6 +86,7 @@ export function createSky(atmo: AtmosphereNodes, star: StarState, space: SpaceBa
       // The air's LUTs already carry the Veil-filtered sky that lights it (atmosphere/worker.ts).
       const local = { S: localRaw.S.mul(illuminant).toVar(), T: localRaw.T.toVar() };
       const out = vec3(0).toVar();
+      const motion = float(0).toVar();
       const disc = d.y.mul(d.y).sub(1 - s * s);
 
       If(d.y.lessThanEqual(0.0), () => {
@@ -102,9 +113,14 @@ export function createSky(atmo: AtmosphereNodes, star: StarState, space: SpaceBa
             col.assign(spaceRadiance(space, toFrame(d), pixelAngle));
             // Through a gap: out of the shell.
             tEnd.assign(d.y.mul(2.0));
+            motion.assign(SKY_MOTION_INFINITY);
           }).Else(() => {
             const noise = hash33(vec3(screenCoordinate.xy, fract(options.frame.mul(0.618034)).mul(4096.0))).xy;
             col.assign(shadeStructure(hit, d, pixelAngle, light, noise));
+            // The band and its rails (frame members 10, 11) turn with the observer; the rest is the frame.
+            const member = hit.aux.z;
+            const onBand = hit.mat.equal(MAT.girdle).or(hit.mat.equal(MAT.frame).and(member.greaterThan(9.5)).and(member.lessThan(11.5)));
+            motion.assign(select(onBand, float(0), hit.t));
           });
         });
         // The thin plasma between the observer and what the ray meets (sky/medium/plasma.ts).
@@ -133,9 +149,9 @@ export function createSky(atmo: AtmosphereNodes, star: StarState, space: SpaceBa
         out.assign(local.T);
       });
 
-      return max(out, vec3(0.0));
+      return vec4(max(out, vec3(0.0)), motion);
     });
   };
 
-  return { radiance: (dir: V3) => build()(dir) as unknown as V3, options };
+  return { radiance: (dir: V3) => (build()(dir) as unknown as V4).xyz as unknown as V3, radianceMotion: (dir: V3) => build()(dir) as unknown as V4, options };
 }

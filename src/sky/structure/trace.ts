@@ -15,10 +15,11 @@
  * the city as the band turns) are bounded exactly, so their end faces exist from every side. The
  * layout is layout.ts.
  */
-import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, abs, floor, smoothstep, clamp, asin, atan, cos, sin, acos, select, length } from 'three/tsl';
+import { float, vec2, vec3, If, dot, normalize, sqrt, max, min, abs, floor, smoothstep, clamp, asin, atan, cos, sin, acos, select, length, mix } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import { STRUCTURE, hubAxes, isWide, meridianNormal, railFacePlane, sphereDir, strutTopCap, struts } from './layout';
-import { marchRelief, RELIEF } from './relief';
+import { marchRelief } from './relief';
+import { descend, panelCoords, panelSeed, sideDistances, channelHalfWidth } from './districts';
 import { toBand, toFrame } from './spin';
 
 type F = Node<'float'>;
@@ -46,7 +47,8 @@ export interface StructureHit {
    * Per-material coordinates. Face: 0 top, 1 side, 2 end (a cut face across the member).
    *  frame: (signed offset across the centreline, face, member index)
    *  hub:   (angle from the axis / outer radius, face, component index)
-   *  panel / panelEdge: (latitude, longitude, 0) in frame coordinates
+   *  panel: (latitude, longitude, 0) in frame coordinates
+ *  panelEdge: (latitude, longitude, layer of the edge's cross-section: PANEL_EDGE) in frame coordinates
    *  girdle: (latitude, longitude, 0) in band coordinates
    */
   aux: V3;
@@ -56,10 +58,30 @@ export interface StructureHit {
   occlusion: F;
   /**
    * Member size: frames (half-width in plane-offset units, depth, centre offset of the slab plane);
-   * hubs (outer angular radius, depth, inner radius / outer radius: 0 for a solid hub).
+   * hubs (outer angular radius, depth, inner radius / outer radius: 0 for a solid hub);
+   * panel edges (height of the hit below the panel's top / panel depth, 0, 0).
    */
   size: V3;
 }
+
+/**
+ * The exposed edge of a collector panel in cross-section, as heights below its top (fractions of the
+ * panel depth): a thin collector-facing layer flush with the outline, a recessed distribution layer
+ * set back under it, and a deep structural backing flush again. Where a manifold or major branch
+ * meets the perimeter, a full-depth connection fills the recess. Everything stays inside the
+ * panel's outline, and the backing is continuous.
+ */
+export const PANEL_EDGE = {
+  face: 0.2,
+  recess: 0.5,
+  /** Setback of the distribution layer behind the outline (arc units, ≈ 2,500 km). */
+  setback: 0.0025,
+  /** Network levels whose lines get a connection (the manifolds), and its half-length beyond their channel. */
+  connectLevels: 3,
+  connectExtra: 0.0012,
+  /** Layer ids (aux.z). */
+  layer: { face: 0, recessWall: 1, ledge: 2, backing: 3, connection: 4 },
+} as const;
 
 interface Ctx {
   /** Ray origin relative to the sphere centre. */
@@ -409,6 +431,45 @@ function inGirdle(qn: V3): B {
   return abs(asin(clamp(qn.z.negate(), -1, 1))).lessThan(STRUCTURE.girdleHalfLatitude);
 }
 
+/**
+ * The edge's cross-section (PANEL_EDGE) along a primary ray that passes the outline inside the
+ * panel layer. Over that short stretch the outline is straight and the ray's height in the layer and
+ * its distance past the outline are both linear in t, so the layer it meets follows in closed form.
+ */
+function panelEdgeSection(ctx: Ctx, best: StructureHit, tTop: F, qTop: V3, pf: PanelField, wallN: V3): void {
+  const E = PANEL_EDGE;
+  const dTop = panelField(qTop).dist;
+  const dShell = pf.dist;
+  const span = max(dShell.sub(dTop), 1e-9);
+  const crossAt = clamp(dTop.negate().div(span), 0, 1);
+  // Where the outline is crossed: is a manifold or major branch's connection there?
+  const qc = normalize(ctx.oc.add(ctx.d.mul(mix(tTop, ctx.tExit, crossAt))));
+  const ll = latLon(qc);
+  const c = panelCoords(ll.lon, abs(ll.lat), pf.lon0, pf.lonSpan, panelSeed(pf.cell));
+  const cell = descend(c, E.connectLevels);
+  const dist = sideDistances(c, cell).outer;
+  const reach = (i: 'x' | 'y' | 'z' | 'w') => dist[i].sub(channelHalfWidth(cell.side[i]).mul(1.4)).sub(E.connectExtra).add(select(channelHalfWidth(cell.side[i]).greaterThan(0.0), float(0), float(1)));
+  const connected = min(min(reach('x'), reach('y')), min(reach('z'), reach('w'))).lessThan(0.0);
+  // The layer met: the face above E.face, the backing below E.recess; in between the ray continues
+  // under the face layer to the recessed wall, or lands on the backing's top (a ledge) first.
+  const atSetback = clamp(float(E.setback).sub(dTop).div(span), 0, 1);
+  const inRecess = crossAt.greaterThanEqual(E.face).and(crossAt.lessThan(E.recess)).and(connected.not());
+  const toWall = atSetback.lessThan(E.recess);
+  const h = select(inRecess, select(toWall, atSetback, float(E.recess)), crossAt);
+  const layer = select(
+    inRecess,
+    select(toWall, float(E.layer.recessWall), float(E.layer.ledge)),
+    select(crossAt.lessThan(E.face), float(E.layer.face), select(connected, float(E.layer.connection), float(E.layer.backing))),
+  );
+  const t = mix(tTop, ctx.tExit, h);
+  const q = normalize(ctx.oc.add(ctx.d.mul(t)));
+  best.t.assign(t);
+  best.normal.assign(select(layer.equal(float(E.layer.ledge)), q.negate(), wallN));
+  const lq = latLon(q);
+  best.aux.assign(vec3(lq.lat, lq.lon, layer));
+  best.size.assign(vec3(h, 0, 0));
+}
+
 // ---------------------------------------------------------------------------------------------
 // Intersection
 
@@ -498,18 +559,10 @@ export function traceStructure(o: V3, dBand: V3, footprint0: F, withRelief = fal
       const ll = latLon(qTop);
       best.aux.assign(vec3(ll.lat, ll.lon, 0));
       if (withRelief) {
-        // Relief: ribs and recessed bays on the module lattice (relief.ts), sized as in surfaces.ts.
+        // Relief: the collection network's channels (relief.ts, districts.ts); flat at the rim.
         const pf = panelField(qTop);
-        const nu = max(floor(pf.span.x.div(S.panelModule).add(0.5)), 1.0);
-        const nv = max(floor(pf.span.y.div(S.panelModule).add(0.5)), 1.0);
-        const module = vec2(pf.span.x.div(nu), pf.span.y.div(nv));
-        const cosLat = cos(ll.lat).max(0.05);
-        const seed = pf.cell.z.mul(7.0).add(pf.cell.x.mul(31.0)).add(pf.cell.y.mul(3.0));
-        // Fade with how well the ribs are resolved, and away from the panel's outline (its rim is flat).
-        const ribWidth = min(module.x, module.y).mul(RELIEF.ribHalf * 2);
-        const amp = float(1).sub(smoothstep(ribWidth.mul(0.6), ribWidth.mul(1.8), fpTop)).mul(smoothstep(0.002, 0.004, pf.dist));
-        const fr = { lon0: pf.lon0, lonSpan: pf.lonSpan, latLow: float(S.panelLow), module, cosLat, hemi: pf.cell.y, seed };
-        const rh = marchRelief(oc, d, tTop, 1 - S.panelDepth, fr, amp, qTop.negate());
+        const fr = { lon0: pf.lon0, lonSpan: pf.lonSpan, seed: panelSeed(pf.cell), fp: fpTop, amp: smoothstep(0.002, 0.004, pf.dist) };
+        const rh = marchRelief(oc, d, tTop, 1 - S.panelDepth, fr, qTop.negate());
         best.t.assign(rh.t);
         best.normal.assign(rh.normal);
         best.occlusion.assign(rh.occlusion);
@@ -520,11 +573,14 @@ export function traceStructure(o: V3, dBand: V3, footprint0: F, withRelief = fal
       If(panelCoverage(qShell, footprint0.mul(tExit)).greaterThan(0.5), () => {
         // The ray dropped past a panel's outline and met its edge face.
         const pf = panelField(qShell);
+        const wallN = normalize(pf.grad.negate().add(qShell.negate().mul(0.1)));
         best.t.assign(tExit);
-        best.normal.assign(normalize(pf.grad.negate().add(qShell.negate().mul(0.1))));
+        best.normal.assign(wallN);
         best.mat.assign(float(MAT.panelEdge));
         const ll = latLon(qShell);
-        best.aux.assign(vec3(ll.lat, ll.lon, 0));
+        best.aux.assign(vec3(ll.lat, ll.lon, PANEL_EDGE.layer.backing));
+        best.size.assign(vec3(1, 0, 0));
+        if (withRelief) panelEdgeSection(ctx, best, tTop, qTop, pf, wallN);
       })
         .ElseIf(inGirdle(qShell), () => {
           best.t.assign(tExit);
