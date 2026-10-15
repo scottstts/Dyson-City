@@ -35,7 +35,7 @@ const G = GATE;
 const deg = Math.PI / 180;
 
 /** Signed area of a 2D loop (positive: counter-clockwise). */
-function area2(loop: Vec2[]): number {
+export function area2(loop: Vec2[]): number {
   let s = 0;
   for (let i = 0; i < loop.length; i++) {
     const a = loop[i];
@@ -47,13 +47,13 @@ function area2(loop: Vec2[]): number {
 const ccw = (loop: Vec2[]): Vec2[] => (area2(loop) >= 0 ? loop : [...loop].reverse());
 
 /** Prism: a closed (x, y) outline extruded along z from z0 to z1. */
-function extrudeZ(outline: Vec2[], z0: number, z1: number, slot: number, crease = 30): PolyMesh {
+export function extrudeZ(outline: Vec2[], z0: number, z1: number, slot: number, crease = 30): PolyMesh {
   // Along +z with up = +y the profile's b axis is +x.
   return straightSweep([0, 0, z0], [0, 0, z1], [0, 1, 0], loopProfile(ccw(outline), slot), { crease, capSlot: slot });
 }
 
 /** Prism: a closed (z, y) outline extruded along x from x0 to x1. */
-function extrudeX(outline: Vec2[], x0: number, x1: number, slot: number, crease = 30): PolyMesh {
+export function extrudeX(outline: Vec2[], x0: number, x1: number, slot: number, crease = 30): PolyMesh {
   // Along +x with up = +y the profile's b axis is −z.
   return straightSweep([x0, 0, 0], [x1, 0, 0], [0, 1, 0], loopProfile(ccw(outline.map(([z, y]) => [-z, y] as Vec2)), slot), { crease, capSlot: slot });
 }
@@ -360,7 +360,7 @@ function vents(): GatePart[] {
 }
 
 /** A rectangular frame ring in a plane z ∈ [z0, z1]: outer half-sizes (hw, hh), bar width b. */
-function frameRing(xc: number, yc: number, hw: number, hh: number, b: number, z0: number, z1: number): PolyMesh {
+export function frameRing(xc: number, yc: number, hw: number, hh: number, b: number, z0: number, z1: number): PolyMesh {
   const mesh = new PolyMesh(30);
   const outer: Vec2[] = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]];
   const inner: Vec2[] = [[-hw + b, -hh + b], [hw - b, -hh + b], [hw - b, hh - b], [-hw + b, hh - b]];

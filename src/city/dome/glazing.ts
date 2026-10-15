@@ -8,15 +8,17 @@
  * set error, so reflections break pane by pane): plan coffers above the eave, bays between the drum
  * verticals below it.
  */
-import { v3, type Vec2, type Vec3 } from '../../geometry/polyMesh';
+import { v3, type PolyMesh, type Vec2, type Vec3 } from '../../geometry/polyMesh';
 import { framesFrom, sampleCurve, sweep, type Plane, type Profile } from '../../geometry/sweep';
 import { DOME, GATE_OPENING, SILL } from './spec';
+import { LOCK_OPENING } from '../eastLock/spec';
 import { CARDINALS, cardinalPoint } from './surface';
 import type { FrameLayout } from './frame';
 import { SLOT } from './frame';
 
 const { a } = DOME;
 const holeW = GATE_OPENING.halfWidth + GATE_OPENING.trim;
+const lockW = LOCK_OPENING.halfWidth + LOCK_OPENING.trim;
 
 /** Azimuths (at the sill) of the drum's verticals: posts, collar legs and band rails. */
 export function drumVerticals(layout: FrameLayout): number[] {
@@ -44,8 +46,11 @@ export function bayTable(layout: FrameLayout, size = 2048): Float32Array {
   return table;
 }
 
-/** The sill channel: a bronze kerb on the platform's top edge with the glass's slot. */
-export function buildSill() {
+/**
+ * The sill channel: a bronze kerb on the platform's top edge with the glass's slot. It runs in two
+ * lengths, north and south, between the West Gate's gatehouse and the East Lock's.
+ */
+export function buildSill(): PolyMesh[] {
   const y0 = DOME.centreY - 0.02;
   const top = SILL.top;
   const rI = SILL.rIn;
@@ -56,17 +61,20 @@ export function buildSill() {
   const sec: Vec2[] = [
     [rI, y0], [rO, y0], [rO, top - 0.03], [rO - 0.03, top], [slotOut, top], [slotOut, top - 0.1], [slotIn, top - 0.1], [slotIn, top], [rI + 0.03, top], [rI, top - 0.03],
   ];
-  const lat = holeW / a;
-  const phiStart = Math.PI + Math.asin(lat);
-  const phiEnd = Math.PI - Math.asin(lat) + 2 * Math.PI;
+  const latW = Math.asin(holeW / a);
+  const latE = Math.asin(lockW / a);
   const curve = (phi: number): Vec3 => [a * Math.cos(phi), 0, a * Math.sin(phi)];
-  const { p } = sampleCurve(curve, phiStart - 0.002, phiEnd + 0.002, 2, 512);
-  const frames = framesFrom(p, p.map(() => [0, 1, 0] as Vec3));
-  const outward = v3.dot(frames[0].b, v3.norm([p[0][0], 0, p[0][2]])) > 0 ? 1 : -1;
-  const prof: Profile = { pts: sec.map(([r, y]) => [outward * (r - a), y] as Vec2) };
-  if (outward < 0) prof.pts.reverse();
-  // The ring starts on the gatehouse's north side (z < 0) and ends on its south side.
-  const planeA: Plane = { point: [0, 0, -holeW], normal: [0, 0, 1] };
-  const planeB: Plane = { point: [0, 0, holeW], normal: [0, 0, 1] };
-  return sweep(frames, prof, { trimStart: planeA, trimEnd: planeB, crease: 30, capSlot: SLOT.bronze });
+  // North: from the gate's north side round to the lock's; south: from the lock's south side to the gate's.
+  const runs: [number, number, Plane, Plane][] = [
+    [Math.PI + latW, 2 * Math.PI - latE, { point: [0, 0, -holeW], normal: [0, 0, 1] }, { point: [0, 0, -lockW], normal: [0, 0, 1] }],
+    [latE, Math.PI - latW, { point: [0, 0, lockW], normal: [0, 0, 1] }, { point: [0, 0, holeW], normal: [0, 0, 1] }],
+  ];
+  return runs.map(([p0, p1, trimStart, trimEnd]) => {
+    const { p } = sampleCurve(curve, p0 - 0.002, p1 + 0.002, 2, 256);
+    const frames = framesFrom(p, p.map(() => [0, 1, 0] as Vec3));
+    const outward = v3.dot(frames[0].b, v3.norm([p[0][0], 0, p[0][2]])) > 0 ? 1 : -1;
+    const prof: Profile = { pts: sec.map(([r, y]) => [outward * (r - a), y] as Vec2) };
+    if (outward < 0) prof.pts.reverse();
+    return sweep(frames, prof, { trimStart, trimEnd, crease: 30, capSlot: SLOT.bronze });
+  });
 }

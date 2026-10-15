@@ -9,6 +9,7 @@ import { AirlockWatcher } from './airlockEvents';
 import { Footsteps } from './sounds/footsteps';
 import { GateSounds } from './sounds/gate';
 import { VentSounds } from './sounds/vents';
+import { FieldSounds, type AudioField } from './sounds/field';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
 import type { Airlock } from '../city/gate/airlock';
@@ -19,6 +20,8 @@ import type { FootEvent } from '../player/controller';
 export interface AudioWorld {
   airlock: Airlock;
   surface(x: number, z: number): GroundSurface;
+  /** The field's machines (absent in tools that only drive the airlock). */
+  field?: AudioField;
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -39,6 +42,7 @@ export class GameAudio {
   private readonly footsteps: Footsteps;
   private readonly gate: GateSounds;
   private readonly vents: VentSounds;
+  private readonly field: FieldSounds | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
   private readonly listener: ListenerState = {
@@ -61,6 +65,7 @@ export class GameAudio {
     this.footsteps = new Footsteps(this.engine, (x, z) => world.surface(x, z));
     this.gate = new GateSounds(this.engine, world.airlock.outer, world.airlock.inner);
     this.vents = new VentSounds(this.engine, world.airlock);
+    this.field = world.field ? new FieldSounds(this.engine, world.field) : null;
   }
 
   /**
@@ -106,6 +111,7 @@ export class GameAudio {
 
     this.gate.update(dt, t);
     this.vents.update(dt, t, this.airlock);
+    this.field?.update(dt, t, l);
     this.engine.update(l, t);
   }
 

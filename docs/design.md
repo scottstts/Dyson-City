@@ -208,7 +208,7 @@ Outdoor shadows are very dim and short: a soft darkening at the foot of each obj
 
 ## 12. Rendering scope
 
-Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/shadows.md`, `docs/render-pipeline.md`, `docs/runtime.md`, `docs/dome.md`, `docs/gate.md`).
+Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `docs/ground.md`, `docs/player.md`, `docs/shadows.md`, `docs/render-pipeline.md`, `docs/runtime.md`, `docs/dome.md`, `docs/gate.md`, `docs/east-lock.md`, `docs/field.md`, `docs/audio.md`).
 
 - **Physically based radiometry.** One radiance scale for the star, the far structure, the atmosphere and local materials. Exposure is a camera, never a fix for wrong ratios.
 - **Star:**

@@ -1,54 +1,62 @@
 /**
  * Draws the city site plan (docs/city_plan_site.png): a to-scale plan of the platform under the
- * Dome, north up, with a projected west–east section below it. The layout here is the one
- * docs/city_plan.md describes; the Dome and gate dimensions mirror src/city/dome/spec.ts and
- * src/city/gate/spec.ts.
+ * Dome, north up, with a projected west–east section below it.
+ *
+ * The field is drawn from the source of truth: tools/site-plan/planData.ts is bundled (rolldown)
+ * and reads src/field/layout.ts and the builders' own layouts (roads, viaducts, the Halo's arches,
+ * the Cold Hold's tanks, the radiator forest, the tower clusters, the East Lock), so the plan cannot
+ * disagree with the build. The Dome, the West Gate and the estate (step 2) are drawn here.
  *
  * Frame: plan x = world X (east), plan y = world Z (south), so north (−Z) is up. Units are metres.
- *
  * The drawing is built as SVG and rasterised to PNG in headless Chrome (as tools/render.mjs is).
  *
  *   node tools/site-plan/sitePlan.mjs
  */
 import { chromium } from 'playwright-core';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { build } from 'rolldown';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { dirname, resolve, join } from 'node:path';
+import os from 'node:os';
+import fs from 'node:fs';
 
 const OUT = resolve(dirname(fileURLToPath(import.meta.url)), '../../docs/city_plan_site.png');
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
-// ── World (mirrors the specs) ────────────────────────────────────────────────────────────────
-const GLASS_A = 499.75; // S's horizontal semi-axis (glass at the sill)
-const GLASS_C = 250; // S's vertical semi-axis
-const PAD_R = 500; // platform top edge
-const PAD_OUTER_R = 502.4; // bottom step
+const tmp = join(os.tmpdir(), `dyson-plan-${process.pid}.mjs`);
+const bundle = await build({ input: 'tools/site-plan/planData.ts', platform: 'node', write: false, output: { format: 'esm' }, logLevel: 'silent' });
+fs.writeFileSync(tmp, bundle.output[0].code);
+const { planData } = await import(pathToFileURL(tmp).href);
+fs.rmSync(tmp, { force: true });
+const D = planData();
+
+// ── World (the Dome mirrors src/city/dome/spec.ts) ───────────────────────────────────────────
+const GLASS_A = 499.75;
+const GLASS_C = 250;
+const PAD_R = 500;
+const PAD_OUTER_R = 502.4;
 const EAVE_R = 480;
 const BAND_HALF = 12;
 const RIBS = [96, 192, 288, 384];
 const BOUNDARY_INLAY_R = 488;
-const COLLAR_HALF = 48; // collar legs at ±48 across the band
+const COLLAR_HALF = 48;
 const domeHeight = (r) => (r >= GLASS_A ? 0 : GLASS_C * Math.sqrt(1 - (r / GLASS_A) ** 2));
 
-// ── Layout (docs/city_plan.md) ───────────────────────────────────────────────────────────────
-const GATE_COURT = { x0: -470, x1: -410, z0: -28, z1: 28 };
-const ROAD_HALF = 10;
-const HALO_R = 110;
-const PAD = { r: 45 };
-const CORRIDOR = { x0: 120, x1: 470, half: 30 };
-const ESTATE = { south: -40, north: -170, east: -290, backR: 470 };
-const HOUSE = { x: -372, z: -112 };
-const MAST = { x: 150, z: -62, h: 150 };
-const GYRE = { x: 215, z: -235, ringR: 45, centreY: 55 };
-const RESONATOR = { x: -230, z: 165, ringR: 50, pylonOff: 78, h: 130 };
-const LOOM = { x0: 20, x1: 340, zA: 185, zB: 215, h: 40 };
-const SPOOL = { x0: 336, x1: 381, z0: 178, z1: 222 };
-const HOLD = { x: -165, z: -208, a: 95, b: 58, rot: -0.42 };
-const PLANT = { z0: 300 };
+// ── Layout (from the build) ──────────────────────────────────────────────────────────────────
+const GATE_COURT = D.court;
+const HALO_R = D.halo.r;
+const CORRIDOR = D.corridor;
+const ESTATE = D.estate;
+const HOUSE = { x: D.house[0], z: D.house[1] };
+const MAST = D.mast;
+const GYRE = D.gyre;
+const RESONATOR = D.resonator;
+const LOOM = D.loom;
+const HOLD = D.hold;
+const GATEWAY = D.gateway;
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 const f = (n) => (Math.round(n * 10) / 10).toString();
 const pts = (arr) => arr.map(([x, z]) => `${f(x)},${f(z)}`).join(' ');
-const deg = (rad) => (rad * 180) / Math.PI;
 let seed = 7;
 const rand = () => {
   seed = (seed * 16807) % 2147483647;
@@ -56,8 +64,7 @@ const rand = () => {
 };
 const out = [];
 const add = (s) => out.push(s);
-const text = (x, y, s, cls = 'lbl', extra = '') =>
-  add(`<text x="${f(x)}" y="${f(y)}" class="${cls}" ${extra}>${s}</text>`);
+const text = (x, y, s, cls = 'lbl', extra = '') => add(`<text x="${f(x)}" y="${f(y)}" class="${cls}" ${extra}>${s}</text>`);
 /** A rectangle centred at c, `len` along unit u, `wid` across it. */
 const orientedRect = (cx, cz, ux, uz, len, wid) => {
   const vx = -uz;
@@ -72,13 +79,14 @@ const orientedRect = (cx, cz, ux, uz, len, wid) => {
   ];
 };
 const polar = (r, a) => [r * Math.cos(a), r * Math.sin(a)];
+const deg = (rad) => (rad * 180) / Math.PI;
 
-// Height clearance to the glass, checked at each structure's true plan radius.
+// Height clearance to the glass, at each structure's true plan radius (least per name).
 const clearances = [];
 const checkClear = (name, x, z, reach, top) => {
   const r = Math.hypot(x, z) + reach;
   const c = domeHeight(r) - top;
-  clearances.push({ name, r: Math.round(r), top, clear: Math.round(c) });
+  clearances.push({ name, r: Math.round(r), top: Math.round(top), clear: Math.round(c) });
 };
 
 // ── Style ────────────────────────────────────────────────────────────────────────────────────
@@ -152,113 +160,134 @@ for (let i = 0; i < 24; i++) {
 add(`<circle r="${PAD_OUTER_R}" fill="#cfc7b6"/>`);
 add(`<circle r="${PAD_R + 1.2}" fill="#dbd3c2"/>`);
 add(`<circle r="${PAD_R}" fill="${C.pad}"/>`);
-// Pad border courses every 24 m, half a bay off the axes (faint).
 add(`<g clip-path="url(#padClip)" stroke="${C.padLine}" stroke-width="0.35">`);
 for (let v = 12; v < PAD_R; v += 24) {
   add(`<line x1="${v}" y1="-${PAD_R}" x2="${v}" y2="${PAD_R}"/><line x1="-${v}" y1="-${PAD_R}" x2="-${v}" y2="${PAD_R}"/>`);
   add(`<line y1="${v}" x1="-${PAD_R}" y2="${v}" x2="${PAD_R}"/><line y1="-${v}" x1="-${PAD_R}" y2="-${v}" x2="${PAD_R}"/>`);
 }
 add(`</g>`);
-// Survey axes and boundary ring (bronze inlay).
 add(`<g stroke="${C.bronze}" stroke-width="0.9" fill="none"><line x1="-${PAD_R}" x2="${PAD_R}" y1="0" y2="0"/><line y1="-${PAD_R}" y2="${PAD_R}" x1="0" x2="0"/><circle r="${BOUNDARY_INLAY_R}" stroke-width="0.7"/></g>`);
 add(`<circle r="${GLASS_A}" fill="none" stroke="${C.glass}" stroke-width="2.2"/>`);
 
-// ── Gatehouse (west) and East Lock ───────────────────────────────────────────────────────────
-// Collar legs at the four cardinal points.
+// ── Collars, the West Gate and the East Lock ─────────────────────────────────────────────────
 for (const a of [0, 0.5, 1, 1.5]) {
   for (const s of [-1, 1]) {
     const ang = a * Math.PI;
     const ux = Math.cos(ang);
     const uz = Math.sin(ang);
-    const cx = ux * 504 - uz * s * COLLAR_HALF;
-    const cz = uz * 504 + ux * s * COLLAR_HALF;
-    add(`<polygon points="${pts(orientedRect(cx, cz, ux, uz, 8, 6))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
+    add(`<polygon points="${pts(orientedRect(ux * 504 - uz * s * COLLAR_HALF, uz * 504 + ux * s * COLLAR_HALF, ux, uz, 8, 6))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
   }
 }
-// West gatehouse: piers |z| 9–16 from x −518 to −470, chamber floor, the two leaves, apron.
 add(`<rect x="-560" y="-16" width="42" height="32" fill="#d9d1bf" stroke="${C.ceramicLine}" stroke-width="0.4"/>`);
 add(`<rect x="-518" y="-9" width="48" height="18" fill="#3b3c40"/>`);
 for (const s of [-1, 1]) add(`<rect x="-518" y="${s > 0 ? 9 : -16}" width="48" height="7" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
-for (const x of [-515.5, -472.5]) add(`<line x1="${x}" y1="-9" x2="${x}" y2="9" stroke="${C.bronze}" stroke-width="2"/>`);
-// East Lock: the same construction at craft size (60 m clear, piers 10 m, through the collar).
-add(`<rect x="540" y="-40" width="44" height="80" fill="#d9d1bf" stroke="${C.ceramicLine}" stroke-width="0.4"/>`);
-add(`<rect x="455" y="-30" width="85" height="60" fill="#3b3c40"/>`);
-for (const s of [-1, 1]) add(`<rect x="455" y="${s > 0 ? 30 : -40}" width="85" height="10" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
-for (const x of [459, 536]) add(`<line x1="${x}" y1="-30" x2="${x}" y2="30" stroke="${C.bronze}" stroke-width="2.6"/>`);
+for (const x of [-499, -473]) add(`<line x1="${x}" y1="-9" x2="${x}" y2="9" stroke="${C.bronze}" stroke-width="2"/>`);
+{
+  const L = D.lock;
+  add(`<rect x="${L.x1}" y="${-44}" width="40" height="88" fill="#d9d1bf" stroke="${C.ceramicLine}" stroke-width="0.4"/>`);
+  add(`<rect x="${L.x0}" y="${-L.passageHalf}" width="${L.x1 - L.x0}" height="${2 * L.passageHalf}" fill="#3b3c40"/>`);
+  for (const s of [-1, 1]) add(`<rect x="${L.x0}" y="${s > 0 ? L.passageHalf : -L.outerHalf}" width="${L.x1 - L.x0}" height="${L.outerHalf - L.passageHalf}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
+  for (const x of [L.innerLip, L.outerLip]) add(`<line x1="${x}" y1="${-L.passageHalf}" x2="${x}" y2="${L.passageHalf}" stroke="${C.bronze}" stroke-width="2.6"/>`);
+}
 
 // ── Craft corridor ───────────────────────────────────────────────────────────────────────────
 add(`<rect x="${CORRIDOR.x0}" y="${-CORRIDOR.half}" width="${CORRIDOR.x1 - CORRIDOR.x0}" height="${CORRIDOR.half * 2}" fill="#5f7d93" fill-opacity="0.07" stroke="${C.glass}" stroke-width="1.1" stroke-dasharray="8 5"/>`);
 for (let x = 160; x < 450; x += 60) add(`<path d="M${x} -6 L${x + 12} 0 L${x} 6" fill="none" stroke="${C.glass}" stroke-width="1.4" transform="rotate(180 ${x + 6} 0)"/>`);
 
-// ── Roads (basalt, bronze edges) ─────────────────────────────────────────────────────────────
-const roads = [];
-const roadRect = (pts4) => roads.push(pts4);
-roadRect([[GATE_COURT.x1, -ROAD_HALF], [-HALO_R - 8, -ROAD_HALF], [-HALO_R - 8, ROAD_HALF], [GATE_COURT.x1, ROAD_HALF]]);
-const spur = (angle, r0, r1) => {
-  const ux = Math.cos(angle);
-  const uz = Math.sin(angle);
-  const mid = (r0 + r1) / 2;
-  roadRect(orientedRect(ux * mid, uz * mid, ux, uz, r1 - r0, ROAD_HALF * 2));
-  return { ux, uz, r0, r1 };
-};
-const gyreSpur = spur(Math.atan2(GYRE.z, GYRE.x), HALO_R + 8, Math.hypot(GYRE.x, GYRE.z) - 62);
-const resSpur = spur(Math.atan2(RESONATOR.z, RESONATOR.x), HALO_R + 8, Math.hypot(RESONATOR.x, RESONATOR.z) - 42);
-const holdSpur = spur(Math.atan2(HOLD.z + 40, HOLD.x + 30), HALO_R + 8, 150);
-roadRect([[-ROAD_HALF, HALO_R + 8], [ROAD_HALF, HALO_R + 8], [ROAD_HALF, PLANT.z0 - 5], [-ROAD_HALF, PLANT.z0 - 5]]);
-// Gate Court (limestone, its own paving) and the service yard at the south road's end.
-add(`<rect x="${GATE_COURT.x0}" y="${GATE_COURT.z0}" width="${GATE_COURT.x1 - GATE_COURT.x0}" height="${GATE_COURT.z1 - GATE_COURT.z0}" fill="#efe9dc" stroke="${C.bronze}" stroke-width="0.8"/>`);
-add(`<g fill="${C.road}" stroke="${C.roadEdge}" stroke-width="0.9">`);
-for (const r of roads) add(`<polygon points="${pts(r)}"/>`);
-add(`<circle r="${HALO_R + ROAD_HALF}"/>`);
-add(`<rect x="-24" y="${PLANT.z0 - 6}" width="48" height="40"/>`);
+// ── Precincts: each block paved in its zone's stone (field/paving.ts), inside the compound ───
+const ZONE_TINT = { craft: '#77777a', instruments: '#ebe8e0', power: '#d9bf98', cryo: '#b6c0cb', science: '#efe6d3', works: '#5c5853', heat: '#c99a80' };
+add(`<clipPath id="compoundClip"><circle r="${D.compoundR}"/></clipPath>`);
+add(`<g clip-path="url(#compoundClip)">`);
+for (const p of D.precincts) {
+  if (p.x1 < D.cordon.frontX) continue;
+  const x0 = Math.max(p.x0, D.cordon.frontX + 6);
+  add(`<rect x="${x0}" y="${p.z0}" width="${p.x1 - x0}" height="${p.z1 - p.z0}" fill="${ZONE_TINT[p.zone]}" fill-opacity="0.55" stroke="${C.bronze}" stroke-width="0.5"/>`);
+}
 add(`</g>`);
-// Apron inside the ring road, then the pad.
-add(`<circle r="${HALO_R - ROAD_HALF}" fill="#ece6d8" stroke="${C.roadEdge}" stroke-width="0.9"/>`);
-for (let r = 55; r < 100; r += 11) add(`<circle r="${r}" fill="none" stroke="${C.padLine}" stroke-width="0.4"/>`);
-add(`<line x1="-100" y1="0" x2="100" y2="0" stroke="${C.bronze}" stroke-width="0.9"/><line y1="-100" y2="100" x1="0" x2="0" stroke="${C.bronze}" stroke-width="0.9"/>`);
-add(`<circle r="${PAD.r}" fill="#2c2e33"/>`);
-add(`<circle r="${PAD.r - 3}" fill="none" stroke="${C.bronze}" stroke-width="1.2"/>`);
-add(`<circle r="${PAD.r - 14}" fill="none" stroke="${C.bronze}" stroke-width="0.6" stroke-dasharray="4 4"/>`);
-for (let i = 0; i < 4; i++) {
-  const [x0, z0] = polar(PAD.r - 12, (i * Math.PI) / 2 + Math.PI / 4);
-  const [x1, z1] = polar(PAD.r - 4, (i * Math.PI) / 2 + Math.PI / 4);
-  add(`<line x1="${f(x0)}" y1="${f(z0)}" x2="${f(x1)}" y2="${f(z1)}" stroke="${C.bronze}" stroke-width="1.4"/>`);
+
+// ── Roads (basalt, bronze edges), the court, the landing pad, trenches ───────────────────────
+add(`<rect x="${GATE_COURT.x0}" y="${GATE_COURT.z0}" width="${GATE_COURT.x1 - GATE_COURT.x0}" height="${GATE_COURT.z1 - GATE_COURT.z0}" fill="#efe9dc" stroke="${C.bronze}" stroke-width="0.8"/>`);
+add(`<rect x="${GATEWAY.x0}" y="${GATEWAY.z}" width="${GATEWAY.x1 - GATEWAY.x0}" height="${GATE_COURT.z0 - GATEWAY.z}" fill="#efe9dc" stroke="${C.bronze}" stroke-width="0.6"/>`);
+add(`<g fill="${C.road}" stroke="${C.roadEdge}" stroke-width="0.9">`);
+for (const s of D.roads) {
+  const dx = s.b[0] - s.a[0];
+  const dz = s.b[1] - s.a[1];
+  const L = Math.hypot(dx, dz);
+  add(`<polygon points="${pts(orientedRect((s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2, dx / L, dz / L, L, 2 * s.half))}"/>`);
 }
-add(`<circle r="3.2" fill="${C.bronze}"/>`);
+add(`<circle r="${D.ringRoad.r1}"/>`);
+add(`</g>`);
+add(`<circle r="${D.ringRoad.r0}" fill="#ece6d8" stroke="${C.roadEdge}" stroke-width="0.9"/>`);
+for (let r = D.pad.r + 11; r < D.ringRoad.r0; r += 11) add(`<circle r="${r}" fill="none" stroke="${C.padLine}" stroke-width="0.4"/>`);
+add(`<line x1="${-D.ringRoad.r0}" y1="0" x2="${D.ringRoad.r0}" y2="0" stroke="${C.bronze}" stroke-width="0.9"/><line y1="${-D.ringRoad.r0}" y2="${D.ringRoad.r0}" x1="0" x2="0" stroke="${C.bronze}" stroke-width="0.9"/>`);
+add(`<circle r="${D.pad.r}" fill="#2c2e33"/>`);
+add(`<circle r="${D.pad.r - 3}" fill="none" stroke="${C.bronze}" stroke-width="1.2"/>`);
+add(`<circle r="${D.pad.r - 14}" fill="none" stroke="${C.bronze}" stroke-width="0.6" stroke-dasharray="4 4"/>`);
+add(`<circle r="3.4" fill="${C.pad}"/><circle r="3.0" fill="${C.bronze}"/>`);
+add(`<g stroke="#5d5a52" stroke-width="1.1" fill="none" stroke-dasharray="1.5 1.5">`);
+for (const t of D.trenches) add(`<line x1="${f(t.a[0])}" y1="${f(t.a[1])}" x2="${f(t.b[0])}" y2="${f(t.b[1])}"/>`);
+add(`<circle r="${D.ringTrench}"/>`);
+add(`</g>`);
 
-// ── Pipe racks (thin double line with bents) ─────────────────────────────────────────────────
-const rack = (x0, z0, x1, z1) => {
-  const len = Math.hypot(x1 - x0, z1 - z0);
-  const ux = (x1 - x0) / len;
-  const uz = (z1 - z0) / len;
-  const vx = -uz * 1.4;
-  const vz = ux * 1.4;
-  add(`<g stroke="${C.goldDark}" stroke-width="0.7"><line x1="${f(x0 + vx)}" y1="${f(z0 + vz)}" x2="${f(x1 + vx)}" y2="${f(z1 + vz)}"/><line x1="${f(x0 - vx)}" y1="${f(z0 - vz)}" x2="${f(x1 - vx)}" y2="${f(z1 - vz)}"/>`);
-  for (let s = 0; s <= len; s += 7) add(`<line x1="${f(x0 + ux * s + vx)}" y1="${f(z0 + uz * s + vz)}" x2="${f(x0 + ux * s - vx)}" y2="${f(z0 + uz * s - vz)}"/>`);
-  add(`</g>`);
-};
-const spurRack = (s, off) => {
-  const vx = -s.uz * off;
-  const vz = s.ux * off;
-  rack(s.ux * (HALO_R + 4) + vx, s.uz * (HALO_R + 4) + vz, s.ux * (s.r1 - 4) + vx, s.uz * (s.r1 - 4) + vz);
-};
-rack(GATE_COURT.x1 + 6, ROAD_HALF + 5, -HALO_R - 6, ROAD_HALF + 5);
-spurRack(gyreSpur, 15);
-spurRack(resSpur, -15);
-rack(ROAD_HALF + 5, HALO_R + 4, ROAD_HALF + 5, PLANT.z0 - 8);
-rack(-ROAD_HALF - 5, HALO_R + 4, -ROAD_HALF - 5, PLANT.z0 - 8);
-spurRack(holdSpur, 15);
+// ── Viaducts: spines on Y-piers with the lines on their backs; valve pavilions under them ────
+for (const l of D.racks) {
+  const line = l.close ? [...l.pts, l.pts[0]] : l.pts;
+  add(`<polyline points="${pts(line)}" fill="none" stroke="${C.ceramicLine}" stroke-width="4" stroke-linejoin="round"/>`);
+  add(`<polyline points="${pts(line)}" fill="none" stroke="${C.ceramic}" stroke-width="3" stroke-linejoin="round"/>`);
+  add(`<polyline points="${pts(line)}" fill="none" stroke="${C.gold}" stroke-width="1.4" stroke-linejoin="round"/>`);
+}
+for (const p of D.pavilions) add(`<circle cx="${f(p.x)}" cy="${f(p.z)}" r="4.6" fill="${C.goldLight}" stroke="${C.goldDark}" stroke-width="0.6"/>`);
 
-// ── The Halo: raised ring main on portal piers ───────────────────────────────────────────────
-for (let i = 0; i < 32; i++) {
-  const a = ((i + 0.5) / 32) * Math.PI * 2;
+// ── The secondary plant: halls, hangars, compressor houses, tank farms, switchyards, labs ────
+for (const l of D.plant) {
+  const fill = l.kind === 'tanks' || l.kind === 'spheres' ? C.goldLight : l.kind === 'switchyard' ? '#d8d2c4' : C.ceramic;
+  if (l.kind === 'drum') add(`<circle cx="${f(l.x)}" cy="${f(l.z)}" r="${f(l.sx / 2 - 3.2)}" fill="${fill}" stroke="${C.ink}" stroke-width="0.6"/>`);
+  else add(`<rect x="${f(l.x - l.sx / 2)}" y="${f(l.z - l.sz / 2)}" width="${f(l.sx)}" height="${f(l.sz)}" fill="${fill}" stroke="${C.ink}" stroke-width="0.6" ${l.kind === 'switchyard' ? 'stroke-dasharray="3 2"' : ''}/>`);
+  checkClear('Secondary plant', l.x, l.z, Math.hypot(l.sx, l.sz) / 2, l.H);
+}
+
+// ── The Cordon: the wall-gallery's runs, its gate bridges and pylons, the portal ─────────────
+{
+  const R = D.cordon.r;
+  for (const r of D.cordon.plan.runs) {
+    const w = 2 * 5.6;
+    const stroke = r.bridge ? C.ceramicLine : C.ceramic;
+    if (r.arc) {
+      const [a0, a1] = r.arc;
+      const p0 = polar(R, a0);
+      const p1 = polar(R, a1);
+      add(`<path d="M${f(p0[0])} ${f(p0[1])} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f(p1[0])} ${f(p1[1])}" fill="none" stroke="${C.ceramicLine}" stroke-width="${w + 1}"/>`);
+      add(`<path d="M${f(p0[0])} ${f(p0[1])} A${R} ${R} 0 ${a1 - a0 > Math.PI ? 1 : 0} 1 ${f(p1[0])} ${f(p1[1])}" fill="none" stroke="${stroke}" stroke-width="${w - 0.6}"/>`);
+    } else {
+      const [p0, p1] = r.line;
+      add(`<line x1="${f(p0[0])}" y1="${f(p0[1])}" x2="${f(p1[0])}" y2="${f(p1[1])}" stroke="${C.ceramicLine}" stroke-width="${w + 1}"/><line x1="${f(p0[0])}" y1="${f(p0[1])}" x2="${f(p1[0])}" y2="${f(p1[1])}" stroke="${stroke}" stroke-width="${w - 0.6}"/>`);
+    }
+  }
+  for (const p of D.cordon.plan.pylons) {
+    add(`<polygon points="${pts(orientedRect(p.x, p.z, p.ox, p.oz, 2 * p.hr, 2 * p.ht))}" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.8"/>`);
+    add(`<circle cx="${f(p.x)}" cy="${f(p.z)}" r="${f(Math.min(p.hr, p.ht) * 0.45)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.5"/>`);
+    checkClear('Cordon pylons', p.x, p.z, Math.hypot(p.hr, p.ht), p.height + p.crown);
+  }
+  const ps = D.cordon.plan.pylons[D.cordon.plan.portal.south];
+  const pn = D.cordon.plan.pylons[D.cordon.plan.portal.north];
+  add(`<line x1="${f(ps.x)}" y1="${f(ps.z - ps.ht)}" x2="${f(pn.x)}" y2="${f(pn.z + pn.ht)}" stroke="${C.gold}" stroke-width="3.2"/>`);
+  // The perimeter road inside it.
+  const rc = (D.perimeter.r0 + D.perimeter.r1) / 2;
+  const q0 = polar(rc, D.perimeter.a0);
+  const q1 = polar(rc, D.perimeter.a1);
+  add(`<path d="M${f(q0[0])} ${f(q0[1])} A${rc} ${rc} 0 1 1 ${f(q1[0])} ${f(q1[1])}" fill="none" stroke="${C.roadEdge}" stroke-width="${D.perimeter.r1 - D.perimeter.r0 + 1.2}"/>`);
+  add(`<path d="M${f(q0[0])} ${f(q0[1])} A${rc} ${rc} 0 1 1 ${f(q1[0])} ${f(q1[1])}" fill="none" stroke="${C.road}" stroke-width="${D.perimeter.r1 - D.perimeter.r0 - 0.6}"/>`);
+}
+
+// ── The Halo: the ring main on sculpted arches over the ring road ────────────────────────────
+for (const a of D.halo.arches) {
   const [x, z] = polar(HALO_R, a);
-  add(`<polygon points="${pts(orientedRect(x, z, Math.cos(a), Math.sin(a), 24, 2.4))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.5"/>`);
+  add(`<polygon points="${pts(orientedRect(x, z, Math.cos(a), Math.sin(a), 2 * D.halo.archHalf + 3, 2.2))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.5"/>`);
 }
-add(`<circle r="${HALO_R}" fill="none" stroke="${C.goldDark}" stroke-width="8.4"/>`);
-add(`<circle r="${HALO_R}" fill="none" stroke="${C.gold}" stroke-width="6.8"/>`);
-add(`<circle r="${HALO_R - 1.6}" fill="none" stroke="${C.goldLight}" stroke-width="1.2"/>`);
-checkClear('Halo', HALO_R + 4, 0, 0, 20);
+add(`<circle r="${HALO_R}" fill="none" stroke="${C.goldDark}" stroke-width="12.4"/>`);
+add(`<circle r="${HALO_R}" fill="none" stroke="${C.gold}" stroke-width="10.8"/>`);
+add(`<circle r="${HALO_R - 4}" fill="none" stroke="${C.goldLight}" stroke-width="1.2"/>`);
+checkClear('Halo', HALO_R + 6, 0, 0, 20);
 
 // ── The Estate ───────────────────────────────────────────────────────────────────────────────
 const arcX = (z) => -Math.sqrt(ESTATE.backR ** 2 - z * z);
@@ -277,7 +306,6 @@ add(`<polygon points="${pts(estatePoly)}" fill="${C.wall}" stroke="#a89c84" stro
 add(`<polygon points="${pts(estatePoly)}" fill="url(#lawnStripes)" stroke="${C.ceramic}" stroke-width="1.6" stroke-dasharray="1.2 1.6"/>`);
 add(`<g clip-path="url(#estateClip)">`);
 // Gateway steps and ramp down to the Gate Court.
-const GATEWAY = { x0: -437, x1: -423 };
 add(`<rect x="${GATEWAY.x0}" y="${ESTATE.south - 5}" width="${GATEWAY.x1 - GATEWAY.x0}" height="10" fill="${C.gravel}"/>`);
 // Drive and forecourt.
 const fx = Math.cos(Math.atan2(-HOUSE.z, -HOUSE.x));
@@ -354,150 +382,76 @@ add(`</g>`);
   checkClear('House turret', tx, tz, 5, 40);
 }
 
-// ── The Cold Hold: gold-foiled spheres, power-law sizes ──────────────────────────────────────
-{
-  const spheres = [];
-  const diam = [];
-  for (let i = 0; i < 30; i++) diam.push(Math.min(34, 8 * Math.pow(1 - rand() * 0.985, -1 / 1.5)));
-  diam.sort((a, b) => b - a);
-  diam[0] = 34;
-  diam[1] = 30;
-  for (const d of diam) {
-    for (let tries = 0; tries < 4000; tries++) {
-      const ang = rand() * Math.PI * 2;
-      const rr = Math.sqrt(rand());
-      const lx = Math.cos(ang) * rr * HOLD.a;
-      const lz = Math.sin(ang) * rr * HOLD.b;
-      const x = HOLD.x + lx * Math.cos(HOLD.rot) - lz * Math.sin(HOLD.rot);
-      const z = HOLD.z + lx * Math.sin(HOLD.rot) + lz * Math.cos(HOLD.rot);
-      const r = d / 2;
-      if (Math.hypot(x, z) < HALO_R + 30 + r) continue;
-      if (x - r < ESTATE.east + 22) continue;
-      if (spheres.some((s) => Math.hypot(s.x - x, s.z - z) < s.r + r + 6)) continue;
-      spheres.push({ x, z, r });
-      break;
-    }
-  }
-  // Pipe runs: each sphere to the nearest larger one, the largest to the Halo.
-  add(`<g stroke="${C.goldDark}" stroke-width="1.5" stroke-linecap="round">`);
-  spheres.forEach((s, i) => {
-    let best = null;
-    for (let j = 0; j < i; j++) {
-      const d = Math.hypot(spheres[j].x - s.x, spheres[j].z - s.z);
-      if (!best || d < best.d) best = { d, t: spheres[j] };
-    }
-    if (best) add(`<line x1="${f(s.x)}" y1="${f(s.z)}" x2="${f(best.t.x)}" y2="${f(best.t.z)}"/>`);
-  });
-  add(`</g>`);
-  for (const s of spheres) {
-    add(`<circle cx="${f(s.x + 1.5)}" cy="${f(s.z + 1.8)}" r="${f(s.r)}" fill="#000" fill-opacity="0.14"/>`);
-    add(`<circle cx="${f(s.x)}" cy="${f(s.z)}" r="${f(s.r)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-    checkClear('Cold Hold sphere', s.x, s.z, s.r, s.r * 2 + 8);
-  }
+// ── The Cold Hold: foil-wrapped spheres of power-law sizes on columns ────────────────────────
+for (const t of HOLD.tanks) {
+  add(`<circle cx="${f(t.x + 1.5)}" cy="${f(t.z + 1.8)}" r="${f(t.R)}" fill="#000" fill-opacity="0.14"/>`);
+  add(`<circle cx="${f(t.x)}" cy="${f(t.z)}" r="${f(t.R)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
+  checkClear('Cold Hold', t.x, t.z, t.R, t.top);
 }
 
 // ── The Gyre ─────────────────────────────────────────────────────────────────────────────────
 {
-  const { x, z, ringR } = GYRE;
-  add(`<rect x="${x - 40}" y="${z - 72}" width="80" height="144" rx="10" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
-  add(`<circle cx="${x}" cy="${z}" r="${ringR + 2}" fill="none" stroke="${C.goldDark}" stroke-width="0.8" stroke-dasharray="3 3"/>`);
-  for (const s of [-1, 1]) add(`<rect x="${x - 9}" y="${z + s * (ringR + 10) - 7}" width="18" height="14" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.8"/>`);
-  add(`<line x1="${x}" y1="${z - ringR - 12}" x2="${x}" y2="${z + ringR + 12}" stroke="${C.ink}" stroke-width="0.6" stroke-dasharray="10 3 2 3"/>`);
-  add(`<rect x="${x - 2.4}" y="${z - ringR}" width="4.8" height="${ringR * 2}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-  add(`<ellipse cx="${x}" cy="${z}" rx="${ringR * 0.74}" ry="${ringR * 0.36}" transform="rotate(-32 ${x} ${z})" fill="none" stroke="${C.goldDark}" stroke-width="5"/>`);
-  add(`<ellipse cx="${x}" cy="${z}" rx="${ringR * 0.74}" ry="${ringR * 0.36}" transform="rotate(-32 ${x} ${z})" fill="none" stroke="${C.gold}" stroke-width="3.4"/>`);
+  const { x, z } = GYRE;
+  add(`<rect x="${x - GYRE.plinth.hx}" y="${z - GYRE.plinth.hz}" width="${2 * GYRE.plinth.hx}" height="${2 * GYRE.plinth.hz}" rx="9" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
+  for (const s of [-1, 1]) add(`<rect x="${x - 6.5}" y="${f(z + (s > 0 ? GYRE.towerIn : -GYRE.towerOut))}" width="13" height="${GYRE.towerOut - GYRE.towerIn}" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.8"/>`);
+  add(`<line x1="${x}" y1="${z - 60}" x2="${x}" y2="${z + 60}" stroke="${C.ink}" stroke-width="0.6" stroke-dasharray="10 3 2 3"/>`);
+  add(`<rect x="${x - 1.3}" y="${z - 45}" width="2.6" height="90" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
+  add(`<ellipse cx="${x}" cy="${z}" rx="${36.5 * 0.74}" ry="${36.5 * 0.36}" transform="rotate(-32 ${x} ${z})" fill="none" stroke="${C.gold}" stroke-width="3"/>`);
   add(`<circle cx="${x}" cy="${z}" r="17" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
-  checkClear('Gyre', x, z, ringR + 2, GYRE.centreY + ringR);
+  checkClear('Gyre', x, z, 46, GYRE.top);
 }
 
 // ── The Resonator ────────────────────────────────────────────────────────────────────────────
 {
-  const { x, z, ringR, pylonOff } = RESONATOR;
-  // The ring's face looks at the house, so the house sees itself in the torus.
-  let dx = HOUSE.x - x;
-  let dz = HOUSE.z - z;
-  const dl = Math.hypot(dx, dz);
-  dx /= dl;
-  dz /= dl;
-  const tx = -dz;
-  const tz = dx;
-  add(`<polygon points="${pts(orientedRect(x, z, tx, tz, pylonOff * 2 + 26, 46))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
-  for (const s of [-1, 1]) {
-    const px = x + tx * pylonOff * s;
-    const pz = z + tz * pylonOff * s;
-    add(`<polygon points="${pts(orientedRect(px, pz, tx, tz, 16, 16))}" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.8"/>`);
-  }
-  for (const s of [-1, 1]) {
-    const ox = dx * 5 * s;
-    const oz = dz * 5 * s;
-    add(`<line x1="${f(x - tx * pylonOff + ox)}" y1="${f(z - tz * pylonOff + oz)}" x2="${f(x + tx * pylonOff + ox)}" y2="${f(z + tz * pylonOff + oz)}" stroke="${C.ink}" stroke-width="0.7" stroke-dasharray="6 3"/>`);
-  }
-  add(`<polygon points="${pts(orientedRect(x, z, tx, tz, ringR * 2, 7))}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
-  for (const s of [-1, 0, 1]) add(`<circle cx="${f(x + tx * (ringR - 2) * s)}" cy="${f(z + tz * (ringR - 2) * s)}" r="4.2" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.6"/>`);
-  for (const s of [-1, 1]) add(`<circle cx="${f(x + tx * 30 * s)}" cy="${f(z + tz * 30 * s)}" r="1.4" fill="${C.ink}"/>`);
-  checkClear('Resonator frame', x, z, pylonOff + 8, RESONATOR.h);
-  RESONATOR.t = [tx, tz];
+  const { x, z, pylonOff } = RESONATOR;
+  const [tx, , tz] = RESONATOR.T;
+  const [nx, , nz] = RESONATOR.N;
+  add(`<polygon points="${pts(orientedRect(x, z, tx, tz, 2 * (pylonOff + RESONATOR.pylonHalf + 5), 46))}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
+  for (const s of [-1, 1]) add(`<polygon points="${pts(orientedRect(x + tx * pylonOff * s, z + tz * pylonOff * s, tx, tz, 16, 16))}" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.8"/>`);
+  add(`<polygon points="${pts(orientedRect(x, z, tx, tz, 2 * (pylonOff + 8), 8.4))}" fill="none" stroke="${C.ink}" stroke-width="0.7" stroke-dasharray="6 3"/>`);
+  add(`<polygon points="${pts(orientedRect(x, z, tx, tz, 2 * RESONATOR.ringR + 7, 7))}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
+  add(`<line x1="${f(x)}" y1="${f(z)}" x2="${f(x + nx * 40)}" y2="${f(z + nz * 40)}" stroke="${C.inkSoft}" stroke-width="0.5" stroke-dasharray="2 2"/>`);
+  checkClear('Resonator', x, z, pylonOff + 8, RESONATOR.top);
 }
 
 // ── The Loom ─────────────────────────────────────────────────────────────────────────────────
 {
-  const { x0, x1, zA, zB } = LOOM;
-  add(`<rect x="${x0 - 6}" y="${zA - 8}" width="${SPOOL.x1 - x0 + 14}" height="${zB - zA + 16}" fill="${C.ceramic}" fill-opacity="0.55" stroke="${C.ceramicLine}" stroke-width="0.6"/>`);
+  const { x0, x1, zA, zB, spool } = LOOM;
   for (const zr of [zA, zB]) add(`<rect x="${x0}" y="${zr - 1.6}" width="${x1 - x0}" height="3.2" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.6"/>`);
-  let lx = x0 + 4;
-  while (lx < x1 - 6) {
-    for (const zr of [zA, zB]) add(`<rect x="${f(lx - 2.5)}" y="${zr - 3.5}" width="5" height="7" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.6"/>`);
-    lx += 26 + rand() * 18;
-  }
-  add(`<line x1="172" y1="${(zA + zB) / 2}" x2="${SPOOL.x0}" y2="${(zA + zB) / 2}" stroke="${C.gold}" stroke-width="2.2"/>`);
-  add(`<line x1="${x0 + 10}" y1="${zB + 7}" x2="${x1 - 10}" y2="${zB + 7}" stroke="${C.ink}" stroke-width="0.5" stroke-dasharray="2 2"/>`);
-  add(`<rect x="140" y="${zA - 5}" width="32" height="${zB - zA + 10}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
-  add(`<rect x="168" y="${zA + 3}" width="2.2" height="${zB - zA - 6}" fill="${C.glow}"/>`);
-  add(`<rect x="${SPOOL.x0}" y="${SPOOL.z0}" width="${SPOOL.x1 - SPOOL.x0}" height="${SPOOL.z1 - SPOOL.z0}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
-  for (const zz of [SPOOL.z0, SPOOL.z1 - 3.5]) add(`<rect x="${SPOOL.x0 - 2}" y="${zz}" width="${SPOOL.x1 - SPOOL.x0 + 4}" height="3.5" fill="${C.goldDark}"/>`);
-  for (let i = 1; i < 8; i++) add(`<line x1="${SPOOL.x0 + ((SPOOL.x1 - SPOOL.x0) * i) / 8}" y1="${SPOOL.z0 + 3.5}" x2="${SPOOL.x0 + ((SPOOL.x1 - SPOOL.x0) * i) / 8}" y2="${SPOOL.z1 - 3.5}" stroke="${C.goldDark}" stroke-width="0.35"/>`);
-  checkClear('Loom gantry', x1, zB, 0, LOOM.h);
-  checkClear('Loom spool', SPOOL.x1, SPOOL.z1, 0, 49);
+  const cx = LOOM.carriageX;
+  add(`<ellipse cx="${f(cx)}" cy="${(zA + zB) / 2}" rx="${LOOM.carriageLen / 2}" ry="16.8" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
+  add(`<rect x="${f(cx + LOOM.carriageLen / 2)}" y="${(zA + zB) / 2 - 4}" width="${f(spool.x - cx - LOOM.carriageLen / 2)}" height="8" fill="#5a4a3a" stroke="${C.glow}" stroke-width="0.6"/>`);
+  add(`<rect x="${spool.x - spool.d / 2}" y="${spool.z0}" width="${spool.d}" height="${spool.z1 - spool.z0}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.8"/>`);
+  checkClear('Loom', x1, zB, 0, LOOM.carriageTop);
+  checkClear('Loom spool', spool.x + spool.d / 2, spool.z1, 0, spool.centreY + spool.d / 2);
 }
 
-// ── The Mast ─────────────────────────────────────────────────────────────────────────────────
+// ── The Mast: a ringed spire on three buttress fins ──────────────────────────────────────────
 {
   const { x, z } = MAST;
   for (let i = 0; i < 3; i++) {
-    const a = -Math.PI / 2 + (i / 3) * Math.PI * 2;
-    add(`<line x1="${x}" y1="${z}" x2="${f(x + Math.cos(a) * 20)}" y2="${f(z + Math.sin(a) * 20)}" stroke="${C.ceramicLine}" stroke-width="5" stroke-linecap="round"/>`);
-    add(`<line x1="${x}" y1="${z}" x2="${f(x + Math.cos(a) * 20)}" y2="${f(z + Math.sin(a) * 20)}" stroke="${C.ceramic}" stroke-width="3.6" stroke-linecap="round"/>`);
+    const a = Math.PI / 2 + (i / 3) * Math.PI * 2;
+    add(`<line x1="${x}" y1="${z}" x2="${f(x + Math.cos(a) * MAST.legR)}" y2="${f(z + Math.sin(a) * MAST.legR)}" stroke="${C.ceramicLine}" stroke-width="2.4" stroke-linecap="round"/>`);
   }
-  add(`<circle cx="${x}" cy="${z}" r="11" fill="none" stroke="${C.goldDark}" stroke-width="0.8" stroke-dasharray="3 2"/>`);
-  add(`<circle cx="${x}" cy="${z}" r="5.5" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
-  checkClear('Mast', x, z, 11, MAST.h);
+  add(`<circle cx="${x}" cy="${z}" r="8.2" fill="none" stroke="${C.ceramicLine}" stroke-width="0.9"/>`);
+  add(`<circle cx="${x}" cy="${z}" r="3.4" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
+  checkClear('Mast', x, z, 8, MAST.top * 1.06);
 }
 
-// ── Cold plant and radiator banks (south) ────────────────────────────────────────────────────
-{
-  add(`<rect x="-62" y="${PLANT.z0 - 2}" width="34" height="44" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.7"/>`);
-  add(`<rect x="28" y="${PLANT.z0 - 2}" width="40" height="36" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.7"/>`);
-  for (const [cx, cz] of [[-45, PLANT.z0 + 10], [-45, PLANT.z0 + 28], [48, PLANT.z0 + 16]]) add(`<circle cx="${cx}" cy="${cz}" r="5.5" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.5"/>`);
-  let maxTop = 0;
-  const bank = (xa, xb) => {
-    let x = xa;
-    while (x < xb) {
-      const len = 26 + rand() * 38;
-      const z0 = PLANT.z0 + 8 + rand() * 14;
-      const zEnd = Math.min(z0 + len, Math.sqrt(440 ** 2 - x * x));
-      if (zEnd - z0 > 12) {
-        add(`<rect x="${f(x)}" y="${f(z0)}" width="2" height="${f(zEnd - z0)}" fill="${C.gold}" stroke="${C.goldDark}" stroke-width="0.35"/>`);
-        const top = Math.round(25 + rand() * 20);
-        maxTop = Math.max(maxTop, top);
-        checkClear('Radiator fin', x, zEnd, 0, top);
-      }
-      x += 5 + rand() * 6;
-    }
-  };
-  bank(-215, -72);
-  bank(76, 175);
-  rack(-28, PLANT.z0 + 12, -72, PLANT.z0 + 12);
-  rack(68, PLANT.z0 + 12, 76, PLANT.z0 + 12);
+// ── The radiator forest and the tower clusters ───────────────────────────────────────────────
+for (const s of D.radiators) {
+  add(`<circle cx="${f(s.x)}" cy="${f(s.z)}" r="${f(s.ring)}" fill="none" stroke="${C.goldDark}" stroke-width="0.5" stroke-dasharray="2 1.5"/>`);
+  add(`<circle cx="${f(s.x)}" cy="${f(s.z)}" r="${f(s.r * 1.2)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.4"/>`);
+  checkClear('Radiator spires', s.x, s.z, s.ring, s.top);
+}
+for (const c of D.clusters) {
+  add(`<circle cx="${c.x}" cy="${c.z}" r="${c.podiumR}" fill="${C.ceramic}" stroke="${C.ceramicLine}" stroke-width="0.8"/>`);
+  for (const r of c.rings) add(`<circle cx="${c.x}" cy="${c.z}" r="${r.R}" fill="none" stroke="${C.goldDark}" stroke-width="0.9" stroke-dasharray="5 3"/>`);
+  for (const t of c.towers) {
+    add(`<circle cx="${f(t.x)}" cy="${f(t.z)}" r="${f(t.r0 * 1.15)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
+    add(`<circle cx="${f(t.x + t.lean[0])}" cy="${f(t.z + t.lean[1])}" r="1.2" fill="${C.ink}"/>`);
+    checkClear(c.name[0].toUpperCase() + c.name.slice(1), t.x + t.lean[0], t.z + t.lean[1], 3, t.top);
+  }
 }
 
 // ── Dome frame overhead (dashed, drawn over everything inside) ───────────────────────────────
@@ -533,23 +487,22 @@ add(`</g>`);
   }
 }
 
-// ── Viewpoints (city_plan.md §8) ─────────────────────────────────────────────────────────────
+// ── Viewpoints (city_plan.md §8; src/debug/viewpoints.ts) ────────────────────────────────────
 const viewpoint = (n, x, z, dirDeg, spread = 50, len = 46) => {
   const a = (dirDeg * Math.PI) / 180;
   const h = (spread * Math.PI) / 360;
   add(`<path d="M${f(x)} ${f(z)} L${f(x + Math.cos(a - h) * len)} ${f(z + Math.sin(a - h) * len)} A${len} ${len} 0 0 1 ${f(x + Math.cos(a + h) * len)} ${f(z + Math.sin(a + h) * len)} Z" fill="#c2452d" fill-opacity="0.18" stroke="#c2452d" stroke-width="0.6"/>`);
   add(`<circle cx="${f(x)}" cy="${f(z)}" r="5.6" fill="#c2452d" stroke="#fff" stroke-width="1.2"/>`);
-  text(x, z + 2.9, n, "vp", 'text-anchor="middle"');
+  text(x, z + 2.9, n, 'vp', 'text-anchor="middle"');
 };
 {
-  const front = deg(Math.atan2(fz, fx));
+  // Plan direction (deg, atan2(z, x)) toward a point.
+  const toward = (x, z, tx, tz) => (Math.atan2(tz - z, tx - x) * 180) / Math.PI;
   viewpoint('1', -462, 0, 0, 56, 60);
-  viewpoint("2", HOUSE.x + fx * 17 + fz * 7, HOUSE.z + fz * 17 - fx * 7, front, 70);
-  const ux = fx;
-  const uz = fz;
-  viewpoint('3', HOUSE.x + ux * 11 - uz * 15, HOUSE.z + uz * 11 + ux * 15, front + 10, 110, 52);
+  viewpoint('2', -357, -100, toward(-357, -100, 0, 0), 70);
+  viewpoint('3', -362, -96, toward(-362, -96, 0, 0) + 10, 110, 52);
   viewpoint('4', -450, -113, 180, 60, 34);
-  viewpoint('5', -150, 120, deg(Math.atan2(RESONATOR.z - 120, RESONATOR.x + 150)), 60);
+  viewpoint('5', -192, 214, toward(-192, 214, RESONATOR.x, RESONATOR.z), 60);
   viewpoint('6', 100, -28, 0, 44, 60);
   viewpoint('7', 0, 150, 90, 50, 46);
 }
@@ -560,37 +513,36 @@ const heroLabel = (x, z, name, sub, anchor = 'start') => {
   text(x, z, name, 'hero', `text-anchor="${anchor}"`);
   text(x, z + 14, sub, 'sub', `text-anchor="${anchor}"`);
 };
-heroLabel(GYRE.x - 52, GYRE.z - 40, "THE GYRE", "inertial reference · rings Ø90 m · top 100 m", "end");
+const tallest = (c) => Math.max(...c.towers.map((t) => t.top));
+const cl = Object.fromEntries(D.clusters.map((c) => [c.name, c]));
+heroLabel(GYRE.x + 50, GYRE.z - 78, 'THE GYRE', `inertial reference · rings Ø88 m · top ${Math.round(GYRE.top)} m`, 'start');
 heroLabel(RESONATOR.x - 30, RESONATOR.z + 72, 'THE RESONATOR', 'ring Ø100 m, hung free · frame 130 m', 'middle');
-heroLabel(190, 268, 'THE LOOM', 'gantry 320 m · 40 m tall · spool Ø45 m', 'middle');
-leader(190, 255, 190, LOOM.zB + 9);
-heroLabel(-120, -296, 'THE COLD HOLD', '30 foil spheres, Ø8–34 m', 'middle');
-heroLabel(MAST.x + 26, MAST.z - 18, 'THE MAST', 'approach control · 150 m');
-leader(MAST.x + 24, MAST.z - 14, MAST.x + 9, MAST.z - 5);
-heroLabel(0, -152, 'THE HALO', 'ring main Ø220 m on piers, 14 m clear', 'middle');
-leader(0, -134, 0, -HALO_R - 4);
+heroLabel(171, LOOM.zA - 30, 'THE LOOM', 'gantry 320 m · 35 m to the rails · spool Ø45 m', 'middle');
+heroLabel(HOLD.x, -40, 'THE COLD HOLD', `${HOLD.tanks.length} foil spheres, Ø${HOLD.dMin}–${HOLD.dMax} m`, 'middle');
+heroLabel(MAST.x + 24, MAST.z - 34, 'THE MAST', `approach control · ${MAST.top} m spire`);
+heroLabel(cl.stills.x, cl.stills.z - cl.stills.podiumR - 22, 'THE STILLS', `cryogen distillation · ${cl.stills.towers.length} towers, top ${Math.round(tallest(cl.stills))} m`, 'middle');
+heroLabel(cl.converter.x, cl.converter.z + cl.converter.podiumR + 18, 'THE CONVERTER', `power · ${cl.converter.towers.length} towers, top ${Math.round(tallest(cl.converter))} m`, 'middle');
+heroLabel(cl.reckoner.x - 70, cl.reckoner.z + cl.reckoner.podiumR + 20, 'THE RECKONER', `computation · ${cl.reckoner.towers.length} towers, top ${Math.round(tallest(cl.reckoner))} m`, 'middle');
+heroLabel(0, -150, 'THE HALO', 'ring main Ø220 m on arches over the ring road', 'middle');
+leader(0, -134, 0, -HALO_R - 6);
+text(0, -458, 'THE CORDON · arcaded wall-gallery round the compound', 'sub', 'text-anchor="middle"');
 text(0, 62, 'PAD', 'zone', 'text-anchor="middle"');
 text(0, 75, 'Ø90 m · on the datum', 'sub', 'text-anchor="middle"');
-text(300, -36, 'CRAFT CORRIDOR · kept clear above 20 m', 'sub', 'text-anchor="middle"');
-heroLabel(0, 412, "COLD PLANT · RADIATOR BANKS", "radiator fins 25–45 m tall", "middle");
-text(-380, -214, "THE ESTATE", "zone", `text-anchor="middle"`);
-text(-380, -200, "raised soil terrace · ~170 × 130 m", "sub", `text-anchor="middle"`);
+text(330, 46, 'CRAFT CORRIDOR · kept clear above 20 m', 'sub', 'text-anchor="middle"');
+heroLabel(310, 262, 'RADIATOR FOREST', `${D.radiators.length} heat-rejection spires`, 'middle');
+text(-380, -214, 'THE ESTATE', 'zone', `text-anchor="middle"`);
+text(-380, -200, 'raised soil terrace · ~170 × 130 m', 'sub', `text-anchor="middle"`);
 text(-300, -58, 'house · faces the field', 'small', 'text-anchor="start"');
 leader(-302, -61, -362, -104);
-text(-372, -16, 'carriage house', 'small', 'text-anchor="middle"');
-leader(-372, -24, -400, -60);
-text(-300, -182, "pond", "small");
-leader(-302, -180, -313, -155);
 text(-440, 48, 'GATE COURT', 'zone', 'text-anchor="middle"');
 text(-270, 30, 'AXIS ROAD · 20 m', 'sub', 'text-anchor="middle"');
-text(-560, 36, "WEST GATE", 'deckLbl', 'text-anchor="middle"');
-text(-560, 50, "people", 'deckLbl', 'text-anchor="middle" style="font-size:9px"');
+text(-560, 36, 'WEST GATE', 'deckLbl', 'text-anchor="middle"');
+text(-560, 50, 'people', 'deckLbl', 'text-anchor="middle" style="font-size:9px"');
 text(560, 70, 'EAST LOCK', 'deckLbl', 'text-anchor="middle"');
-text(560, 84, 'craft · 60 m clear', 'deckLbl', 'text-anchor="middle" style="font-size:9px"');
+text(560, 84, `craft · ${2 * D.lock.passageHalf} m clear`, 'deckLbl', 'text-anchor="middle"');
 text(0, -540, 'NORTH COLLAR', 'deckLbl', 'text-anchor="middle"');
 text(0, 553, 'SOUTH COLLAR', 'deckLbl', 'text-anchor="middle"');
 text(-380, 470, 'THE GIRDLE DECK', 'deckLbl', 'text-anchor="middle" transform="rotate(-38 -380 470)"');
-text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fill:#c7d5df" transform="rotate(-41 -332 -390)"`);
 
 // ── Right column: title, north, scale, legend, views ─────────────────────────────────────────
 {
@@ -616,10 +568,13 @@ text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fi
   };
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="${C.pad}" stroke="${C.padLine}"/>`, 'Limestone platform (the field’s floor)');
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="${C.road}" stroke="${C.roadEdge}"/>`, 'Basalt road, bronze edges');
+  sw((x, y) => `<g><rect x="${x}" y="${y - 7}" width="8" height="14" fill="${ZONE_TINT.cryo}"/><rect x="${x + 8}" y="${y - 7}" width="8" height="14" fill="${ZONE_TINT.power}"/><rect x="${x + 16}" y="${y - 7}" width="8" height="14" fill="${ZONE_TINT.heat}"/></g>`, 'Precinct paving: each zone its own stone');
+  sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.6"/>`, 'Secondary plant: halls, hangars, labs, compressors');
+  sw((x, y) => `<line x1="${x}" y1="${y}" x2="${x + 24}" y2="${y}" stroke="${C.ceramicLine}" stroke-width="10"/>`, 'The Cordon: arcaded wall-gallery, 13.7 m, pylons at its gates');
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="${C.lawn}" stroke="#a89c84" stroke-width="2.5"/>`, 'Estate terrace (soil, lawn, planting)');
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="url(#goldBar)" stroke="${C.goldDark}"/>`, 'Gold structure');
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="${C.ceramic}" stroke="${C.ink}"/>`, 'White ceramic structure');
-  sw((x, y) => `<g stroke="${C.goldDark}" stroke-width="0.8"><line x1="${x}" y1="${y - 1.5}" x2="${x + 24}" y2="${y - 1.5}"/><line x1="${x}" y1="${y + 1.5}" x2="${x + 24}" y2="${y + 1.5}"/><line x1="${x + 6}" y1="${y - 1.5}" x2="${x + 6}" y2="${y + 1.5}"/><line x1="${x + 13}" y1="${y - 1.5}" x2="${x + 13}" y2="${y + 1.5}"/><line x1="${x + 20}" y1="${y - 1.5}" x2="${x + 20}" y2="${y + 1.5}"/></g>`, 'Pipe rack');
+  sw((x, y) => `<g stroke="${C.goldDark}" stroke-width="0.8"><line x1="${x}" y1="${y - 1.5}" x2="${x + 24}" y2="${y - 1.5}"/><line x1="${x}" y1="${y + 1.5}" x2="${x + 24}" y2="${y + 1.5}"/><line x1="${x + 6}" y1="${y - 1.5}" x2="${x + 6}" y2="${y + 1.5}"/><line x1="${x + 13}" y1="${y - 1.5}" x2="${x + 13}" y2="${y + 1.5}"/><line x1="${x + 20}" y1="${y - 1.5}" x2="${x + 20}" y2="${y + 1.5}"/></g>`, 'Viaduct (lines on a spine, Y-piers)');
   sw((x, y) => `<line x1="${x}" y1="${y}" x2="${x + 24}" y2="${y}" stroke="${C.frame}" stroke-width="1.8" stroke-dasharray="7 3"/>`, 'Dome frame overhead (bands, ribs, Eave Ring)');
   sw((x, y) => `<line x1="${x}" y1="${y}" x2="${x + 24}" y2="${y}" stroke="${C.glass}" stroke-width="2.2"/>`, 'Dome glass at the sill');
   sw((x, y) => `<rect x="${x}" y="${y - 7}" width="24" height="14" fill="#5f7d93" fill-opacity="0.1" stroke="${C.glass}" stroke-dasharray="4 2"/>`, 'Craft corridor');
@@ -635,7 +590,7 @@ text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fi
     '4  The back garden bench, facing the glass and the deck',
     '5  Under the Resonator, the house in its torus',
     '6  A craft arriving along the corridor',
-    '7  Driving south past the Loom',
+    '7  Driving south under the Halo toward the Loom',
   ]) {
     text(X, ly, line, 'lbl');
     ly += 19;
@@ -660,12 +615,11 @@ text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fi
 
 // ── Section: west–east, projected ────────────────────────────────────────────────────────────
 {
-  const G = 1000; // ground line (platform top) in drawing y
+  const G = 1000;
   const Y = (h) => G - h;
   const S0 = 700;
   text(-600, S0, 'SECTION · WEST–EAST, LOOKING NORTH · structures projected onto the Spinward axis', 'h2');
   text(-600, S0 + 16, 'Same scale as the plan. The Dome’s glass (S) and the 30 m clearance line inside it.', 'sub');
-  // Dome profile and the clearance line.
   const prof = [];
   const clr = [];
   for (let i = 0; i <= 200; i++) {
@@ -673,7 +627,6 @@ text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fi
     const x = GLASS_A * Math.cos(t);
     const h = GLASS_C * Math.sin(t);
     prof.push([x, Y(h)]);
-    // Inward normal offset of the ellipse by 30 m.
     const nx = Math.cos(t) / GLASS_A;
     const nh = Math.sin(t) / GLASS_C;
     const nl = Math.hypot(nx, nh);
@@ -683,65 +636,36 @@ text(-332, -390, "glass · r 499.75 m", "small", `text-anchor="middle" style="fi
   add(`<rect x="-502.4" y="${G - 1.2}" width="1004.8" height="2.4" fill="#cfc7b6"/>`);
   add(`<polyline points="${pts(clr.filter(([, y]) => y <= G))}" fill="none" stroke="#c2452d" stroke-width="0.8" stroke-dasharray="5 4"/>`);
   add(`<polyline points="${pts(prof)}" fill="none" stroke="${C.glass}" stroke-width="2.4"/>`);
-  // Frame: Eave Ring and collar arches (the west and east ones are cut by this section).
-  add(`<circle cx="-480" cy="${Y(74)}" r="4" fill="${C.frame}"/><circle cx="480" cy="${Y(74)}" r="4" fill="${C.frame}"/>`);
-  text(-470, Y(80), 'Eave Ring 74 m', 'small');
   text(0, Y(258), 'crown 251 m', 'small', 'text-anchor="middle"');
   const box = (x0, x1, h0, h1, fill, stroke = C.ink) => add(`<rect x="${f(x0)}" y="${f(Y(h1))}" width="${f(x1 - x0)}" height="${f(h1 - h0)}" fill="${fill}" stroke="${stroke}" stroke-width="0.7"/>`);
-  // Gatehouse and East Lock.
   box(-518, -470, 0, 31, C.ceramic);
-  box(455, 540, 0, 52, C.ceramic);
+  box(D.lock.x0, D.lock.x1, 0, D.lock.top, C.ceramic);
   text(-494, Y(38), 'gate 31 m', 'small', 'text-anchor="middle"');
-  text(497, Y(58), 'East Lock', 'small', 'text-anchor="middle"');
-  // Estate: terrace and trees, the house with its turret.
-  box(-468, -290, 0, 1.5, C.wall, '#a89c84');
-  for (let x = -455; x < -295; x += 13 + rand() * 6) add(`<ellipse cx="${f(x)}" cy="${f(Y(1.5 + 11))}" rx="${f(5 + rand() * 3)}" ry="${f(8 + rand() * 4)}" fill="${C.tree}" fill-opacity="0.85"/>`);
-  add(`<polygon points="${pts([[-389, Y(1.5)], [-389, Y(25)], [-381, Y(32)], [-363, Y(32)], [-355, Y(25)], [-355, Y(1.5)]])}" fill="${C.slate}" stroke="${C.ink}" stroke-width="0.7"/>`);
-  add(`<polygon points="${pts([[-360, Y(1.5)], [-360, Y(30)], [-357, Y(30)], [-354, Y(41)], [-351, Y(30)], [-348, Y(30)], [-348, Y(1.5)]])}" fill="${C.slate}" stroke="${C.ink}" stroke-width="0.7"/>`);
-  text(-372, Y(50), 'house ~40 m', 'small', 'text-anchor="middle"');
-  // Resonator (ring and frame, projected).
+  text((D.lock.x0 + D.lock.x1) / 2, Y(D.lock.top + 7), `East Lock ${Math.round(D.lock.top)} m`, 'small', 'text-anchor="middle"');
+  // The towers: tapering needles at their projected x.
+  const towerShape = (x, r0, top, lean) => add(`<polygon points="${pts([[x - r0 * 1.2, G], [x - r0 * 0.9, Y(top * 0.2)], [x + lean * 0.8 - r0 * 0.25, Y(top * 0.85)], [x + lean, Y(top)], [x + lean * 0.8 + r0 * 0.25, Y(top * 0.85)], [x + r0 * 0.9, Y(top * 0.2)], [x + r0 * 1.2, G]])}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
+  for (const c of D.clusters) {
+    for (const t of [...c.towers].sort((p, q) => p.top - q.top)) towerShape(t.x, t.r0, t.top, t.lean[0]);
+    for (const r of c.rings) add(`<line x1="${f(c.x - r.R)}" y1="${f(Y(r.h + 2.4))}" x2="${f(c.x + r.R)}" y2="${f(Y(r.h + 2.4))}" stroke="${C.ceramicLine}" stroke-width="1.6"/>`);
+    text(c.x, Y(Math.max(...c.towers.map((t) => t.top)) + 8), `${c.name[0].toUpperCase() + c.name.slice(1)} ${Math.round(Math.max(...c.towers.map((t) => t.top)))} m`, 'small', 'text-anchor="middle"');
+  }
+  for (const s of D.radiators) towerShape(s.x, s.r, s.top, 0);
+  // The Resonator, the Gyre, the Mast, the Loom, the Hold, the Halo.
   {
-    const [tx] = RESONATOR.t;
-    const xa = RESONATOR.x - tx * RESONATOR.pylonOff;
-    const xb = RESONATOR.x + tx * RESONATOR.pylonOff;
-    box(xa - 7, xa + 7, 0, RESONATOR.h, C.ceramic);
-    box(xb - 7, xb + 7, 0, RESONATOR.h, C.ceramic);
-    box(xa - 7, xb + 7, RESONATOR.h - 9, RESONATOR.h, C.ceramic);
-    const rw = RESONATOR.ringR * Math.abs(tx);
-    add(`<ellipse cx="${RESONATOR.x}" cy="${Y(68)}" rx="${f(rw)}" ry="${RESONATOR.ringR}" fill="none" stroke="${C.gold}" stroke-width="6"/>`);
-    for (const s of [-1, 1]) add(`<line x1="${RESONATOR.x + s * 30 * Math.abs(tx)}" y1="${Y(RESONATOR.h - 9)}" x2="${RESONATOR.x + s * 30 * Math.abs(tx)}" y2="${Y(68 + RESONATOR.ringR * 0.8)}" stroke="${C.ink}" stroke-width="0.6"/>`);
-    text(RESONATOR.x, Y(RESONATOR.h + 8), 'Resonator 130 m', 'small', 'text-anchor="middle"');
+    const [tx] = RESONATOR.T;
+    for (const s of [-1, 1]) box(RESONATOR.x + s * tx * RESONATOR.pylonOff - 7, RESONATOR.x + s * tx * RESONATOR.pylonOff + 7, 0, RESONATOR.top, C.ceramic);
+    add(`<ellipse cx="${RESONATOR.x}" cy="${Y(RESONATOR.centreY)}" rx="${f(RESONATOR.ringR * Math.abs(tx))}" ry="${RESONATOR.ringR}" fill="none" stroke="${C.gold}" stroke-width="6"/>`);
+    text(RESONATOR.x, Y(RESONATOR.top + 8), 'Resonator 130 m', 'small', 'text-anchor="middle"');
   }
-  // Cold Hold (projected spheres, a representative row).
-  for (const [x, d] of [[-232, 22], [-205, 34], [-170, 30], [-140, 16], [-118, 24], [-90, 12]]) {
-    add(`<line x1="${x - d * 0.3}" y1="${Y(0)}" x2="${x - d * 0.3}" y2="${Y(8)}" stroke="${C.ceramicLine}" stroke-width="1.6"/><line x1="${x + d * 0.3}" y1="${Y(0)}" x2="${x + d * 0.3}" y2="${Y(8)}" stroke="${C.ceramicLine}" stroke-width="1.6"/>`);
-    add(`<circle cx="${x}" cy="${Y(8 + d / 2)}" r="${d / 2}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-  }
-  text(-160, Y(52), 'Cold Hold ≤ 42 m', 'small', 'text-anchor="middle"');
-  // Halo and pad.
-  for (const x of [-HALO_R, HALO_R]) box(x - 3, x + 3, 0, 14, C.ceramic);
-  add(`<rect x="${-HALO_R - 4}" y="${Y(20)}" width="8" height="6" fill="${C.gold}" stroke="${C.goldDark}" stroke-width="0.6"/><rect x="${HALO_R - 4}" y="${Y(20)}" width="8" height="6" fill="${C.gold}" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-  add(`<line x1="${-HALO_R}" y1="${Y(17)}" x2="${HALO_R}" y2="${Y(17)}" stroke="${C.gold}" stroke-width="1" stroke-dasharray="3 3"/>`);
-  add(`<rect x="-45" y="${G - 1}" width="90" height="2" fill="#2c2e33"/>`);
-  text(0, Y(26), 'Halo 20 m · pad', 'small', 'text-anchor="middle"');
-  // Mast.
-  add(`<polygon points="${pts([[MAST.x - 12, G], [MAST.x - 3, Y(40)], [MAST.x - 1.5, Y(MAST.h)], [MAST.x + 1.5, Y(MAST.h)], [MAST.x + 3, Y(40)], [MAST.x + 12, G]])}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-  for (const h of [60, 95, 125]) add(`<rect x="${MAST.x - 6}" y="${Y(h)}" width="12" height="2.2" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.4"/>`);
-  text(MAST.x, Y(MAST.h + 7), 'Mast 150 m', 'small', 'text-anchor="middle"');
-  // Loom and spool.
-  box(LOOM.x0, LOOM.x1, LOOM.h - 5, LOOM.h, C.ceramic);
-  for (let x = LOOM.x0 + 4; x < LOOM.x1; x += 36) box(x - 2, x + 2, 0, LOOM.h - 5, C.ceramic);
-  box(140, 172, LOOM.h - 16, LOOM.h - 4, C.gold, C.goldDark);
-  add(`<circle cx="${(SPOOL.x0 + SPOOL.x1) / 2}" cy="${Y(26.5)}" r="22.5" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
-  text(60, Y(LOOM.h + 7), "Loom 40 m", "small", `text-anchor="middle"`);
-  text((SPOOL.x0 + SPOOL.x1) / 2, Y(56), "spool 49 m", "small", `text-anchor="middle"`);
-  // Gyre (projected: rings seen face-on from the south).
-  add(`<rect x="${GYRE.x - 8}" y="${Y(GYRE.centreY + 6)}" width="16" height="${GYRE.centreY + 6}" fill="${C.ceramic}" stroke="${C.ink}" stroke-width="0.7"/>`);
-  add(`<circle cx="${GYRE.x}" cy="${Y(GYRE.centreY)}" r="${GYRE.ringR}" fill="none" stroke="${C.gold}" stroke-width="5"/>`);
-  add(`<ellipse cx="${GYRE.x}" cy="${Y(GYRE.centreY)}" rx="${GYRE.ringR * 0.74}" ry="${GYRE.ringR * 0.74}" fill="none" stroke="${C.goldDark}" stroke-width="3.4"/>`);
+  add(`<circle cx="${GYRE.x}" cy="${Y(GYRE.centreY)}" r="44" fill="none" stroke="${C.gold}" stroke-width="4"/>`);
   add(`<circle cx="${GYRE.x}" cy="${Y(GYRE.centreY)}" r="17" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
-  text(GYRE.x, Y(GYRE.centreY + GYRE.ringR + 7), 'Gyre 100 m', 'small', 'text-anchor="middle"');
-  // Radiators (projected), behind the near structures.
+  add(`<polygon points="${pts([[MAST.x - MAST.legR, G], [MAST.x - 3, Y(38)], [MAST.x - 0.8, Y(MAST.top)], [MAST.x + 0.8, Y(MAST.top)], [MAST.x + 3, Y(38)], [MAST.x + MAST.legR, G]])}" fill="url(#goldBar)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
+  text(MAST.x, Y(MAST.top + 9), `Mast ${MAST.top} m`, 'small', 'text-anchor="middle"');
+  box(LOOM.x0, LOOM.x1, LOOM.railTop - 4, LOOM.railTop, C.ceramic);
+  add(`<circle cx="${LOOM.spool.x}" cy="${Y(LOOM.spool.centreY)}" r="${LOOM.spool.d / 2}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.7"/>`);
+  for (const t of HOLD.tanks.filter((_, i) => i % 3 === 0)) add(`<circle cx="${f(t.x)}" cy="${f(Y(t.top - t.R))}" r="${f(t.R)}" fill="url(#goldSphere)" stroke="${C.goldDark}" stroke-width="0.6"/>`);
+  for (const x of [-HALO_R, HALO_R]) add(`<path d="M${x - 12.4} ${G} Q${x} ${Y(26)} ${x + 12.4} ${G}" fill="none" stroke="${C.ceramicLine}" stroke-width="2.2"/>`);
+  add(`<rect x="-45" y="${G - 1}" width="90" height="2" fill="#2c2e33"/>`);
   text(-600, G + 34, 'Projected heights; each structure’s clearance to the glass is checked at its own plan radius (table above), not at its projected position.', 'sub');
 }
 

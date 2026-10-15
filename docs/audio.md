@@ -100,6 +100,29 @@ These rules apply to all future sounds, not just the current ones.
 - **Valves.** The open valve thunks with a broadband pop and a ~40 Hz thump; the close valve thunks and cuts the flow.
 - The same voice vents and fills.
 
+## The field (`sounds/field.ts`)
+
+- **Seven clones** of the user's recordings (textures in `models/field*.ts`): transformer hum, a cryogenic plant, a pump set, a furnace, an overhead crane, a slewing drive, a relief valve's roar.
+  - The relief recording was one steady blow-off, not bursts. The roar is its texture, and each burst's lift and reseat use the existing valve pop and thunk.
+  - The slew sample came as MP3: convert it to WAV first.
+- **Sources are game state** (`field/sources.ts`). Each is a point on the machine that makes the sound, with its size and how hard it works now:
+  - the Converter's and the Reckoner's plant rooms hum;
+  - the Stills and the Cold Hold run the cryogen plant;
+  - every valve pavilion has a pump;
+  - the secondary plant's compressor houses run a cryogen compressor each, and its switchyards' transformers hum;
+  - the Loom's draw head roars and its carriage's drives whine as it creeps;
+  - the Gyre's torque motors turn slowly;
+  - the Mast's dish heads slew in proportion to their scan rate.
+- **Loops start at random points** and each machine wanders in speed on its own, so two of a kind never phase-lock into one louder source.
+- **Every sound comes from its machine; there is no bed.** The user rejected a hum heard everywhere under the Dome. It was the drones' reverb send: the city's reverb is diffuse and the same everywhere, so two dozen machines feeding it became a hum without a source.
+  - Field emitters have no reverb send. What reaches you is each machine's direct sound: delayed, spread 1/d beyond its size, dulled by the air and placed by HRTF.
+  - A pool of six HRTF voices goes to the machines loudest where you stand, nearest first. A voice keeps its machine while that machine stays in the top eight, and fades out before it is reassigned. A machine below audibility makes no sound at all.
+  - Each machine's level wanders with its load, by a dB or two and a fraction of a percent in speed. Each has its own wander, so no two of a kind move together.
+  - `tests/fieldSound.test.ts`: by the house and at the drum nothing is loud; next to a pump the pump dominates by 12 dB or more, and only the machines of the precinct you stand in are audible.
+- The three vent voices are HRTF-panned too, also with no send.
+- **Relief stacks** (`field/vents.ts`, a seeded schedule): a voice from the pool takes a lifting stack. It pops, its roar follows the stack's flow (brighter at full lift), and it thunks on reseat.
+- **Levels** are `LEVEL.field` and `LEVEL.ventValve` in `mix.ts`: first-pass values, to be tuned by ear.
+
 ## Runtime
 
 - **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it.

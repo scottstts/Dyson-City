@@ -27,4 +27,11 @@ export const LEVEL = {
   jet: 0.25,
   buffet: 0.3,
   valve: 0.7,
+  /**
+   * The field's machines, RMS at each source's size (sources.ts): transformer hum at 8 m, the
+   * cryogen plant at 10 m, a pump set at 3 m, the Loom's draw head at 5 m and its carriage's
+   * drives at 6 m, a slewing drive at 3 m; a relief stack's roar at 1 m (full lift) and its valve.
+   */
+  field: { hum: 0.11, cryo: 0.12, pump: 0.14, furnace: 0.18, crane: 0.07, slew: 0.06, vent: 0.4 },
+  ventValve: 0.55,
 } as const;

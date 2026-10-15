@@ -1,5 +1,6 @@
 /**
- * The city's shared structure (docs/dome.md, docs/gate.md): the Dome and the West Gate. Places are
+ * The city's shared structure (docs/dome.md, docs/gate.md, docs/east-lock.md): the Dome, the West
+ * Gate and the East Lock. Places are
  * built on top of this later. Every part is generated as named parts (audited by tests/), then
  * emitted here as one draw mesh per material.
  */
@@ -12,6 +13,7 @@ import { bayTable, buildSill } from './dome/glazing';
 import { createDomeGlass, GLASS_TRANSMISSION, type GlassComposite } from './dome/glass';
 import { createBlackGlazeMaterial, createBronzeMaterial, createCeramicMaterial, domeEnvironment } from './materials/ceramic';
 import { buildWestGate, type WestGate } from './gate/gate';
+import { buildEastLock, type EastLock } from './eastLock/lock';
 import { buildWalk, type CityWalk } from './walk';
 import { StarVisibility, type StarView } from './visibility';
 
@@ -27,6 +29,8 @@ export interface City {
   /** What the eye sees of the star from a position (glare scaling). */
   starVisibility(eye: Vector3): StarView;
   readonly gate: WestGate;
+  /** The craft airlock in the East Collar (posed by the craft, step 4). */
+  readonly lock: EastLock;
   /** Walls and walkable surfaces for the player. */
   readonly walk: CityWalk;
   /** Per frame: runs the airlock for a player standing at `feet`. */
@@ -55,7 +59,7 @@ export function buildCity(): City {
   const bolts = frameBolts(layout);
   for (const m of buildBoltMeshes(bolts, bronze, 'Dome.bolts')) group.add(m);
 
-  const sill = new Mesh(emitParts([buildSill()], { slots: FRAME_SLOTS }), materials);
+  const sill = new Mesh(emitParts(buildSill(), { slots: FRAME_SLOTS }), materials);
   sill.name = 'Dome.sill';
   group.add(sill);
 
@@ -67,6 +71,8 @@ export function buildCity(): City {
   }
   const gate = buildWestGate();
   group.add(gate.group);
+  const lock = buildEastLock();
+  group.add(lock.group);
   group.updateMatrixWorld(true);
   const walk = buildWalk(layout);
   const star = new StarVisibility(GLASS_TRANSMISSION);
@@ -91,10 +97,12 @@ export function buildCity(): City {
         m.needsUpdate = true;
       }
       gate.bindEnvironments(outdoor, interior);
+      lock.bindEnvironments(outdoor, interior);
       return [createDomeGlass({ outdoor, interior, bays }), gate.mist.composite];
     },
     starVisibility: (eye) => star.at(eye),
     gate,
+    lock,
     walk,
     update(dt, feet) {
       gate.update(dt, feet, walk.walls);

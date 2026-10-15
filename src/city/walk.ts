@@ -10,6 +10,7 @@ import { DOME, FOOT, GATE_OPENING, LAYER, POST_T1_SILL, MEMBER, SILL } from './d
 import type { FrameLayout } from './dome/frame';
 import { GATE } from './gate/spec';
 import { DIAL, VENTS } from './gate/gatehouse';
+import { LOCK, LOCK_OPENING } from './eastLock/spec';
 
 /** What is underfoot (footstep sounds): pale stone, the chamber's basalt, a bronze sill, the bare deck. */
 export type GroundSurface = 'stone' | 'basalt' | 'bronze' | 'deck';
@@ -34,7 +35,7 @@ const RING_SEGMENTS = 2880;
 
 export function buildWalk(layout: FrameLayout): CityWalk {
   const walls = new CollisionWorld();
-  const gap = (x: number, z: number) => x < 0 && Math.abs(z) < GATE_OPENING.halfWidth + 0.05;
+  const gap = (x: number, z: number) => (x < 0 && Math.abs(z) < GATE_OPENING.halfWidth + 0.05) || (x > 0 && Math.abs(z) < LOCK_OPENING.halfWidth + 0.05);
   // The glass from inside (the sill's inner face) and from outside (clear of the sill).
   for (const r of [SILL.rIn, DOME.a + 0.25]) {
     for (let i = 0; i < RING_SEGMENTS; i++) {
@@ -54,6 +55,9 @@ export function buildWalk(layout: FrameLayout): CityWalk {
   // The leaves, while not fully open.
   walls.addBox(GATE.outerLipX - 0.25, -GATE.passageHalf, GATE.outerLipX + 0.45, GATE.passageHalf, 'gate:outer');
   walls.addBox(GATE.innerLipX - 0.3, -GATE.passageHalf, GATE.innerLipX + 0.4, GATE.passageHalf, 'gate:inner');
+  // The East Lock: its piers, and both gates (it is for craft: walkers never pass it).
+  for (const s of [-1, 1]) walls.addBox(-LOCK.eastX - 0.9, s * LOCK.passageHalf, -LOCK.westX + 0.9, s * LOCK.outerHalf);
+  for (const lip of [LOCK.outerLipX, LOCK.innerLipX]) walls.addBox(-lip - 0.45, -LOCK.passageHalf, -lip + 0.45, LOCK.passageHalf);
   // Plinths under the frame's feet.
   for (const f of layout.feet) {
     const p = f.curve(f.u);

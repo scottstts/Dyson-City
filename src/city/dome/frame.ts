@@ -17,6 +17,7 @@ import { buildGirder, buildStiffeners, memberT0, memberT1, sectionDims, type Kin
 import { Node } from './nodes';
 import { DOME, EAVE_Y, FOOT, FOOT_SINK, JOINT, LAYER, MEMBER, POST_T1_SILL } from './spec';
 import { SLOT } from './slots';
+import { LOCK } from '../eastLock/spec';
 import { spliceBolts, spliceFace, spliceMesh, spliceSite, type SpliceSite } from './splice';
 import { CARDINALS, collarCurve, heightAt, meridian, meridianParam, planeSection, planeSectionParam, ring, type Curve } from './surface';
 
@@ -165,20 +166,20 @@ export function frameLayout(): FrameLayout {
   const sameCollar = (a: Stop, b: Stop) => !!a.node && !!b.node && a.node.name.startsWith('node:collar:') && a.node.name.split(':')[2] === b.node.name.split(':')[2];
   run('eave', eaveRing, ringStops, () => 'eave', sameCollar);
 
-  // Spinward rails: E foot → E collar → over the crown → W collar → onto the gatehouse.
+  // Spinward rails: onto the East Lock's roof → E collar → over the crown → W collar → onto the gatehouse.
   const C = (DOME.c * Math.sqrt(DOME.a ** 2 - H * H)) / DOME.a;
   const uFootLow = (FOOT.y - DOME.centreY) / C;
   const uFootHigh = Math.PI + (DOME.centreY - FOOT.y) / C;
   const uGate = GATEHOUSE_RAIL_Y >= DOME.centreY ? Math.PI - Math.asin((GATEHOUSE_RAIL_Y - DOME.centreY) / C) : Math.PI + (DOME.centreY - GATEHOUSE_RAIL_Y) / C;
+  const uLock = Math.asin((LOCK.railY - DOME.centreY) / C);
   for (const sz of [-1, 1]) {
     const c = spinRail(sz);
     const along = (n: Node) => ({ u: th('z', sz * H, n.p[0]), node: n });
-    const stops: Stop[] = [{ u: uFootLow }, { u: uGate }];
+    const stops: Stop[] = [{ u: uLock }, { u: uGate }];
     for (const name of ['east', 'west']) stops.push(along(collar(name).rail.find((r) => Math.sign(r.node.p[2]) === sz)!.node));
     for (const x of signed) stops.push(along(spinBand.get(`${x}:${sz}`)!));
     for (const sx of [-1, 1]) stops.push(along(crown.get(`${sx}:${sz}`)!));
     run(`rail:spinward:${sz}`, c, stops, rail);
-    feet.push({ name: `rail:spinward:${sz}:east`, kind: 'rail', curve: c, u: uFootLow });
   }
   // Meridian rails: S foot → S collar → over the crown → N collar → N foot.
   for (const sx of [-1, 1]) {

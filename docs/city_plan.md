@@ -46,7 +46,7 @@ The site plan ([`city_plan_site.png`](city_plan_site.png)) is drawn to scale, no
 |---|---|---|
 | **Gate Court** | Inside the West Gate, on the axis | A plain paved forecourt where the road begins; the estate's gateway opens off it to the north |
 | **The Estate** | North-west, between the Gate Court and the drum | The house and its garden on a raised terrace, about 170 × 130 m, its back edge following the drum 30 m inside the glass. The house faces inward to the field; its back garden runs to the Dome's glass |
-| **The Field** | Everywhere else | The machine compound on the bare limestone pad |
+| **The Field** | Everywhere else, inside the Cordon | One walled machine compound: the Cordon (an arcaded wall-gallery) round it, avenues on the Dome's rib lines dividing it into precincts, each zoned and paved in its own stone |
 | **Pad and Halo** | The centre, on the datum | The craft landing pad, ringed by the Halo |
 | **Craft corridor** | The Spinward axis east of the Halo | Kept clear of anything over ~20 m: craft fly it between the East Lock and the pad |
 | **East Lock** | The East Collar | The craft airlock through the Dome |
@@ -54,8 +54,8 @@ The site plan ([`city_plan_site.png`](city_plan_site.png)) is drawn to scale, no
 ### Rules of the plan
 
 - **Height follows the Dome.** The tallest structures stand near the centre (up to ~150 m, where the glass is ~240 m up) and step down outward. Everything keeps **≥ 30 m clear of the glass**. The Dome still reads as the enclosing vault; nothing presses against it.
-- **Few heroes, one network.** Five hero structures, each one of a kind, all tied together by the compound's infrastructure (§5.3), radiating from the Halo. A plant is a network, not a sculpture park.
-- **Open ground between.** The pad's pale limestone stays visible as the field's floor, with its border courses and bronze survey inlays. Machines stand on their own plinths and gratings; services run in covered trenches cut into the pad. Wide empty stretches are part of the design: the distances are what make the machines read as huge.
+- **Few heroes, one network.** Five hero structures, each one of a kind, and three tower clusters that rise as tall as the Dome allows, all tied together by the compound's infrastructure (§5.3), radiating from the Halo. A plant is a network, not a sculpture park.
+- **A compound, not a lot.** The field is walled by the Cordon and divided by avenues under the Dome's ribs into precincts, each with a zone (craft, instruments, power, cryogen, science, works, heat), its own stone, its hero and a dense secondary plant (40–55 % built) of halls, hangars, labs, compressor houses, tank farms and switchyards. Its lanes and the avenues are the open ground; the distances that make the heroes read as huge are now along the avenues and across the core round the Halo. *Rejected:* heroes standing apart on bare limestone, which read as things put on an empty lot.
 - **Sightlines are designed.** Each hero is placed for how it reads from the Gate Court, the house's porch, the turret room and the road (§8).
 
 ## 4. The house and the estate
@@ -107,24 +107,39 @@ A science, technology and industry compound: the instruments and plants that a c
 - **No countable rhythm.** Repeated parts vary in size and spacing as real plants grow; a strict regular array reads human-scale.
 - **Motion is slow and large.** A few things move: a gimbal turning, a carriage creeping, a dish tracking, a vent breathing vapour. Slow motion on a huge body is what makes it read as huge.
 - **Clean, not grimy.** Maintained, precise, cold. Not cyberpunk, not rust.
+- **Soaring, not plant-like.** The field borrows the language of the user's reference image (a city of soaring metal), not its forms:
+  - things taper and rise;
+  - halo rings circle them on slender spokes;
+  - members run in long flowing curves;
+  - supports branch;
+  - gold leads, with polished chrome and white ceramic beside it.
+  Some buildings are genuinely big and tall, up to what the Dome allows where they stand. Every form keeps a working purpose; nothing is ornament. Details are in `docs/field.md`.
 
 ### 5.2 The heroes
 
 | Structure | Where | Size | What it is | What you see |
 |---|---|---|---|---|
 | **The Gyre** | North-east | Outer ring ~90 m across, centre ~55 m up | The compound's inertial reference: a gyroscope that holds its orientation to the stars, against which the band's spin is measured and steered | Three nested gold gimbal rings round a polished gold rotor sphere, carried on bearings in a white ceramic yoke. The band turns under it, so the rotor's axis rolls slowly about the north–south line, once every two hours (3°/min, the sky's own rate): the world's spin, visible in one object |
-| **The Resonator** | South-west, across the road from the estate | Ring ~100 m across, frame ~130 m tall | Listens to the star: a cryogenic resonant ring that the star's pressure oscillations, carried through the sphere's structure, set ringing | A flawless polished gold torus hanging free inside a tall ceramic portal frame, suspended on long cables from isolation stages so it touches nothing. Cryostat pods and sensor rings at its rim. Utterly still. The best mirror in the field: it frames the sky and reflects the house |
+| **The Resonator** | South-west, the outer science block, its ring facing the house | Ring ~100 m across, frame ~130 m tall | Listens to the star: a cryogenic resonant ring that the star's pressure oscillations, carried through the sphere's structure, set ringing | A flawless polished gold torus hanging free inside a tall ceramic portal frame, suspended on long cables from isolation stages so it touches nothing. Cryostat pods and sensor rings at its rim. Utterly still. The best mirror in the field: it frames the sky and reflects the house |
 | **The Loom** | South-east, parallel to the axis | ~320 m long, gantry ~40 m tall, spool ~45 m across | The materials works: draws a continuous ribbon of the sphere's refractory alloy from a travelling furnace head and winds it on a spool | Long ceramic gantry rails on legs; a gold-clad furnace carriage, glowing at its draw-slit, creeping along the rails; at the east end a great gold-flanged spool slowly turning; cable chains, coolant lines, crane trolleys |
 | **The Cold Hold** | North-west of the Halo, between the estate and the pad | Spheres 8–34 m across, about 30 of them | The craft's propellant and the compound's cryogen store | A cluster of gold-foiled spherical tanks of power-law sizes on ceramic legs, linked by foil-wrapped pipe runs, valve stations and walkways. Relief vents breathe white vapour now and then. The nearest gold to the house: the house's reflection lives in its spheres |
-| **The Mast** | Beside the Halo on the craft corridor's north side | ~150 m tall | Approach and landing control for craft | A slender tapering gold mast on a three-legged ceramic base, ringed by platforms, with phased-array panels and dish heads that track each craft in and out |
+| **The Mast** | Beside the Halo on the craft corridor's north side | ~150 m tall | Approach and landing control for craft | A slender fluted gold spire on three white ceramic buttress fins (its tripod), ringed by galleries, with a band of phased-array panels and two dish heads that track each craft in and out |
+
+**The tower clusters.** The field's tallest buildings: bundles of lobed, ribbed, brushed-gold towers converging on their tallest, on round podiums, with slit windows between the ribs, buttress arches at their feet and great halo rings round each cluster.
+
+| Cluster | Where | Tallest | What it is |
+|---|---|---|---|
+| **The Stills** | North, between the Cold Hold and the Gyre | 185 m, five towers | The cryogen distillation columns |
+| **The Converter** | East, behind the Gyre | 156 m, four towers | Power conversion: the shell's supply stepped down for the compound |
+| **The Reckoner** | South-west, the inner science block by the Halo | 177 m, three towers | The compound's computation, cryogen-cooled |
 
 ### 5.3 The network
 
-- **The Halo:** a raised ring main of gold-clad conduits round the pad (~110 m radius), on ceramic portal piers ~14 m high. Power, cryogen and data branch from it to every hero. Roads pass under it.
-- **Pipe racks** along the roads, carrying foil-wrapped lines between the Halo and the heroes.
-- **Covered trenches** in the pad for cables and services, with bronze-edged cover plates.
-- **Plant:** substations, transformer yards, valve houses, pump sets.
-- **The cold plant and radiator banks** along the south: tall, thin gold radiator fins in ranks of varied height that reject the compound's heat.
+- **The Halo:** a raised ring main of gold-clad and foil-wrapped conduits round the pad (~110 m radius), on sculpted ceramic arches that straddle the ring road, each line on a stem branching from an arch's back. Cryogen and data branch from it to every hero. Roads pass under it.
+- **Viaducts:** a white-and-gold spine on Y-piers. A square main runs just outside the avenues' ring of blocks; trunks along the Axis Road and the Meridian swoop down to it from the Halo's height. Domed valve pavilions (each with its pump set) draw from it into every precinct.
+- **The Cordon** walls the compound (`docs/field.md`): an arcaded wall-gallery 13.7 m high and walkable on top, carrying the compound's header lines, with pylons at its gates and the main portal on the Axis Road.
+- **Covered trenches** in the pad for power and services, with bronze-edged cover plates.
+- **The radiator forest** along the south: heat-rejection spires of varied height, deeply fluted (the fins), with coolant-header rings, that reject the compound's heat.
 
 ## 6. Craft
 
@@ -135,7 +150,7 @@ A science, technology and industry compound: the instruments and plants that a c
 
 ## 7. Roads and the car
 
-- **Few roads, all wide** (~20 m): the **Axis Road** from the Gate Court east to the Halo, a **ring road** under the Halo, and **spurs** from the ring to each hero and to the estate's gateway. The axis east of the Halo is the craft corridor, not a road.
+- **Few roads, all wide** (~20 m), on the Dome's grid: the **Axis Road** from the Gate Court through the Cordon's main portal east to the Halo, the **Meridian** north and south from the Halo to the Cordon's gates, four **avenues** under the rib lines at x, z = ±192, a **ring road** under the Halo and a **perimeter road** inside the Cordon. Every hero stands in a precinct and is reached from the avenues; there are no spurs. The Gate Court opens onto the estate's gateway. The axis east of the Halo is the craft corridor, not a road; it leaves through the Cordon's open craft gate.
 - **Surface:** dark polished basalt slabs set flush into the limestone, edged with bronze inlay. No painted markings.
 - **The car** lives in the estate's carriage house and is driven by the player round the field. It stays inside the Dome. Built separately in step 4.
 
@@ -164,7 +179,7 @@ These are the acceptance views: when built, each must read as described.
    - **Multi-storey walking.** Today the walkable world is one surface height plus plan walls (`docs/player.md`); stairs and upper floors need per-floor floors and walls.
    - **Window glass** for the house. The Dome's glass is an analytic post pass for its ellipsoid only.
    - **Interior light:** the baked lightmaps, plus a local environment capture for interior reflections.
-3. **The Field.** The Halo and pad, the five heroes, the network, roads, and the East Lock in the Dome.
+3. **The Field.** The Halo and pad, the five heroes, the tower clusters, the network, roads, and the East Lock in the Dome. Built: `docs/field.md`, `docs/east-lock.md`. The East Lock is a foundation the craft (step 4) will drive.
 4. **Vehicles and other moving things.** The car, the craft and their behaviour, separate assets.
 
 Each part gets its own system doc in `docs/` as it is built; this plan stays the overall intent.

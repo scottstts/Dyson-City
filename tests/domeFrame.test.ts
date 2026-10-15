@@ -9,7 +9,7 @@ import { domeClashAllow } from './helpers/domeAllow';
 
 describe('dome frame geometry', () => {
   const layout = frameLayout();
-  const parts = [...buildFrameParts(layout), { name: 'sill', mesh: buildSill() }];
+  const parts = [...buildFrameParts(layout), ...buildSill().map((mesh, i) => ({ name: `sill${i}`, mesh }))];
 
   it('has the designed members and junctions', () => {
     const nodes = (prefix: string) => layout.nodes.filter((n) => n.name.startsWith(prefix));

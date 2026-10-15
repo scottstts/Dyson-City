@@ -26,3 +26,8 @@ dist-ssr
 refs
 # headless review renders
 tools/out
+__pycache__
+blender/renders
+blender/textures
+blender/audit
+*.blend

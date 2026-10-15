@@ -18,6 +18,7 @@ import { float, vec2, vec3, sqrt, abs, floor, dot, min, normalize, reflect, sele
 import type { DataTexture, Node, Texture } from 'three/webgpu';
 import { hash33 } from '../../render/tsl/noise';
 import { DOME, EAVE_Y, GATE_OPENING, INTERIOR_CAPTURE_Y } from './spec';
+import { LOCK_OPENING } from '../eastLock/spec';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
@@ -51,6 +52,9 @@ export function createDomeGlass(opts: DomeGlassOptions): GlassComposite {
   const centre = vec3(0, centreY, 0);
   const holeW = GATE_OPENING.halfWidth + GATE_OPENING.trim;
   const holeTop = GATE_OPENING.top + GATE_OPENING.trim;
+  // The East Lock's gatehouse (city/eastLock) passes through the skin at the east cardinal.
+  const lockW = LOCK_OPENING.halfWidth + LOCK_OPENING.trim;
+  const lockTop = LOCK_OPENING.top + LOCK_OPENING.trim;
   const M = DOME.module;
   const capture = vec3(0, INTERIOR_CAPTURE_Y, 0);
   const roughness = float(0.02);
@@ -97,7 +101,7 @@ export function createDomeGlass(opts: DomeGlassOptions): GlassComposite {
   };
 
   const valid = (p: V3, t: F, dist: F): Node<'bool'> => {
-    const hole = p.x.lessThan(-400).and(abs(p.z).lessThan(holeW)).and(p.y.lessThan(holeTop));
+    const hole = p.x.lessThan(-400).and(abs(p.z).lessThan(holeW)).and(p.y.lessThan(holeTop)).or(p.x.greaterThan(400).and(abs(p.z).lessThan(lockW)).and(p.y.lessThan(lockTop)));
     return t.greaterThan(1e-3).and(t.lessThan(dist)).and(p.y.greaterThanEqual(centreY)).and(hole.not()) as unknown as Node<'bool'>;
   };
 

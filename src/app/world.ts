@@ -26,6 +26,12 @@ import { CoronalGas } from '../sky/star/gas/solver';
 import { buildCity, type City } from '../city/city';
 import { GLASS_TRANSMISSION, type GlassComposite } from '../city/dome/glass';
 import { INTERIOR_CAPTURE_Y } from '../city/dome/spec';
+import { buildField, type Field } from '../field/field';
+import { fieldPaving } from '../field/paving';
+import { createFieldProbes } from '../field/probes';
+import { addFieldWalls } from '../field/walk';
+import { createStarShade, rasterOccluders } from '../lighting/starShade';
+import { FIELD_Y } from '../field/layout';
 
 export interface World {
   readonly scene: Scene;
@@ -39,6 +45,8 @@ export interface World {
   readonly composites: GlassComposite[];
   /** The city's structure: the gate's airlock, walls and walkable surfaces. */
   readonly city: City;
+  /** The Field: the Halo, the heroes and the network (docs/field.md). */
+  readonly field: Field;
   /** The star's atmosphere, composited onto sky pixels by the pipeline. */
   readonly starAtmosphere: StarAtmosphere;
   /** The star's erupting gas: a fluid stepped on the GPU each frame. */
@@ -73,7 +81,8 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const skyMesh = createSkyMesh(sky, { velocity: true });
   scene.add(skyMesh.mesh);
 
-  const platform = new Mesh(createPlatformGeometry(), createPadMaterial());
+  const platformMaterial = createPadMaterial({ paving: fieldPaving() });
+  const platform = new Mesh(createPlatformGeometry(), platformMaterial);
   platform.name = 'GardenDeck.platform';
   scene.add(platform);
 
@@ -89,6 +98,11 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
 
   const city = buildCity();
   scene.add(city.group);
+  const field = buildField();
+  scene.add(field.group);
+  const tWalls = performance.now();
+  const fieldWalls = addFieldWalls(city.walk.walls, [...field.statics, ...field.moving]);
+  console.info(`[Dyson] field walls: ${fieldWalls} segments, ${(performance.now() - tWalls).toFixed(0)} ms`);
 
   // Inside the Dome: the sky through the glass, the frame, the platform.
   const captureSite = [platform, deck].map((m) => {
@@ -105,7 +119,19 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   scene.environment = interior.target.texture;
   deckMaterial.envNode = pmremTexture(environment.target.texture);
   deckMaterial.needsUpdate = true;
-  const composites = city.bindEnvironments(environment.target.texture, interior.target.texture);
+  const composites = [...city.bindEnvironments(environment.target.texture, interior.target.texture), field.vapour.composite];
+  // The star-shade under the field (lighting/starShade.ts), baked once: the platform and the field take it.
+  const tShade = performance.now();
+  const occluders = rasterOccluders([...field.statics, ...field.moving]);
+  const tRaster = performance.now();
+  const shade = await createStarShade(renderer, occluders, FIELD_Y);
+  console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
+  platformMaterial.aoNode = shade.ao();
+  platformMaterial.needsUpdate = true;
+  // The field's reflection probes, each captured where its zone stands (field/probes.ts).
+  const tProbes = performance.now();
+  const probes = createFieldProbes(renderer, sky, field, startTime, { extras: [...city.captureExtras(), ...captureSite], interior, transmittance: GLASS_TRANSMISSION, shade: shade.ao });
+  console.info(`[Dyson] field probes: ${(performance.now() - tProbes).toFixed(0)} ms`);
 
   return {
     scene,
@@ -116,14 +142,17 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     interior,
     composites,
     city,
+    field,
     gas,
     starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame, gas),
     update: (t) => {
       star.update(t);
       gas.update(star.time.value);
       updateFrameSpin(t);
+      field.update(t);
       environment.update(t);
       interior.update(t);
+      probes.update(t);
       (sky.options.frame as unknown as { value: number }).value += 1;
     },
   };

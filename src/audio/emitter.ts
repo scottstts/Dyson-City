@@ -99,6 +99,11 @@ export class Emitter {
     this.position[2] = z;
   }
 
+  /** The source's size (spreading begins beyond it), for an emitter that voices different sources in turn. */
+  setRefDistance(r: number): void {
+    this.panner.refDistance = r;
+  }
+
   /** Turns the directivity axis (unit vector) with a moving source. */
   setAxis(x: number, y: number, z: number): void {
     if (!this.directivity) return;

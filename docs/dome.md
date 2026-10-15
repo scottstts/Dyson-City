@@ -1,6 +1,6 @@
 # The Dome
 
-Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel in `src/geometry/`, the audit kit in `tools/geometry-kit/`. Design intent is `docs/design.md` §7.2; the East Lock is planned in `docs/city_plan.md` §6.
+Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel in `src/geometry/`, the audit kit in `tools/geometry-kit/`. Design intent is `docs/design.md` §7.2; the East Lock is `docs/east-lock.md`.
 
 ## Construction
 
@@ -17,6 +17,7 @@ Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel i
   - *Rejected:* stiffeners as section steps inside the member's sweep. Four extra rings per stiffener tripled the member triangles (1.2 M).
 - **Bolts** (`bolts.ts`): ~50 k bronze hex heads (16 triangles each), drawn as one instanced mesh per 250 m plan tile so off-screen tiles are culled. They are seated 10 mm into their face by construction and are not in the geometry audit.
 - **Members bear on the glass** at a 50 mm gasket line, stepping out to 300 mm near the sill (clear of the sill channel the glass stands in) by 9 m up. Under the members, in order: node bodies 20 mm off the glass, arms 35 mm, splice plates 65 mm.
+- **The Spinward rails land on gatehouses at both ends**: on the West Gate's piers and on the East Lock's roof. Only the Meridian rails have feet.
 - **Feet.** Drum posts, collar legs and the band rails taper to the sill depth (2.55 m) over the lower 40 m, so their outer faces land a 20 mm reveal inside the bottom riser. They stand on plinths whose stepped seats sink 20 mm into the two lower treads and the platform edge. The plinths reach 0.6 m past the member along the sill, so a black base plate is bolted down on either side of it.
 - **The eave and the grid.** The ribs at 288 and 384 m meet the Eave Ring (r = 480) at shared nodes; the edge coffers close as triangles and quads. Eave nodes are therefore 16 single and 8 double.
 - **Collars** are a semicircle (r = 48 m, centred 42 m up) on vertical legs. *Rejected:* a full ring cut by the ground, whose legs met the sill at ~27°.
@@ -31,7 +32,7 @@ Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel i
   - *Rejected:* a transparent glass mesh. It would need sorting, its depth would hide the sky's depth-0 treatment (the star's atmosphere, no aerial perspective on the sky), and the MRT normal/velocity would be overwritten under blending.
   - **Each crossing reflects the eye's side of the pane**: the outdoor sky where the ray enters the Dome, the interior capture where it leaves. The interior lookup is parallax-corrected by tracing the reflected ray to the platform top or S's far side and reading the capture toward that point. *Rejected:* the outdoor sky for every crossing; from inside, near the drum at grazing incidence, the outdoor horizon (bright sky over the dark deck) showed as a dark curve that slid with the eye.
   - Known limit: the glass's own reflections move with the velocity of what lies behind them under TAA; the panes are smooth, so it does not show.
-- **The gatehouse opening** is masked in the shader (|z| < 16.48, y < 31.48 on the west side) and covered by bronze trims on the glass (30 mm off the gatehouse; the top trim runs in three pieces between the landing rails).
+- **The gatehouse opening** is masked in the shader (|z| < 16.48, y < 31.48 on the west side) and covered by bronze trims on the glass (30 mm off the gatehouse; the top trim runs in three pieces between the landing rails). The East Lock's is masked the same way on the east side (`docs/east-lock.md`), and the sill runs in two lengths, north and south, between the two gatehouses.
 
 ## Light
 

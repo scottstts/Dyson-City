@@ -89,6 +89,8 @@ export class Game {
 
     this.adaptation = debug.ev === null ? new EyeAdaptation(handle.renderer, this.pipeline.sceneLuminance) : null;
     if (debug.gate) world.city.gate.airlock.hold(debug.gate);
+    if (debug.vent) world.field.vents.lift(0);
+    if (debug.lock) world.city.lock.setOpenness(debug.lock === 'outer' || debug.lock === 'open' ? 1 : 0, debug.lock === 'inner' || debug.lock === 'open' ? 1 : 0);
 
     this.pause = new PauseMenu(host, this.settings, (s) => {
       this.player.sensitivity = s.sensitivity;

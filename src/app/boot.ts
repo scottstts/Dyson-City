@@ -8,6 +8,8 @@ import { createRenderer } from '../core/renderer';
 import { computeAtmosphereTextures } from '../atmosphere/luts';
 import { generateNoiseVolumes, setNoiseVolumes } from '../render/tsl/volumeNoise';
 import { buildWorld } from './world';
+import { fieldSurface } from '../field/walk';
+import { fieldSoundSources } from '../field/sources';
 import { Game } from './game';
 import { GameAudio } from '../audio/gameAudio';
 import { loadAudioBank } from '../audio/loadBank';
@@ -56,7 +58,7 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
 
   stage('compile', entry, 0.6, 'Compiling shaders');
   const walk = world.city.walk;
-  const audio = new GameAudio(audioContext, { airlock: world.city.gate.airlock, surface: (x, z) => walk.surface(x, z) }, audioBank);
+  const audio = new GameAudio(audioContext, { airlock: world.city.gate.airlock, surface: (x, z) => fieldSurface(walk.surface, x, z), field: { sources: fieldSoundSources(), vents: world.field.vents, time: () => world.field.time } }, audioBank);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
   await handle.renderer.compileAsync(world.scene, game.camera);
 

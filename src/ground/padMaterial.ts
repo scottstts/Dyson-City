@@ -21,6 +21,7 @@ import type { Node } from 'three/webgpu';
 import { hash33, valueNoise3, fbm3, cellular3 } from '../render/tsl/noise';
 import { band, runningBond, lodFade } from '../render/tsl/patterns';
 import { SITE } from './site';
+import type { Paving } from '../field/paving';
 
 type F = Node<'float'>;
 type V2 = Node<'vec2'>;
@@ -73,6 +74,10 @@ function apronInlays(p: V2, fp: F): F {
 export interface PadMaterialOptions {
   /** 'platform': the survey inlays of the Garden Deck; 'axis': the Spinward axis only (the apron). */
   inlays?: 'platform' | 'axis';
+  /** What the city sets flush into the platform top (field/paving.ts): roads, the landing pad, trenches. */
+  paving?: Paving;
+  /** Ambient-occlusion term (the star-shade: lighting/starShade.ts). */
+  ao?: Node<'float'>;
 }
 
 export function createPadMaterial(opts: PadMaterialOptions = {}): MeshPhysicalNodeMaterial {
@@ -132,20 +137,35 @@ export function createPadMaterial(opts: PadMaterialOptions = {}): MeshPhysicalNo
   const course = select(isTop, max(band(coursePos.x, COURSE_HALF_WIDTH, fp), band(coursePos.y, COURSE_HALF_WIDTH, fp)), float(0)).mul(float(1).sub(inlay)).toVar();
   const courseColor = COURSE.mul(float(0.9).add(h.y.mul(0.15)));
   const stoneWithCourse = mix(stoneColor, courseColor, course);
-  const color = mix(stoneWithCourse.mul(float(1).sub(joint.mul(0.65))), BRONZE.mul(float(0.92).add(h.x.mul(0.08))), inlay);
+  let base = stoneWithCourse.mul(float(1).sub(joint.mul(0.65)));
+  let baseRough = mix(mix(stoneRough, float(0.36), course), float(0.92), joint);
+  // Flush paving (roads, the landing pad, trenches) replaces the stone, under the survey inlays.
+  const pave = opts.paving ? opts.paving(wp.xz, fp) : null;
+  const paveCover = pave ? select(isTop.and(r.lessThan(SITE.padRadius - 0.05)), pave.cover, float(0)).toVar() : float(0);
+  let baseMetal: F = float(0);
+  if (pave) {
+    base = mix(base, pave.color, paveCover);
+    baseRough = mix(baseRough, pave.roughness, paveCover);
+    baseMetal = pave.metalness.mul(paveCover);
+  }
+  const color = mix(base, BRONZE.mul(float(0.92).add(h.x.mul(0.08))), inlay);
   mat.colorNode = color;
-  mat.roughnessNode = mix(mix(mix(stoneRough, float(0.36), course), float(0.92), joint), float(0.55).add(grain.abs().mul(0.2)), inlay);
-  mat.metalnessNode = inlay;
+  mat.roughnessNode = mix(baseRough, float(0.55).add(grain.abs().mul(0.2)), inlay);
+  mat.metalnessNode = max(inlay, baseMetal);
   // Sealer: a clear coat, intact on most slabs and worn on some; none in the joints or on bronze.
   const wear = smoothstep(0.55, 0.95, h.z).mul(0.6).add(dust.sub(0.5).mul(0.3)).clamp(0, 1);
-  mat.clearcoatNode = float(0.9).sub(wear.mul(0.6)).mul(float(1).sub(joint)).mul(float(1).sub(inlay)).mul(select(isTop, float(1), float(0.7)));
-  mat.clearcoatRoughnessNode = float(0.07).add(h.x.mul(0.06)).add(wear.mul(0.18)).add(grain.abs().mul(0.05));
+  const stoneCoat = float(0.9).sub(wear.mul(0.6)).mul(float(1).sub(joint)).mul(select(isTop, float(1), float(0.7)));
+  const stoneCoatRough = float(0.07).add(h.x.mul(0.06)).add(wear.mul(0.18)).add(grain.abs().mul(0.05));
+  mat.clearcoatNode = (pave ? mix(stoneCoat, pave.coat, paveCover) : stoneCoat).mul(float(1).sub(inlay));
+  mat.clearcoatRoughnessNode = pave ? mix(stoneCoatRough, pave.coatRoughness, paveCover) : stoneCoatRough;
 
   // Perturb the normal (world space) on horizontal faces; risers keep their geometric normal.
-  const perturb = select(isTop, vec3(tilt2.x, 0, tilt2.y), vec3(0));
+  const t2 = pave ? mix(tilt2, pave.tilt, paveCover) : tilt2;
+  const perturb = select(isTop, vec3(t2.x, 0, t2.y), vec3(0));
   const nWorld = normalize(geoN.add(perturb));
   mat.normalNode = select(isTop, transformNormalToView(nWorld), normalViewGeometry);
   // The seal follows each slab's lippage, so the sky's reflection breaks slab by slab.
   mat.clearcoatNormalNode = mat.normalNode;
+  if (opts.ao) mat.aoNode = opts.ao;
   return mat;
 }

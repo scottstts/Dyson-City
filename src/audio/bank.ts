@@ -18,6 +18,14 @@ import { HYDRAULIC_STOP } from './models/hydraulicStop';
 import { VAULT_RUMBLE } from './models/vaultRumble';
 import { VAULT_SHUT } from './models/vaultShut';
 import { VAULT_LATCH } from './models/vaultLatch';
+import { FIELD_HUM } from './models/fieldHum';
+import { FIELD_CRYO } from './models/fieldCryo';
+import { FIELD_PUMP } from './models/fieldPump';
+import { FIELD_FURNACE } from './models/fieldFurnace';
+import { FIELD_CRANE } from './models/fieldCrane';
+import { FIELD_SLEW } from './models/fieldSlew';
+import { FIELD_VENT } from './models/fieldVent';
+import type { TextureModel } from './synth/spectral';
 import type { GroundSurface } from '../city/walk';
 
 export type FootKey = `${GroundSurface}:${FootGait}`;
@@ -41,7 +49,13 @@ export interface AudioBank {
   /** Peak 1. */
   valveOpen: Float32Array;
   valveClose: Float32Array;
+  /** The field's machines (docs/audio.md, "The field"): seamless loops at RMS 1. */
+  field: Record<FieldLoop, Float32Array>;
 }
+
+/** The field's looping sounds, each cloned from a recording (src/audio/models/field*.ts). */
+export type FieldLoop = 'hum' | 'cryo' | 'pump' | 'furnace' | 'crane' | 'slew' | 'vent';
+const FIELD_MODELS: Record<FieldLoop, TextureModel> = { hum: FIELD_HUM, cryo: FIELD_CRYO, pump: FIELD_PUMP, furnace: FIELD_FURNACE, crane: FIELD_CRANE, slew: FIELD_SLEW, vent: FIELD_VENT };
 
 /** Footstep variants per floor and gait (each a different recorded step, new fine structure). */
 export const FOOT_BANK_VARIANTS = 3;
@@ -102,11 +116,15 @@ export function buildAudioBank(sr: number): AudioBank {
     latch: [501, 502, 503].map((s) => scaled(renderPrint(VAULT_LATCH[0], sr, s, 0.1), 1 / roll)),
     valveOpen: synthValve('open', sr, 601),
     valveClose: synthValve('close', sr, 602),
+    field: Object.fromEntries((Object.keys(FIELD_MODELS) as FieldLoop[]).map((k, i) => {
+      const x = synthTexture(FIELD_MODELS[k], 10, sr, rng(701 + i));
+      return [k, scaled(x, 1 / rms(x))];
+    })) as Record<FieldLoop, Float32Array>,
   };
 }
 
 /** The bank's sample buffers, for a transfer list. */
 export function bankBuffers(b: AudioBank): ArrayBuffer[] {
-  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose];
+  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field)];
   return arrays.map((a) => a.buffer as ArrayBuffer);
 }

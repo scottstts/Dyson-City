@@ -1,6 +1,6 @@
 # Shadows under a 90° star
 
-Not built yet: nothing in the world phase needs it. This records what the city phase must do, and why.
+The outdoor field is built for the Field (see Status). This records what the city must do, and why.
 
 ## What the source allows
 
@@ -50,5 +50,14 @@ How:
 
 ## Status
 
-- **Built:** the Dome's even dimming (its frame is in the interior environment capture); the West Gate chamber's light (lamps without shadow maps, daylight through the openings by solid angle, `docs/gate.md`); the star's glare scaled by its visibility at the eye.
-- **Not built yet:** the outdoor star-visibility field (the gatehouse and plinths cast no foot darkening yet beyond contact AO), baked interior light, and lamp shadow maps for the gate's moving leaves.
+- **Built:**
+  - the Dome's even dimming (its frame is in the interior environment capture);
+  - the West Gate chamber's light (lamps without shadow maps, daylight through the openings by solid angle, `docs/gate.md`);
+  - the star's glare scaled by its visibility at the eye;
+  - the outdoor star-visibility field for the Field's structures (`src/lighting/starShade.ts`, `docs/field.md`).
+    - It applies to the platform and to surfaces within ~8 m of it; higher surfaces keep contact AO only.
+    - The West Gate's gatehouse and the Dome's plinths are not yet in the occluder map.
+- **Not built yet:**
+  - visibility on raised surfaces (per vertex, as above);
+  - baked interior light;
+  - lamp shadow maps for the gate's moving leaves.

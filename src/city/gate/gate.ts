@@ -46,7 +46,7 @@ function setPose(m: Mesh, p: Pose): void {
   m.matrixWorldNeedsUpdate = true;
 }
 
-function basaltMaterial(): MeshPhysicalNodeMaterial {
+export function basaltMaterial(): MeshPhysicalNodeMaterial {
   const mat = new MeshPhysicalNodeMaterial();
   mat.name = 'Gate.basalt';
   // Dark honed basalt in 1.2 × 0.6 m slabs (their joints a footprint-filtered line).
@@ -62,7 +62,7 @@ function basaltMaterial(): MeshPhysicalNodeMaterial {
 }
 
 /** Black EPDM rubber: the gates' seals. */
-function rubberMaterial(): MeshPhysicalNodeMaterial {
+export function rubberMaterial(): MeshPhysicalNodeMaterial {
   const mat = new MeshPhysicalNodeMaterial();
   mat.name = 'Gate.rubber';
   mat.colorNode = vec3(0.018, 0.018, 0.019);
