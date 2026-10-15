@@ -22,3 +22,12 @@ The eye moves as a walking or running person's head does: real gait, kept small.
 - **Landings** sink through the knees: a soft 2.6 Hz spring kicked by the impact speed (a jump lands ~5 cm deep).
 - **Frame-rate independence.** Springs integrate in substeps of at most 1/240 s, and a foot strike lands at its own moment within the frame (`tests/headMotion.test.ts` compares 60 and 240 Hz).
 - **No FOV kick when sprinting.** It is a game convention, not something a person sees.
+
+## Foot events
+
+`PlayerController.onFoot` reports what the feet do, for sound (`docs/audio.md`):
+- a `step` when `HeadMotion` strikes a foot (`stepped`), so sound and head jolt coincide;
+- a `takeoff` and a `land` (with impact speed);
+- a `stop` when the body comes to rest from above 0.9 m/s.
+
+No foot event follows another within 0.15 s.

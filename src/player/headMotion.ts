@@ -75,6 +75,9 @@ export class HeadMotion {
   yaw = 0;
   roll = 0;
 
+  /** True for the update in which a foot struck the ground (footstep sounds follow the gait). */
+  stepped = false;
+
   /** Step phase: integer values are foot strikes; one stride is two steps. */
   private phase = 0;
   private envelope = 0;
@@ -104,7 +107,13 @@ export class HeadMotion {
     this.strikeNod.kick(-0.04 * Math.min(impactSpeed, 8));
   }
 
+  /** 0 walking .. 1 running (the gait blend, lagged like the body). */
+  get runBlend(): number {
+    return this.run;
+  }
+
   update(dt: number, g: GaitInput): void {
+    this.stepped = false;
     const moving = g.grounded ? Math.min(g.speed / g.walkSpeed, 1) ** 0.8 : 0;
     // The gait's own amplitude follows speed with the body's lag; in the air it fades out.
     this.envelope += (moving - this.envelope) * (1 - Math.exp(-dt / 0.12));
@@ -122,6 +131,7 @@ export class HeadMotion {
         const at = Math.min((next - (this.phase - rate * dt)) / rate, dt);
         this.springs(at);
         this.strike.kick(-P.strike * this.envelope);
+        this.stepped = true;
         this.strikeNod.kick(-P.strikeNod * this.envelope);
         this.springs(dt - at);
       } else this.springs(dt);

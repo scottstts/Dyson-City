@@ -29,6 +29,21 @@ export interface Walkable {
 /** Radius of the walker's body for wall collisions. */
 const BODY_RADIUS = 0.3;
 
+/**
+ * Something the feet did, for footstep sounds: a step of the gait (in time with the head's strike),
+ * the settling step on stopping, a jump's push-off, or a landing (impact speed, m/s).
+ */
+export type FootEvent =
+  | { kind: 'step'; speed: number; run: number; crouch: boolean }
+  | { kind: 'stop' }
+  | { kind: 'takeoff' }
+  | { kind: 'land'; impact: number };
+
+/** Speed (m/s) above which coming to rest brings the trailing foot alongside, audibly. */
+const STOP_FROM = 0.9;
+/** A foot that has just struck (or landed) does not strike again within this time (s). */
+const FOOT_REFRACTORY = 0.15;
+
 export interface Spawn {
   position: [number, number];
   yaw: number;
@@ -46,6 +61,10 @@ export class PlayerController {
   private readonly head = new HeadMotion();
   private readonly prevVelocity = new Vector3();
   sensitivity = 1;
+  /** Footstep events, as they happen. */
+  onFoot: ((e: FootEvent) => void) | null = null;
+  private moving = false;
+  private sinceFoot = 1;
   private readonly euler = new Euler(0, 0, 0, 'YXZ');
   private readonly wish = new Vector3();
 
@@ -102,6 +121,7 @@ export class PlayerController {
     if (this.grounded && this.input.down('Space')) {
       this.velocity.y = JUMP_SPEED;
       this.grounded = false;
+      this.onFoot?.({ kind: 'takeoff' });
     }
 
     // Horizontal move: slide along walls, then a soft bound.
@@ -145,6 +165,8 @@ export class PlayerController {
         this.stepOffset += this.feet.y - floor;
         this.feet.y = floor;
         this.head.land(-this.velocity.y);
+        this.onFoot?.({ kind: 'land', impact: -this.velocity.y });
+        this.sinceFoot = 0;
         this.velocity.y = 0;
         this.grounded = true;
       }
@@ -167,6 +189,16 @@ export class PlayerController {
       accelForward: -sy * ax - cy * az,
       accelRight: cy * ax - sy * az,
     });
+    this.sinceFoot += dt;
+    if (this.head.stepped && this.sinceFoot > FOOT_REFRACTORY) {
+      this.onFoot?.({ kind: 'step', speed: hSpeed, run: this.head.runBlend, crouch });
+      this.sinceFoot = 0;
+    }
+    if (this.grounded && hSpeed > STOP_FROM) this.moving = true;
+    else if (this.moving && (!this.grounded || hSpeed < 0.15)) {
+      this.moving = false;
+      if (this.grounded && this.sinceFoot > FOOT_REFRACTORY) this.onFoot?.({ kind: 'stop' });
+    }
     this.apply();
   }
 

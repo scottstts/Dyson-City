@@ -9,6 +9,8 @@ import { computeAtmosphereTextures } from '../atmosphere/luts';
 import { generateNoiseVolumes, setNoiseVolumes } from '../render/tsl/volumeNoise';
 import { buildWorld } from './world';
 import { Game } from './game';
+import { GameAudio } from '../audio/gameAudio';
+import { loadAudioBank } from '../audio/loadBank';
 import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 
@@ -43,7 +45,9 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   const handle = await createRenderer(host, { profile: debug.profile });
 
   stage('atmosphere', entry, 0.2, 'Integrating the atmosphere');
-  const [atmosphere, noise] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes()]);
+  // The sound is synthesised in a worker alongside (docs/audio.md); its context sets the rate.
+  const audioContext = GameAudio.context();
+  const [atmosphere, noise, audioBank] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate)]);
   setNoiseVolumes(noise);
 
   stage('environment', entry, 0.4, 'Lighting the world');
@@ -51,7 +55,9 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   const world = await buildWorld(handle.renderer, atmosphere, debug.time ?? 0, debug.sky);
 
   stage('compile', entry, 0.6, 'Compiling shaders');
-  const game = new Game(handle, world, atmosphere, debug, entry, host);
+  const walk = world.city.walk;
+  const audio = new GameAudio(audioContext, { airlock: world.city.gate.airlock, surface: (x, z) => walk.surface(x, z) }, audioBank);
+  const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
   await handle.renderer.compileAsync(world.scene, game.camera);
 
   stage('warmup', entry, 0.85, 'Warming up');

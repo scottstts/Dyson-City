@@ -18,6 +18,7 @@ import type { AtmosphereTextures } from '../atmosphere/luts';
 import { loadSettings, PauseMenu, type PlayerSettings } from '../ui/pauseMenu';
 import type { EntryScreen } from '../ui/entryScreen';
 import { EyeAdaptation } from '../render/adaptation';
+import type { GameAudio } from '../audio/gameAudio';
 
 /** Frames per period of the debug yaw wobble (?wobble). */
 export const WOBBLE_PERIOD = 37;
@@ -42,9 +43,11 @@ export class Game {
   /** Null when the exposure is overridden for review (?ev). */
   private readonly adaptation: EyeAdaptation | null;
   private frameIndex = 0;
+  private readonly audio: GameAudio;
 
-  constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
+  constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
     this.handle = handle;
+    this.audio = audio;
     this.world = world;
     this.debug = debug;
     this.entry = entry;
@@ -60,6 +63,7 @@ export class Game {
     this.input = new Input(handle.renderer.domElement);
     this.player = new PlayerController(this.camera, this.input, world.city.walk);
     this.player.sensitivity = this.settings.sensitivity;
+    this.player.onFoot = (e) => audio.foot(e);
     const base = VIEWPOINTS[debug.spot ?? DEFAULT_VIEWPOINT] ?? VIEWPOINTS[DEFAULT_VIEWPOINT];
     const spawn = debug.look ? { ...base, yaw: (debug.look[0] * Math.PI) / 180, pitch: (debug.look[1] * Math.PI) / 180 } : base;
     this.player.spawn(spawn);
@@ -92,6 +96,7 @@ export class Game {
       this.camera.updateProjectionMatrix();
     });
     this.input.onLockChange = (locked) => {
+      this.audio.setActive(locked);
       if (locked) {
         this.playing = true;
         this.entry.hide();
@@ -126,6 +131,7 @@ export class Game {
   stop(): void {
     this.running = false;
     this.handle.renderer.setAnimationLoop(null);
+    this.audio.close();
   }
 
   enter(): void {
@@ -165,6 +171,7 @@ export class Game {
     }
     this.frameIndex++;
     this.camera.updateMatrixWorld();
+    this.audio.update(dt, this.camera, this.player.feet);
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
     const star = this.world.city.starVisibility(this.camera.position);

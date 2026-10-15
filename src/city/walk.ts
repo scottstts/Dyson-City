@@ -5,15 +5,29 @@
  * above the platform and deck.
  */
 import { CollisionWorld } from '../player/collision';
-import { groundHeight } from '../ground/site';
+import { groundHeight, PAD_OUTER_RADIUS } from '../ground/site';
 import { DOME, FOOT, GATE_OPENING, LAYER, POST_T1_SILL, MEMBER, SILL } from './dome/spec';
 import type { FrameLayout } from './dome/frame';
 import { GATE } from './gate/spec';
 import { DIAL, VENTS } from './gate/gatehouse';
 
+/** What is underfoot (footstep sounds): pale stone, the chamber's basalt, a bronze sill, the bare deck. */
+export type GroundSurface = 'stone' | 'basalt' | 'bronze' | 'deck';
+
 export interface CityWalk {
   readonly walls: CollisionWorld;
   ground(x: number, z: number): number;
+  surface(x: number, z: number): GroundSurface;
+}
+
+/** Sill plates under each leaf's lip (gatehouse.ts): from 0.42 m west to 0.25 m east of the lip line. */
+function onSill(x: number, lip: number): boolean {
+  return x > lip - 0.42 && x < lip + 0.25;
+}
+
+/** The apron outside the gate: a stone slab on the deck, between and in front of the piers. */
+function inApron(x: number, z: number, r: number): boolean {
+  return (Math.abs(z) < GATE.passageHalf - 0.01 && r > 502.42 && x > GATE.westX - 0.19) || (x <= GATE.westX - 0.19 && x > -560 && Math.abs(z) < 20);
 }
 
 const RING_SEGMENTS = 2880;
@@ -63,10 +77,16 @@ export function buildWalk(layout: FrameLayout): CityWalk {
         return Math.max(g, DOME.centreY + 0.015 + (GATE.floor - DOME.centreY - 0.015) * Math.max(ramp, 0));
       }
       // Apron outside the outer gate.
-      const r = Math.hypot(x, z);
-      const inApron = (Math.abs(z) < GATE.passageHalf - 0.01 && r > 502.42 && x > GATE.westX - 0.19) || (x <= GATE.westX - 0.19 && x > -560 && Math.abs(z) < 20);
-      if (inApron) return g + 0.015;
+      if (inApron(x, z, Math.hypot(x, z))) return g + 0.015;
       return g;
+    },
+    surface(x, z) {
+      if (Math.abs(z) < GATE.passageHalf) {
+        if (onSill(x, GATE.outerLipX) || onSill(x, GATE.innerLipX)) return 'bronze';
+        if (x > -499.6 && x < -472.4) return 'basalt';
+      }
+      const r = Math.hypot(x, z);
+      return r <= PAD_OUTER_RADIUS || inApron(x, z, r) ? 'stone' : 'deck';
     },
   };
 }

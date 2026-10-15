@@ -21,6 +21,10 @@ Code: `src/city/gate/` (`spec.ts` holds every dimension), walls in `src/city/wal
 - Mist rises with the pressure drop when venting and decays (6 s sealed, 1.6 s once the outer gate opens).
 - `tests/airlock.test.ts` walks a player in and out and checks the interlock and timing.
 
+## Sound
+
+See `docs/audio.md`. The sound watches the airlock's phases and pressure; the airlock knows nothing of it. The hydraulics sound from the hoists, the landings from the leaf (into both spaces it divides), the bolts from the sill and the jets from the vents. A shut leaf passes only a low rumble.
+
 ## Light in the chamber (`lighting.ts`)
 
 - **Lamps**: six RectAreaLights at the diffusers (each pendant's downlight and uplight, each pier's wall line), applied only to the gate's materials through `lightsNode` (not in the scene's light list, so nothing else pays for them). Radiances 6 / 3 / 5 (scene units) put ~1/35 of outdoor illuminance on the floor and walls: dim, readable once the eye opens up. No shadow maps yet.

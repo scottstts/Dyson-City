@@ -13,6 +13,7 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
   - running.
   Each stage is logged with its duration.
 - **The city** (`src/city/`): built inside the environment stage (geometry on the main thread, ~1–2 s); its interior environment capture needs the frame, so it follows the open-sky capture. `Game` runs `city.update(dt, feet)` every frame (the gate's airlock; the player's walls follow the leaves) and sets the glare's star visibility at the eye.
+- **Audio** (`docs/audio.md`): the audio bank is synthesised in a worker alongside the atmosphere stage (~1 s); `GameAudio` is built in the compile stage. Its context stays suspended until the pointer-lock click; pause suspends it and fatal errors close it. `Game` updates it each frame after the camera's matrix.
 - **Ordering constraints:**
   - Noise volumes must be set before any star shader is built.
   - The space backdrop is baked (and the frame angle set) before the sky is built.
@@ -29,6 +30,7 @@ Code: `src/main.ts`, `src/app/`, `src/core/`.
 - **Headless renders.** `node tools/render.mjs [--query ...] spot…` renders fixed viewpoints (`debug/viewpoints.ts`). It prints exposure, the star illuminant and GPU time (with `profile`). The first render of a batch runs slow (GPU warm-up); profile with a warm-up spot first.
 - **Motion clips.** `node tools/clip.mjs --seconds 20 --query "fov=24&look=20,47" spot` boots once with `?manual`, steps real game time (four TAA sub-frames per captured frame) and encodes an MP4 with ffmpeg (`--speed` scales game time, `--start` jumps the clock).
 - **Frame rate.** `node tools/fps.mjs spot…` counts uncapped frames of the real loop (vsync off, frozen star time). The `?profile` timestamp sum overstates pipelines of many small passes on tile-based GPUs, and costs depend on what is on screen (an erupting prominence, say): compare at a fixed `time`.
+- **Audio preview.** `node tools/audio-preview.mjs [scenario…]` renders scripted walks through the airlock (or `direction`) offline in headless Chrome to `tools/out/audio/*.wav`, with event logs and levels.
 - **Flicker meter.** `node tools/flicker.mjs --wobble 3 --steady spot…` boots with `?manual`, steps frames by hand while the camera sweeps its yaw (37-frame period, ±3° ≈ 10 px/frame at the turn), and captures the frame at the same phase of every sweep. The view is identical, so per-pixel differences are temporal instability. It prints mean and 99.9th-percentile σ and writes a heat map.
   - With `--steady` the camera speed at each capture is identical too, and only the TAA jitter phase differs: this isolates aliasing and crawl.
   - Without it, TAA's normal softening under motion is mixed in, and high-contrast detail inflates the numbers.

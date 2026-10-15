@@ -35,7 +35,7 @@ export interface WestGate {
 }
 
 /** Lip height (m above the sill) at which a rising leaf stops blocking the passage. */
-const LEAF_CLEAR = 2.4;
+export const LEAF_CLEAR = 2.4;
 
 /** Radiance of the lamp-lit chamber air (scene units): ~0.06 irradiance on 0.6 albedo, over π. */
 const MIST_LAMP_AMBIENT = 0.012;
