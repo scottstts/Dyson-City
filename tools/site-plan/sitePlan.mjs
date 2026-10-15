@@ -246,6 +246,9 @@ for (const l of D.plant) {
   checkClear('Secondary plant', l.x, l.z, Math.hypot(l.sx, l.sz) / 2, l.H);
 }
 
+// Service racks and feeders from the viaducts to the plant (plant/services.ts).
+for (const line of D.services) add(`<polyline points="${pts(line)}" fill="none" stroke="${C.goldDark}" stroke-width="1.1" stroke-linejoin="round"/>`);
+
 // ── The Cordon: the wall-gallery's runs, its gate bridges and pylons, the portal ─────────────
 {
   const R = D.cordon.r;

@@ -133,9 +133,11 @@ export function buildField(): Field {
       for (const m of moving) m.mesh.material = materials[m.zone];
     },
     captureCopies(look) {
-      const mats = createFieldMaterials('capture', look);
-      return statics.map((s) => {
-        const m = new Mesh(s.geometry, mats);
+      // One set for the Dome-ceramic zones; the plant's zones keep their own cladding colour.
+      const shared = createFieldMaterials('capture', look);
+      return statics.map((s, i) => {
+        const name = zones[i].name;
+        const m = new Mesh(s.geometry, name.startsWith('plant-') ? createFieldMaterials(name, look) : shared);
         m.name = `capture:${s.name}`;
         m.matrixAutoUpdate = false;
         return m;

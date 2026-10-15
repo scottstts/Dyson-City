@@ -43,8 +43,8 @@ export const VIEWPOINTS: Record<string, Spawn> = {
   reveal: { position: [-462, 0], yaw: -Math.PI / 2, pitch: 0.08 },
   /** §8.2: from where the house's porch will be, over the field. */
   porch: { position: [-357, -100], yaw: deg(-105.6), pitch: 0.1 },
-  /** §8.5: from the west avenue under the Resonator's ring, looking up into it. */
-  resonator: look([-192, 214], [-97, 290], 0.5),
+  /** §8.5: from the Meridian, across the science block to the Resonator's ring. */
+  resonator: look([0, 250], [-97, 290], 0.45),
   /** §8.6: on the craft corridor beside the Halo, looking east to the East Lock. */
   arrival: { position: [100, -28], yaw: -Math.PI / 2, pitch: 0.1 },
   /** §8.7: on the Meridian south of the Halo, toward the heat precincts and the south gate. */

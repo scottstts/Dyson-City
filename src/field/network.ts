@@ -236,13 +236,19 @@ export function viaductPaths(): ViaductPath[] {
   return rackLines().map(route);
 }
 
+/** Where the piers stand: sample indices per viaduct path (one seeded sequence, the same everywhere it is read). */
+export function pierPlan(paths: ViaductPath[] = viaductPaths()): number[][] {
+  const rand = rng(5150);
+  return paths.map((pa) => pierStations(pa, rand));
+}
+
 export function buildNetwork(): Parts {
   const parts = new Parts('net');
-  const rand = rng(5150);
   const paths = viaductPaths();
-  for (const pa of paths) {
+  const piers = pierPlan(paths);
+  for (const [pi, pa] of paths.entries()) {
     parts.add(`${pa.name}:spine`, spine(pa));
-    pierStations(pa, rand).forEach((i, k) => pier(parts, `${pa.name}:pier${k}`, pa, i));
+    piers[pi].forEach((i, k) => pier(parts, `${pa.name}:pier${k}`, pa, i));
     for (const vl of VIADUCT_LINES) {
       const lift = lineLift(vl.r);
       const pts: Vec3[] = [];

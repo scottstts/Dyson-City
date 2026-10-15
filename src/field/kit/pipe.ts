@@ -47,7 +47,8 @@ export function pipeLayout(points: Vec3[], o: PipeOptions): { path: Vec3[]; feat
   const spool = o.spool ?? 12;
   // Coincident input points (a run that meets itself) are dropped before filleting.
   const pts = points.filter((p, i) => i === 0 || v3.dist(p, points[i - 1]) > 1e-3);
-  const path = filletPath(pts, bend, Math.max(o.r * 2, 0.5), 8);
+  // Straights need no rings between their ends (6 m keeps the straight-run detection fine); bends keep their arc samples.
+  const path = filletPath(pts, bend, 6, 8);
   // Straight spans of the original polyline, trimmed by the fillet cut at each corner.
   const features: Feature[] = [];
   const s = arcLengths(path);

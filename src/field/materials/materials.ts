@@ -17,6 +17,8 @@ import { glowNode } from '../../sky/structure/thermal';
 import { fbm3, valueNoise3 } from '../../render/tsl/noise';
 import { band, lodFade } from '../../render/tsl/patterns';
 import { createFoilMaterial, createGoldMaterial, createMirrorMaterial, createSatinGoldMaterial } from './gold';
+import { createCladdingMaterial, ZONE_CLADDING } from './cladding';
+import type { Zone } from '../layout';
 
 type F = Node<'float'>;
 
@@ -108,7 +110,9 @@ export interface FieldLook {
 /** One material per slot, for one zone. */
 export function createFieldMaterials(zone: string, look: FieldLook = {}): Material[] {
   const mats: MeshPhysicalNodeMaterial[] = [];
-  mats[FIELD_SLOT.ceramic] = createCeramicMaterial(`Field.${zone}.ceramic`);
+  // The secondary plant is clad in its zone's colour; everything else is the Dome's ceramic.
+  const plant = zone.startsWith('plant-') ? (zone.slice(6) as Zone) : null;
+  mats[FIELD_SLOT.ceramic] = plant ? createCladdingMaterial(`Field.${zone}.cladding`, ZONE_CLADDING[plant]) : createCeramicMaterial(`Field.${zone}.ceramic`);
   mats[FIELD_SLOT.black] = createBlackGlazeMaterial(`Field.${zone}.black`);
   mats[FIELD_SLOT.bronze] = createBronzeMaterial(`Field.${zone}.bronze`);
   mats[FIELD_SLOT.gold] = createGoldMaterial(`Field.${zone}.gold`);

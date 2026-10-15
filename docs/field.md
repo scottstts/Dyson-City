@@ -17,6 +17,7 @@ The user rejected the first layout: it read as facilities scattered on an empty 
   - The craft gate, where the corridor leaves, is open to the sky. Nothing stands on the corridor's ground, and craft fly over at a few tens of metres.
   - The west front has the main portal on the Axis Road: a satin-gold arch between the two tallest pylons. It ends at a pylon where the estate's own wall will meet it.
   - Arches are split: each pier's haunches stop 0.9 m short of its neighbour's, so each arch opens at the crown in a slot to the soffit. Every bay is a whole arch; half piers are engaged in the pylons.
+  - Pylon shafts are fluted (22 shallow flutes that emerge over the foot and die out under the shadow band), with crowns of slender gold needles. *Rejected:* swelling crowns, which read as onions and tents. Each pylon has a bronze door from the compound side, to its stair. The gallery's back wall answers each pier with a pilaster.
 - **Precincts** are the blocks between the roads. Each has a zone: craft, instruments, power, cryogen, science, works or heat.
   - Each zone has its own flush stone (`paving.ts`), inside a bronze border 1.4 m in from the block's edge. Roads and trenches cut through it.
   - Each precinct holds its hero, and secondary plant fills the rest.
@@ -65,6 +66,21 @@ The user chose a dense working plant: 40–55 % of each precinct built (`plant/`
   - Bodies are profile sweeps, with their clerestory bands, eaves, parapets and roofs cut into the section. Gable rims are bevelled by an inset end section.
   - Fittings are seated and declared per lot (`lotAllow`). These are frame ribs, doors, vents, stacks and ducts, ladders, headers, bushings and fan decks.
 - **Probes:** each zone's plant is one mesh, lit by its hero's probe. It costs no extra capture.
+- **Palette** (`materials/cladding.ts`): the plant is clad in rainscreen panels (1.5 × 3 m, 10 mm open reveals) in its zone's own colour, so no precinct reads as the one white city.
+  - Craft: graphite. Instruments: pearl. Power: ochre. Cryogen: blue-grey. Science: cream. Works: dark umber. Heat: terracotta.
+  - The colour is a uniform, so the seven zones compile to one program.
+  - The heroes, the Cordon and the network keep the Dome's ceramic: they belong to the Dome's hand, and the plant to its precinct.
+- **Scale cues** on every building: frame ribs and pilasters, canopies over doors, louvred vents, brise-soleil fins on labs' lane faces, roof plant rooms and masts, drum pilasters, tank roof rails, switchyard fences.
+  - Fittings are placed clear of each other by construction: vents between ribs, drum pilasters clear of ducts and of the four axis directions where feeders enter.
+- **Service lanes** (`plant/lanes.ts`) are planned before the buildings. In each precinct they run square from the viaduct along its longest border, about every 56 m.
+  - A lane goes only where open ground lies on both sides. A lane through a thin strip splits it into pieces too narrow to build on.
+  - The packer keeps lanes clear, so buildings line up along them.
+- **Services** (`plant/services.ts`):
+  - A pipe rack runs down each lane: cryogen supply and return in foil, power in gold, on T-posts, with lines' bottoms at 5 m lane headroom. It rises into the viaduct spine's underside where the lane leaves it.
+  - Buildings beside a rack take a branch from their wall to the rack line on their side. A low wall (most labs) is left below the clerestory, and the branch rises to rack height 1.4 m out.
+  - Other buildings are fed directly: a pair of lines, straight or with one square turn, to a straight stretch of a viaduct (never a corner). It bridges avenues at lane headroom; no post stands on a road or trench.
+  - Every run keeps clear of buildings, heroes' ground, pavilions, piers and the runs already placed.
+  - About two in five buildings are visibly fed. The rest stand behind their neighbours or hero ground and are served from the trenches.
 
 ## Design language
 
@@ -122,6 +138,9 @@ The user's reference (a soaring metallic city) is borrowed for its language, not
 - Podiums and plinths are walls, not walkable.
 
 ## Cost
+
+- **Pipes are ringed only where they turn** (`kit/pipe.ts`): straights carry no rings between their ends (6 m spacing for straight-run detection), and bends keep their arc samples. Rings on a straight cylinder add nothing to its silhouette.
+- **Spire cores** take about 24 rings up the shaft, where taper and entasis change slowly, and 10 more through the draw-in to the finial.
 
 - About 22 zone meshes plus movers (heroes, the network, the Cordon, the plant by zone): one draw per material slot per zone.
 - Boot: the field ~1 s, walls ~0.1 s, star-shade ~0.1 s, probes ~6 s headless.

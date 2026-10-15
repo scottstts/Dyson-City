@@ -175,6 +175,9 @@ function pylonRings(p: CordonPylon): { h: number; k: number; inset: number; n: n
     { h: -0.03, k: 1.05, inset: 0, n: 5, slot: C },
     { h: 0.5, k: 1.05, inset: 0, n: 5, slot: C },
     { h: 0.8, k: s(0.8), inset: 0, n: 5, slot: C },
+    // The flutes emerge over 0.8 m and die out again under the shadow band (pylon()).
+    { h: 1.6, k: s(1.6), inset: 0, n: 5, slot: C },
+    { h: H - 3.4, k: s(H - 3.4), inset: 0, n: 5, slot: C },
     { h: H - 2.6, k: s(H - 2.6), inset: 0, n: 5, slot: C },
     { h: H - 2.45, k: s(H - 2.45), inset: 0.14, n: 5, slot: FIELD_SLOT.black },
     { h: H - 1.75, k: s(H - 1.75), inset: 0.14, n: 5, slot: C },
@@ -190,8 +193,11 @@ function pylonRings(p: CordonPylon): { h: number; k: number; inset: number; n: n
   return rings;
 }
 
+/** Pylon shafts are fluted: 22 shallow flutes between the foot and the shadow band. */
+const FLUTES = { count: 22, depth: 0.022 } as const;
+
 function pylon(p: CordonPylon): PolyMesh {
-  const N = 44;
+  const N = FLUTES.count * 4;
   const tx = -p.oz;
   const tz = p.ox;
   const rings = pylonRings(p).map(({ h, k, inset, n }) =>
@@ -199,8 +205,10 @@ function pylon(p: CordonPylon): PolyMesh {
       const a = (2 * Math.PI * j) / N;
       const c = Math.cos(a);
       const sn = Math.sin(a);
-      const x = (p.hr * k - inset) * Math.sign(c) * Math.abs(c) ** (2 / n);
-      const y = (p.ht * k - inset) * Math.sign(sn) * Math.abs(sn) ** (2 / n);
+      const fluted = h > 1.0 && h < p.height - 2.7;
+      const fl = fluted ? 1 - FLUTES.depth * (0.5 + 0.5 * Math.cos(FLUTES.count * a)) : 1;
+      const x = (p.hr * k - inset) * fl * Math.sign(c) * Math.abs(c) ** (2 / n);
+      const y = (p.ht * k - inset) * fl * Math.sign(sn) * Math.abs(sn) ** (2 / n);
       return [p.x + p.ox * x + tx * y, Y + h, p.z + p.oz * x + tz * y];
     }),
   );
@@ -277,6 +285,19 @@ export function buildCordon(): Parts {
   const parts = new Parts('cordon');
   const plan = CORDON_PLAN;
   plan.pylons.forEach((p) => parts.add(`pylon:${p.name}`, pylon(p)));
+  // A bronze door into each pylon's stair from the compound side, its frame proud of the tapering face.
+  const doors = new PolyMesh(40);
+  for (const p of plan.pylons) {
+    const n: Vec3 = [-p.ox, 0, -p.oz];
+    const side: Vec3 = [-n[2], 0, n[0]];
+    const taper = (h: number) => p.hr * (1 - (0.16 * h) / p.height);
+    const dh = 4.2;
+    const outer = taper(0.8) + 0.1;
+    const inner = taper(0.8 + dh) - 0.25;
+    const o: Vec3 = [p.x + n[0] * (outer + inner) / 2, Y + 0.8 + dh / 2, p.z + n[2] * (outer + inner) / 2];
+    doors.append(box({ o, u: side, v: [0, 1, 0], w: n }, Math.min(1.3, p.ht * 0.4), dh / 2, (outer - inner) / 2, 0.03, B));
+  }
+  parts.addSet('doors', doors);
   for (const run of plan.runs) {
     const path = runPath(run);
     parts.add(`${run.bridge ? 'bridge' : 'wall'}:${run.name}`, sweepRun(path, shellProfile(run.bridge)));
@@ -297,6 +318,17 @@ export function buildCordon(): Parts {
         piers.append(extrudeBevel(outline, pierBasis(path, s), S.pier.b0, S.pier.b1, 0.04, C));
       }
       parts.addSet(`piers:${run.name}`, piers);
+      // The gallery's back wall answers each whole pier with a pilaster, bedded in the wall and stylobate and under the soffit.
+      const backs = new PolyMesh(40);
+      for (let k = 1; k < bays; k++) {
+        const s = sa + (k * (sb - sa)) / bays;
+        const fr = path.at(s);
+        const b0 = S.wall.inner - 0.38;
+        const b1 = S.wall.inner + SEAT;
+        const o = v3.add(v3.add(fr.p, v3.scale(fr.o, (b0 + b1) / 2)), [0, (S.plinth.top - SEAT + S.slab.under + SEAT) / 2, 0]);
+        backs.append(box({ o, u: fr.o, v: fr.t, w: [0, 1, 0] }, (b1 - b0) / 2, 0.4, (S.slab.under - S.plinth.top + 2 * SEAT) / 2, 0.03, C));
+      }
+      if (bays > 1) parts.addSet(`gallery:${run.name}`, backs);
     }
     // The header lines (spools flanged every ≤ 24 m), on saddles every ~6 m.
     for (const h of CORDON_HEADERS) parts.add(`pipe:${run.name}:${h.name}`, headerLine(path, h.b, h.y, h.r, h.slot));
@@ -320,6 +352,9 @@ export const CORDON_ALLOW: [string, string][] = [
   ['cordon:bridge:', 'cordon:pylon:'],
   ['cordon:plinth:', 'cordon:pylon:'],
   ['cordon:set:piers:', 'cordon:pylon:'],
+  ['cordon:set:gallery:', 'cordon:wall:'],
+  ['cordon:set:gallery:', 'cordon:plinth:'],
+  ['cordon:set:doors', 'cordon:pylon:'],
   ['cordon:pipe:', 'cordon:pylon:'],
   ['cordon:set:piers:', 'cordon:wall:'],
   ['cordon:set:piers:', 'cordon:plinth:'],

@@ -14,6 +14,7 @@ import { YOKE } from '../../src/field/heroes/gyre';
 import { CARRIAGE, carriageX } from '../../src/field/heroes/loom';
 import { LOCK } from '../../src/city/eastLock/spec';
 import { plantLots } from '../../src/field/plant/lots';
+import { servicePlan } from '../../src/field/plant/services';
 import { PORTAL_ARCH } from '../../src/field/cordon';
 
 export function planData() {
@@ -29,6 +30,14 @@ export function planData() {
     perimeter: PERIMETER,
     compoundR: COMPOUND_R,
     cordon: { ...CORDON, plan: CORDON_PLAN, portalCrown: PORTAL_ARCH.crown },
+    services: (() => {
+      const { racks, feeders } = servicePlan();
+      return [
+        ...racks.map((r) => [[r.hit[0], r.hit[2]], [r.hit[0] + r.d[0] * r.length, r.hit[2] + r.d[2] * r.length]]),
+        ...racks.flatMap((r) => r.branches.map((b) => [[b.start[0], b.start[2]], [b.end[0], b.end[2]]])),
+        ...feeders.map((f) => [f.start, ...(f.corner ? [f.corner] : []), f.hit].map((p) => [p[0], p[2]])),
+      ];
+    })(),
     plant: plantLots().map((l) => ({ kind: l.kind, zone: l.zone, x: l.x, z: l.z, sx: l.axis === 0 ? l.L : l.W, sz: l.axis === 0 ? l.W : l.L, H: l.H })),
     trenches: trenchLines(),
     ringTrench: RING_TRENCH_R,

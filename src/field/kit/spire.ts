@@ -75,10 +75,13 @@ export function spireCore(s: SpireSpec): PolyMesh {
   const n = s.flutes;
   const per = 6;
   const depth = s.fluteDepth ?? 0.07;
-  const hs: number[] = [];
-  const dh = Math.max(1.0, s.height / 70);
-  for (let h = -0.05; h < s.height; h += dh) hs.push(h);
-  hs.push(s.height);
+  // The profile changes slowly up the shaft (taper and entasis): ~24 rings; the draw-in to the
+  // finial over the last 12 % curves faster: 10 more rings there.
+  const hs: number[] = [-0.05];
+  const shaft = s.height * 0.86;
+  const nShaft = 24;
+  for (let k = 1; k <= nShaft; k++) hs.push((shaft * k) / nShaft);
+  for (let k = 1; k <= 10; k++) hs.push(shaft + ((s.height - shaft) * k) / 10);
   const pts: Vec3[] = hs.map((h) => [s.x, s.y0 + h, s.z]);
   const frames = framesFrom(pts, pts.map(() => [1, 0, 0] as Vec3));
   const ph = s.phase ?? 0;

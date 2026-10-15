@@ -13,7 +13,7 @@ import { framesFrom, sweep, type Profile } from '../../geometry/sweep';
 import { box, insetPolygon, lathe, orientOutward, tube, type Basis } from '../../geometry/solids';
 import { FIELD_SLOT } from '../materials/materials';
 import { rng, type Parts } from '../kit/parts';
-import { ladder, rod } from '../kit/access';
+import { guardRail, ladder, rod } from '../kit/access';
 import { pipeRun } from '../kit/pipe';
 import { FIELD_Y, type Zone } from '../layout';
 import type { Lot } from './lots';
@@ -206,11 +206,43 @@ function cowl(f: Frame, u: number, v: number, y: number, r: number, slot: number
   return lathe([[0, -0.4], [r, -0.4], [r, 1.0], [r + 0.35, 1.2], [r + 0.35, 1.38], [r * 0.6, 1.62], [0, 1.66]], 24, b, [slot, slot, ST, ST, slot, slot]);
 }
 
+
+/**
+ * A louvred vent on a wall: a black frame plate bedded in the face, horizontal steel blades proud of
+ * it every 0.25 m. Centred at (u, v, y) on a face with outward `normal`.
+ */
+function louvre(f: Frame, u: number, v: number, y: number, normal: Vec3, w: number, h: number): PolyMesh {
+  const m = new PolyMesh(36);
+  const side: Vec3 = [-normal[2], 0, normal[0]];
+  const o = v3.add(P(f, u, v, y), v3.scale(normal, 0.04 - SEAT));
+  m.append(box({ o, u: side, v: [0, 1, 0], w: normal }, w / 2, h / 2, 0.04, 0.015, K));
+  const n = Math.max(2, Math.floor((h - 0.2) / 0.25));
+  for (let i = 0; i < n; i++) {
+    const yb = y - h / 2 + 0.1 + ((h - 0.2) * (i + 0.5)) / n;
+    const ob = v3.add(P(f, u, v, yb), v3.scale(normal, 0.08 + 0.07 - SEAT / 2));
+    m.append(box({ o: ob, u: side, v: [0, 1, 0], w: normal }, w / 2 - 0.06, 0.02, 0.07 + SEAT / 2, 0.005, ST));
+  }
+  return m;
+}
+
+/** A cantilevered canopy over a door: a satin plate bedded in the wall, hung on two rods from above. */
+function canopy(f: Frame, u: number, v: number, y: number, normal: Vec3, w: number, depth: number): PolyMesh {
+  const m = new PolyMesh(36);
+  const side: Vec3 = [-normal[2], 0, normal[0]];
+  const o = v3.add(P(f, u, v, y), v3.scale(normal, depth / 2 - SEAT));
+  m.append(box({ o, u: side, v: [0, 1, 0], w: normal }, w / 2, 0.1, depth / 2 + SEAT, 0.03, FIELD_SLOT.satin));
+  for (const s of [-1, 1]) {
+    const tip = v3.add(v3.add(P(f, u, v, y + 0.05), v3.scale(normal, depth - 0.25)), v3.scale(side, s * (w / 2 - 0.25)));
+    const root = v3.add(v3.add(P(f, u, v, y + 1.6), v3.scale(normal, -SEAT)), v3.scale(side, s * (w / 2 - 0.25)));
+    m.append(rod(tip, root, 0.035, ST, 8));
+  }
+  return m;
+}
+
 // --- builders ------------------------------------------------------------------------------------
 
 function hall(parts: Parts, l: Lot, hangar: boolean): void {
   const f = frameOf(l);
-  const rand = rng(l.seed);
   const trim = zoneTrim(l.zone);
   const roof = hangar ? FIELD_SLOT.satin : trim.roof;
   const k = hangar ? 2.6 : 2.2;
@@ -228,8 +260,26 @@ function hall(parts: Parts, l: Lot, hangar: boolean): void {
     const dh = Math.min(He - 0.6 + (vaultAt(dw / 2, a, He, l.H, k) - He) * 0.75, l.H - 1.5);
     parts.add(`${n}:door`, door(f, s * (l.L / 2), 0, v3.scale(f.u, s), dw, dh, FIELD_SLOT.satin));
   } else {
-    const s = rand() < 0.5 ? -1 : 1;
-    parts.add(`${n}:door`, door(f, s * (l.L / 2), 0, v3.scale(f.u, s), Math.min(0.42 * l.W, 10), Math.min(He - 1.2, 8)));
+    // The loading door is in the gable toward the lane the hall faces; a canopy hangs over it.
+    const s = l.face;
+    const dw = Math.min(0.42 * l.W, 10);
+    const dh = Math.min(He - 1.2, 8);
+    parts.add(`${n}:door`, door(f, s * (l.L / 2), 0, v3.scale(f.u, s), dw, dh));
+    parts.addSet(`${n}:canopy`, canopy(f, s * (l.L / 2), 0, dh + 0.45, v3.scale(f.u, s), dw + 1.6, 2.4));
+  }
+  // Louvred vents high in both gables, under the vault, clear of the door and its canopy's hangers.
+  {
+    const lh = Math.min(1.8, (l.H - He) * 0.42);
+    const ly = He + (l.H - He) * 0.42;
+    const clearOfDoor = ly - lh / 2 > Math.min(He - 1.2, 8) + 2.2;
+    if (lh > 0.7 && (hangar || clearOfDoor)) {
+      const lv = new PolyMesh(36);
+      for (const s of [-1, 1]) {
+        if (hangar && s === l.face) continue;
+        lv.append(louvre(f, s * (l.L / 2), 0, ly, v3.scale(f.u, s), Math.min(0.24 * l.W, 4.5), lh));
+      }
+      parts.addSet(`${n}:louvres`, lv);
+    }
   }
   // Ventilators along the ridge.
   if (!hangar) {
@@ -274,6 +324,10 @@ function chiller(parts: Parts, l: Lot): void {
     }
   }
   parts.addSet(`${n}:fans`, fans);
+  // Intake louvres in both gables.
+  const lv = new PolyMesh(36);
+  for (const s of [-1, 1]) lv.append(louvre(f, s * (l.L / 2), 0, Math.min(h - 3.6, 4.2), v3.scale(f.u, s), Math.min(l.W * 0.5, 9), 2.4));
+  parts.addSet(`${n}:louvres`, lv);
   parts.add(`${n}:door`, door(f, 0, l.face * (l.W / 2), v3.scale(f.v, l.face), 6, Math.min(h - 3.2, 5)));
 }
 
@@ -300,6 +354,16 @@ function store(parts: Parts, l: Lot): void {
   const nd = Math.max(1, Math.floor(l.L / 18));
   for (let i = 0; i < nd; i++) doors.append(door(f, -l.L / 2 + (l.L * (i + 0.5)) / nd, l.face * a, v3.scale(f.v, l.face), 5.5, Math.min(He - 1, 5.5)));
   parts.addSet(`${n}:doors`, doors);
+  // A canopy over each door, and louvres high in both gables.
+  const dh = Math.min(He - 1, 5.5);
+  if (He - dh > 2.1) {
+    const can = new PolyMesh(36);
+    for (let i = 0; i < nd; i++) can.append(canopy(f, -l.L / 2 + (l.L * (i + 0.5)) / nd, l.face * a, dh + 0.4, v3.scale(f.v, l.face), 7, 2.2));
+    parts.addSet(`${n}:canopies`, can);
+  }
+  const lv = new PolyMesh(36);
+  for (const s of [-1, 1]) lv.append(louvre(f, s * (l.L / 2), 0, He - 1.3, v3.scale(f.u, s), Math.min(l.W * 0.4, 8), 1.6));
+  parts.addSet(`${n}:louvres`, lv);
 }
 
 function drum(parts: Parts, l: Lot): void {
@@ -359,6 +423,20 @@ function drum(parts: Parts, l: Lot): void {
     const y = Math.min(hb - 0.6, H * 0.55);
     parts.add(`${n}:duct${i}`, pipeRun([P(f, Math.cos(ang) * (R - 0.2), Math.sin(ang) * (R - 0.2), y), P(f, sx * (1 - 0.6 / d), sz * (1 - 0.6 / d), y)], { r: 0.42, slot: ST, bareEnds: true }));
   }
+  // Pilasters round the drum every ~3.2 m (mullions across its clerestory), clear of the ducts.
+  // (and clear of the four axis directions, where feeders may enter: plant/services.ts).
+  const angles = [...Array.from({ length: stacks }, (_, i) => Math.PI / 4 + (i === 0 ? 0 : Math.PI) + (l.face > 0 ? Math.PI / 2 : 0)), 0, Math.PI / 2, Math.PI, -Math.PI / 2];
+  const np = Math.max(8, Math.round((2 * Math.PI * R) / 3.2));
+  const pil = new PolyMesh(36);
+  for (let k = 0; k < np; k++) {
+    const a = (2 * Math.PI * (k + 0.5)) / np;
+    if (angles.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) * R < 1.3)) continue;
+    const rad = v3.add(v3.scale(f.u, Math.cos(a)), v3.scale(f.v, Math.sin(a)));
+    const tan: Vec3 = [-rad[2], 0, rad[0]];
+    const o = v3.add(P(f, Math.cos(a) * (R + 0.1), Math.sin(a) * (R + 0.1), 0), [0, (0.44 + H + 0.1) / 2, 0]);
+    pil.append(box({ o, u: rad, v: tan, w: [0, 1, 0] }, 0.2, 0.18, (H + 0.1 - 0.44) / 2, 0.03, C));
+  }
+  parts.addSet(`${n}:pilasters`, pil);
 }
 
 function tanks(parts: Parts, l: Lot): void {
@@ -393,6 +471,16 @@ function tanks(parts: Parts, l: Lot): void {
     });
     roof[roof.length - 1] = [0, roof[roof.length - 1][1]];
     parts.add(`${n}:tank${i}`, lathe([[0, -SEAT], [R + 0.35, -SEAT], [R + 0.35, 0.5], [R, 0.6], [R, Ht], [R + 0.08, Ht + 0.1], [R + 0.08, Ht + 0.3], ...roof], 64, b, [C, C, C, trim.tank, BZ, BZ, BZ, ...Array(9).fill(trim.tank)]));
+    // A guard rail round the roof's edge (standing on the roof, its posts bedded in it).
+    {
+      const rr = R - 0.4;
+      const yr = Ht + 0.3 + R * 0.2 * Math.sqrt(1 - (rr / R) ** 2) - 0.05;
+      const ring: Vec3[] = Array.from({ length: 40 }, (_, k) => {
+        const a = (2 * Math.PI * k) / 40;
+        return P(f, u + Math.cos(a) * rr, 0.8 + Math.sin(a) * rr, yr);
+      });
+      parts.addSet(`${n}:rail${i}`, guardRail(ring, true));
+    }
     if (i === 0) parts.addSet(`${n}:ladder`, ladder(P(f, u - R * Math.sin(0.5), 0.8 - R * Math.cos(0.5), 0), Ht + 0.3, v3.norm(v3.sub(P(f, -Math.sin(0.5), -Math.cos(0.5), 0), P(f, 0, 0, 0))), 0.25));
   });
   // The fill header along the farm's front, a stub into each tank, on posts.
@@ -499,6 +587,12 @@ function switchyard(parts: Parts, l: Lot): void {
     parts.addSet(`${n}:gantry${s > 0 ? 'b' : 'a'}`, g);
     parts.add(`${n}:beam${s > 0 ? 'b' : 'a'}`, box({ o: P(f, u, 0, gh + 0.35), u: f.u, v: f.v, w: [0, 1, 0] }, 0.35, gw + 0.6, 0.35, 0.04, ST));
   }
+  // The yard's fence: 2.4 m, 0.5 m inside the lot.
+  {
+    const hu = l.L / 2 - 0.5;
+    const hv = l.W / 2 - 0.5;
+    parts.addSet(`${n}:fence`, guardRail([P(f, -hu, -hv, 0), P(f, hu, -hv, 0), P(f, hu, hv, 0), P(f, -hu, hv, 0)], true, 2.4));
+  }
   const wires = new PolyMesh(36);
   for (const t of [-0.55, 0, 0.55]) wires.append(rod(P(f, -(l.L / 2 - 2) + 0.2, t * gw, gh + 0.35), P(f, l.L / 2 - 2 - 0.2, t * gw, gh + 0.35), 0.05, BZ, 8));
   parts.addSet(`${n}:wires`, wires);
@@ -518,6 +612,20 @@ function lab(parts: Parts, l: Lot): void {
     const h = l.H * hs[i];
     const sec = blockSection(W, h, true, C).map(([p, s]): [Vec2, number] => [[p[0] + off, p[1] + y - (i > 0 ? SEAT : 0)], s]);
     parts.add(`${n}:tier${i}`, sweepSection(f, sec, -L / 2, L / 2));
+    // Brise-soleil on the lane face: satin fins every 1.8 m, bedded in the wall (clear of the door).
+    {
+      const fins = new PolyMesh(36);
+      const vf = off + (l.face * W) / 2;
+      const y0 = y - (i > 0 ? SEAT : 0);
+      const nf = Math.floor((L - 2) / 1.8);
+      for (let k = 0; k <= nf; k++) {
+        const u = -L / 2 + 1 + ((L - 2) * k) / Math.max(1, nf);
+        if (i === 0 && Math.abs(u) < 3.3) continue;
+        const o = P(f, u, vf + l.face * (0.3 - SEAT / 2), y0 + 0.3 + (h - 1.0) / 2);
+        fins.append(box({ o, u: f.u, v: [0, 1, 0], w: f.v }, 0.04, (h - 1.0) / 2, 0.3 + SEAT / 2, 0.01, FIELD_SLOT.satin));
+      }
+      parts.addSet(`${n}:fins${i}`, fins);
+    }
     y += h - 0.3 - (i > 0 ? SEAT : 0);
     // The next tier steps back from the lane side and the ends.
     L = Math.max(10, L - 4 - rand() * 6);
@@ -526,9 +634,34 @@ function lab(parts: Parts, l: Lot): void {
     // Back from the lane side by dW, from the far side by 0.6 (inside the parapet).
     off += (-l.face * (dW - 1.2)) / 2;
   }
+  const domed = (l.zone === 'instruments' || l.zone === 'science') && rand() < 0.55;
+  // Otherwise a plant room on the top tier's roof, louvred on its long sides.
+  if (!domed && y + 2.4 <= l.cap) {
+    const ph = 2.4;
+    const pl = Math.min(L * 0.35, 9);
+    const pw = Math.min(W * 0.4, 5);
+    const pu = L * 0.18;
+    parts.add(`${n}:plantroom`, box({ o: P(f, pu, off, y + ph / 2 - SEAT / 2), u: f.u, v: f.v, w: [0, 1, 0] }, pl / 2, pw / 2, ph / 2 + SEAT / 2, 0.06, ST));
+    const lv = new PolyMesh(36);
+    for (const s of [-1, 1]) lv.append(louvre(f, pu, off + (s * pw) / 2, y + ph / 2, v3.scale(f.v, s), pl - 1.2, ph - 0.8));
+    parts.addSet(`${n}:plantlouvres`, lv);
+    // Instrument labs carry a mast with its crossarms.
+    const mastTop = Math.min(y + 10, l.cap - 0.5);
+    if (l.zone === 'instruments' && mastTop - y > 4) {
+      const base = P(f, -L * 0.25, off, y - SEAT);
+      const mast = new PolyMesh(36);
+      mast.append(tube([{ p: base, r: 0.22 }, { p: v3.add(base, [0, mastTop - y, 0]), r: 0.1 }], 10, ST));
+      for (const t of [0.55, 0.8]) {
+        const c = v3.add(base, [0, (mastTop - y) * t, 0]);
+        mast.append(rod(v3.add(c, v3.scale(f.v, -1.2)), v3.add(c, v3.scale(f.v, 1.2)), 0.05, ST, 8));
+      }
+      parts.addSet(`${n}:mast`, mast);
+    }
+  }
   // Observatories and instrument halls carry a gold dome on the top tier.
-  if ((l.zone === 'instruments' || l.zone === 'science') && rand() < 0.55) {
-    const r = Math.min(W, L) * 0.32;
+  const rd = Math.min(W, L) * 0.32;
+  if (domed && y + 0.7 + rd <= l.cap) {
+    const r = rd;
     const b: Basis = { o: P(f, 0, off, y), u: f.u, v: f.v, w: [0, 1, 0] };
     const prof: Vec2[] = [[0, -SEAT], [r + 0.3, -SEAT], [r + 0.3, 0.6], [r, 0.7]];
     for (let k = 1; k <= 12; k++) {
@@ -593,6 +726,15 @@ export function lotAllow(l: Lot): [string, string][] {
     [`${p}tier`, `${p}tier`],
     [`${p}dome`, `${p}tier`],
     [`${p}door`, `${p}tier`],
+    [`${s}canopy`, `${p}body`],
+    [`${s}canopies`, `${p}body`],
+    [`${s}louvres`, `${p}body`],
+    [`${s}fins`, `${p}tier`],
+    [`${p}plantroom`, `${p}tier`],
+    [`${s}plantlouvres`, `${p}plantroom`],
+    [`${s}mast`, `${p}tier`],
+    [`${s}pilasters`, `${p}body`],
+    [`${s}rail`, `${p}tank`],
   ];
   return pairs;
 }

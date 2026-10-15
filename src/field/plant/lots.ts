@@ -40,6 +40,7 @@ import {
   type Zone,
 } from '../layout';
 import { rng } from '../kit/parts';
+import { inLane, precinctLanes, type Lane } from './lanes';
 
 export type PlantKind = 'hall' | 'hangar' | 'drum' | 'tanks' | 'spheres' | 'switchyard' | 'lab' | 'store' | 'chiller';
 
@@ -110,7 +111,7 @@ export function heroKeepouts(): { name: string; shape: Shape }[] {
   ];
 }
 
-function inShape(s: Shape, x: number, z: number, m: number): boolean {
+export function inShape(s: Shape, x: number, z: number, m: number): boolean {
   if (s.kind === 'rect') return x > s.x0 - m && x < s.x1 + m && z > s.z0 - m && z < s.z1 + m;
   if (s.kind === 'circle') return Math.hypot(x - s.x, z - s.z) < s.r + m;
   const dx = x - s.x;
@@ -190,8 +191,12 @@ function packPrecinct(p: Precinct, seed: number): Lot[] {
   const nz = Math.floor(p.z1 - PACK.edge) - z0;
   if (nx < 20 || nz < 20) return lots;
   // Blocked cells (keep-outs grown by the clearance) and taken cells (buildings grown by half a gap).
+  // The service lanes first (lanes.ts): the buildings line up along them.
+  const lanes = precinctLanes(p, (x, z) => plantBlocked(x, z, 0));
+  LANES.push(...lanes);
   const blocked = new Uint8Array(nx * nz);
   for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) blocked[j * nx + i] = plantBlocked(x0 + i + 0.5, z0 + j + 0.5, PACK.clear) ? 1 : 0;
+  for (const ln of lanes) for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) if (inLane(ln, x0 + i + 0.5, z0 + j + 0.5)) blocked[j * nx + i] = 1;
   const taken = new Uint8Array(nx * nz);
   const sat = new Int32Array((nx + 1) * (nz + 1));
   const rebuild = () => {
@@ -267,12 +272,20 @@ function packPrecinct(p: Precinct, seed: number): Lot[] {
   return lots;
 }
 
+const LANES: Lane[] = [];
+
 let cached: Lot[] | null = null;
 
 /** Every precinct's lots (deterministic). */
 export function plantLots(): Lot[] {
   cached ??= PRECINCTS.flatMap((p, i) => packPrecinct(p, 7001 + i * 131));
   return cached;
+}
+
+/** Every precinct's service lanes (planned with the lots). */
+export function plantLanes(): Lane[] {
+  plantLots();
+  return LANES;
 }
 
 /** Built fraction of each precinct's ground inside the compound (footprints over area). */
