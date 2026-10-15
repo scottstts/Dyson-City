@@ -99,6 +99,41 @@ export function sampleCurve(c: (u: number) => Vec3, u0: number, u1: number, ds: 
   return { u: outU, p: outU.map(c) };
 }
 
+/** Arc-length table of a curve on [u0, u1]: parameter ↔ arc length (u1 may be below u0). */
+export interface ArcTable {
+  length: number;
+  uAt(s: number): number;
+}
+
+export function arcTable(c: (u: number) => Vec3, u0: number, u1: number, n = 1024): ArcTable {
+  const us = new Float64Array(n + 1);
+  const ss = new Float64Array(n + 1);
+  let prev = c(u0);
+  us[0] = u0;
+  for (let i = 1; i <= n; i++) {
+    const u = u0 + ((u1 - u0) * i) / n;
+    const q = c(u);
+    ss[i] = ss[i - 1] + v3.dist(q, prev);
+    us[i] = u;
+    prev = q;
+  }
+  return {
+    length: ss[n],
+    uAt(s) {
+      // Binary search for the bracketing interval.
+      let lo = 0;
+      let hi = n;
+      while (hi - lo > 1) {
+        const mid = (lo + hi) >> 1;
+        if (ss[mid] < s) lo = mid;
+        else hi = mid;
+      }
+      const f = ss[hi] > ss[lo] ? (s - ss[lo]) / (ss[hi] - ss[lo]) : 0;
+      return us[lo] + (us[hi] - us[lo]) * Math.min(Math.max(f, 0), 1);
+    },
+  };
+}
+
 function moveToPlane(p: Vec3, dir: Vec3, plane: Plane): Vec3 {
   const denom = v3.dot(dir, plane.normal);
   if (Math.abs(denom) < 1e-9) return p;

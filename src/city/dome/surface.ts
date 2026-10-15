@@ -31,6 +31,23 @@ export function normalAt(p: Vec3): Vec3 {
   return v3.norm([p[0] / (a * a), dy / (c * c), p[2] / (a * a)]);
 }
 
+/**
+ * Where the line through q along direction d (unit) meets S (the upper head), nearest q: drapes a
+ * point of a planar layout onto the surface.
+ */
+export function dropToS(q: Vec3, d: Vec3): Vec3 {
+  let p = q;
+  for (let i = 0; i < 6; i++) {
+    const y = p[1] - Y0;
+    const F = (p[0] * p[0] + p[2] * p[2]) / (a * a) + (y * y) / (c * c) - 1;
+    const g: Vec3 = [(2 * p[0]) / (a * a), (2 * y) / (c * c), (2 * p[2]) / (a * a)];
+    const dF = v3.dot(g, d);
+    if (Math.abs(dF) < 1e-12) break;
+    p = v3.sub(p, v3.scale(d, F / dF));
+  }
+  return p;
+}
+
 /** A point at offset t outward from the surface point p. */
 export function offset(p: Vec3, t: number): Vec3 {
   return v3.add(p, v3.scale(normalAt(p), t));

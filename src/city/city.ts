@@ -6,7 +6,8 @@
 import { DataTexture, FloatType, Group, Mesh, NearestFilter, RedFormat, RepeatWrapping, RectAreaLightNode, type Material, type Object3D, type Texture, type Vector3 } from 'three/webgpu';
 import { RectAreaLightTexturesLib } from 'three/addons/lights/RectAreaLightTexturesLib.js';
 import { emitParts } from '../geometry/polyMesh';
-import { buildFrameParts, frameLayout, FRAME_SLOTS, SLOT } from './dome/frame';
+import { buildFrameParts, frameBolts, frameLayout, FRAME_SLOTS, SLOT } from './dome/frame';
+import { buildBoltMeshes } from './dome/bolts';
 import { bayTable, buildSill } from './dome/glazing';
 import { createDomeGlass, GLASS_TRANSMISSION, type GlassComposite } from './dome/glass';
 import { createBlackGlazeMaterial, createBronzeMaterial, createCeramicMaterial, domeEnvironment } from './materials/ceramic';
@@ -51,12 +52,14 @@ export function buildCity(): City {
   const frame = new Mesh(emitParts(frameParts.map((p) => p.mesh), { slots: FRAME_SLOTS }), materials);
   frame.name = 'Dome.frame';
   group.add(frame);
+  const bolts = frameBolts(layout);
+  for (const m of buildBoltMeshes(bolts, bronze, 'Dome.bolts')) group.add(m);
 
   const sill = new Mesh(emitParts([buildSill()], { slots: FRAME_SLOTS }), materials);
   sill.name = 'Dome.sill';
   group.add(sill);
 
-  console.info(`[Dyson] dome: ${frameParts.length} parts, ${((frame.geometry.index?.count ?? 0) / 3).toFixed(0)} tris, ${(performance.now() - t0).toFixed(0)} ms`);
+  console.info(`[Dyson] dome: ${frameParts.length} parts, ${bolts.length} bolts, ${((frame.geometry.index?.count ?? 0) / 3).toFixed(0)} tris, ${(performance.now() - t0).toFixed(0)} ms`);
 
   for (const m of group.children) {
     m.matrixAutoUpdate = false;

@@ -39,8 +39,12 @@ export const LAYER = {
    * stands in), easing to the gasket line by GASKET_Y.
    */
   memberT0Sill: 0.3,
-  /** Cast nodes reach slightly below the members (all nodes are well above GASKET_Y). */
+  /** Cast node bodies reach slightly below the members (all nodes are well above GASKET_Y). */
   nodeT0: 0.02,
+  /** Cast node arms: between the body and the members. */
+  armT0: 0.035,
+  /** Splice plates stand this far off the members' inner faces (members and arms run past them). */
+  plateLift: 0.015,
 } as const;
 
 /** Height above which the members bear on the glass at the gasket line. */
@@ -54,6 +58,62 @@ export const MEMBER = {
   eave: { halfWidth: 2.25, t1: 7.3 },
   post: { halfWidth: 2.0, t1: 5.3 },
   arch: { halfWidth: 3.0, t1: 8.3 },
+} as const;
+
+/**
+ * Fabricated girder sections (girder.ts): a glass-side bearing flange and an outer cap flange
+ * joined by a recessed web, with transverse web stiffeners at panel points.
+ */
+export const GIRDER = {
+  /** Fillet between web and flanges. */
+  fillet: 0.08,
+  /** Stiffener plate width along the member, and its face's inset from the flange edges. */
+  stiffenerWidth: 0.22,
+  stiffenerInset: 0.05,
+  /** How far stiffeners are seated into the web and flanges. */
+  seat: 0.02,
+  /** Stiffener spacing as a multiple of the member's depth (plate-girder proportion). */
+  panel: 1.0,
+} as const;
+
+/**
+ * Joints (nodes.ts, splice.ts): every member ends on a bolted end-plate splice, either to a cast
+ * node's arm or (at a field splice) to the next shop length of the same member.
+ */
+export const JOINT = {
+  /** Cast arm section beyond the member's envelope. */
+  armGrow: 0.08,
+  /** Clearance between neighbouring arms where they leave the hub's drum. */
+  armClear: 0.15,
+  /** Drum crown above the tallest arm: its top bevel starts above the arms. */
+  bodyProud: 0.6,
+  /** Least clear arm length between the drum and the splice. */
+  stub: 1.3,
+  /** Splice: plate margin round the member's envelope; half the plate pair's thickness. */
+  plateMargin: 0.4,
+  plateHalf: 0.2,
+  /** Least gap between the plates of neighbouring arms (they must read as two joints, not one). */
+  plateGap: 0.7,
+  /** Members and arms enter the plates by this much (declared seats). */
+  seat: 0.02,
+  /** Bolt pitch round a splice. */
+  boltPitch: 0.8,
+  /** Longest shop length between splices; longer runs get field splices. */
+  fieldSpan: 50,
+} as const;
+
+/** Feet: members stand on dressed plinths with a bolted base plate. */
+export const FOOT = {
+  /** Members end this far below the sill inside their plinths. */
+  y: 1.0,
+  /** Plinth margins round the member's base: radial (in the depth) and lateral (along the sill). */
+  radial: 0.08,
+  lateral: 0.6,
+  /** Plinth top height. */
+  top: 2.4,
+  /** Base plate wing beyond the member, and its thickness. */
+  plateWing: 0.45,
+  plateThickness: 0.14,
 } as const;
 
 /** Reveal between the frame's outer face and the bottom riser at the sill. */

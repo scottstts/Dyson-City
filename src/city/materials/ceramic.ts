@@ -1,6 +1,6 @@
 /**
  * The city's structural materials: honed warm-white ceramic composite for the Dome's frame (dressed
- * like stone) and satin bronze for its nodes, glazing bars and fittings.
+ * like stone; also its cast nodes) and satin bronze for its fittings (bolts, bearing caps, the sill).
  *
  * Ceramic. Geometry UVs are metres (u along a member, v around its section), so the members carry
  * real coursing: block joints every ~7.2 m along a member, offset by a fraction per member face so

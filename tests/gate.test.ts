@@ -98,12 +98,14 @@ describe('west gate geometry', () => {
 
 describe('west gate in the dome', () => {
   it('the gatehouse meets the frame and sill cleanly (rails land on the piers)', { timeout: 300_000 }, async () => {
-    const { buildFrameParts } = await import('../src/city/dome/frame');
+    const { buildFrameParts, frameLayout } = await import('../src/city/dome/frame');
+    const { domeClashAllow } = await import('./helpers/domeAllow');
+    const layout = frameLayout();
     const { buildSill } = await import('../src/city/dome/glazing');
     const near = (m: NamedPart) => m.mesh.verts.some((v) => v[0] < -420 && Math.abs(v[2]) < 80);
-    const frame = buildFrameParts().filter(near);
+    const frame = buildFrameParts(layout).filter(near);
     const parts = [...frame, { name: 'sill', mesh: buildSill() }, ...buildGatehouse()];
-    const report = assemblyAudit(parts, 7, [...ALLOW, ['node:', 'member:'], ['plinth:', 'member:'], ['binding:', 'member:'], ['member:rail:spinward', 'gatehouse:pier']]);
+    const report = assemblyAudit(parts, 7, [...ALLOW, ...domeClashAllow(layout), ['member:rail:spinward', 'gatehouse:pier']]);
     expect(report.zfight, JSON.stringify(report.zfight.slice(0, 8))).toEqual([]);
     expect(report.clash, JSON.stringify(report.clash.slice(0, 8))).toEqual([]);
   });

@@ -6,7 +6,7 @@
  */
 import { CollisionWorld } from '../player/collision';
 import { groundHeight } from '../ground/site';
-import { DOME, GATE_OPENING, LAYER, POST_T1_SILL, MEMBER, SILL } from './dome/spec';
+import { DOME, FOOT, GATE_OPENING, LAYER, POST_T1_SILL, MEMBER, SILL } from './dome/spec';
 import type { FrameLayout } from './dome/frame';
 import { GATE } from './gate/spec';
 import { DIAL, VENTS } from './gate/gatehouse';
@@ -47,7 +47,7 @@ export function buildWalk(layout: FrameLayout): CityWalk {
     const len = Math.hypot(out[0], out[1]);
     const ox = out[0] / len;
     const oz = out[1] / len;
-    const hw = MEMBER[f.kind].halfWidth + 0.08;
+    const hw = MEMBER[f.kind].halfWidth + FOOT.lateral;
     const r0 = DOME.a + LAYER.memberT0Sill - 0.07;
     const r1 = DOME.a + POST_T1_SILL;
     const at = (r: number, s: number): [number, number] => [ox * r - oz * s, oz * r + ox * s];
