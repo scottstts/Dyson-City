@@ -24,7 +24,7 @@ In order, because each feeds the next:
 
 ## Star (`star/`)
 
-**In the normal view the star is blinding**: its disc clips to white and its outline dissolves into halation (`render-pipeline.md`). Almost nothing below is visible there; it lights the world, shows in the far shell's mirrors, and is what the telescope, with its own exposure, will reveal. Only large, bright activity well clear of the glare (the hot cores of gas bursts) registers as warm shapes in the blaze.
+**In the normal view the star is blinding**: its disc clips to white and its outline dissolves into halation (`render-pipeline.md`). Almost nothing below is visible there; it lights the world, shows in the far shell's mirrors, and carries detail at true scale that the normal view cannot resolve. Only large, bright activity well clear of the glare (the hot cores of gas bursts) registers as warm shapes in the blaze.
 
 The white-light photosphere carries no pattern that is not physically there, at true scale:
 
@@ -154,7 +154,7 @@ The stars, the Milky Way and nebulae, in frame coordinates. Their brightness is 
 
 - **Where the city can look** (`catalogue.ts`). Through the open bands, from declination ~15° (low in the east and west) to the poles (low over the north and south horizons, mostly hidden behind the rails); through the wide openings, at |dec| ≈ 55°. The equator is always behind the band. So the galactic plane passes within 12° of both poles, and the showpieces sit at |dec| 20°–70°, spread in right ascension. Two emission nebulae are placed for the first-impression view, one in the gap either side of the band.
 - **The system sits in a star-forming complex.** Showpiece nebulae are 7°–20° across: emission regions (Hα red-pink, OIII teal cores, dust pillars with bright fronts), reflection nebulae (blue), blast remnants (filamentary arcs), dark clouds, one inclined spiral galaxy. The palette is that of deep-sky photographs. **Rejected:** strong domain warping (marbled, lava-lamp clouds) and a bounding outline that read as a pink disc.
-- **Diffuse sky: baked** (`field.ts`, `bake.ts`). A 1024² half-float cube rendered once at boot and sampled with an explicit footprint LOD. Per pixel, its noise would cost more than the rest of a space pixel and add register pressure to the structure trace. A texel is ~0.09°, finer than any structure seen through the air, but the future telescope will need a sharper bake.
+- **Diffuse sky: baked** (`field.ts`, `bake.ts`). A 1024² half-float cube rendered once at boot and sampled with an explicit footprint LOD. Per pixel, its noise would cost more than the rest of a space pixel and add register pressure to the structure trace. A texel is ~0.09°, finer than any structure seen through the air.
 - **Point stars: analytic** (`stars.ts`). Two lattices of equal-angle cube-face cells, at most one star per cell, denser near the galactic plane. Fluxes follow N(>F) ∝ F^−3/2 and are spread over a 0.7 px Gaussian, so a star's flux is conserved at any field of view. Colours come from blackbody temperature. The brightest just cross the bloom threshold.
 - **In mirrors.** A traced reflection that escapes through a gap shows the baked backdrop, without the point stars (the lobe jitter would smear them). It stays dark wherever the sky beyond is dark.
 - **Debug.** `?sky=space` shows the sky beyond the shell alone, in every direction.

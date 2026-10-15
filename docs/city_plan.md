@@ -1,0 +1,170 @@
+# The City Plan
+
+What fills the Dome. The world it sits in (the star, the sphere, the Veil, the platform, the Dome and the West Gate) is `docs/design.md`.
+
+## 1. The picture
+
+You come in out of the airlock's dim vault into full noon. On your left, behind a stone balustrade and a fringe of old trees, stands a house: a tall, many-gabled Victorian house with a turret, bay windows and a deep porch, a striped lawn running down to a gravel drive, smoke-grey slate roofs, curtains in the windows. It looks lived in. Someone could step out onto the porch with a cup of tea.
+
+Beyond the garden wall there is nothing green at all. A wide, dark road runs straight east across a pale stone plain into a field of gold machines: a ring the size of a cathedral hanging in a cradle of cables, a gimballed sphere turning so slowly you have to look twice, a gantry three hundred metres long with a glowing carriage creeping along it, a cluster of gold-foiled spheres, a mast. They are polished, foiled and precise, and they reflect each other, the pale ground, the sky, and the little house, distorted, over and over. Above all of it the glass of the Dome, the frame turning slowly past, the blinding star and the sphere climbing out of the haze on every side. Now and then a craft glides in through the far end of the Dome, along the axis, and settles at the centre.
+
+**The feeling we are after is a dream.** Every surface tells your eyes this is real. Your reasoning tells you it can't be. The house is calm, cosy and human; the field is cold, lean and immense; neither one is fantasy. The wonder is in putting them together under that sky.
+
+### What makes it work
+
+- **Two truths, side by side.** The house must be as real as a house can be: specific, crafted, worn by use. The machines must be as real as machines can be: every part bolted, plumbed, braced and serviced. If either side slips into the generic or the decorative, the dream turns into a theme park.
+- **Contrast, not mixing.** Green, water, wood, softness and warm lamplight exist only inside the estate's wall. Outside it there is no vegetation and no water: stone, gold, ceramic, steel. The wall is a sharp line, not a gradient.
+- **The physics of this place does the surreal work.** Eternal noon from a 90° star overhead, soft shadowless light, gold mirrors that throw the world back at itself. Nothing is invented to look strange: it is strange because the place is.
+- **Emptiness.** No people. The house is waiting for someone; the machines run themselves; the craft come and go on their own.
+
+### Rejected
+
+- **A generic city.** The first build on `main` filled the Dome with earthly programme (markets, a library, streets of buildings). It was plain, had no identity, and could be anywhere.
+- **A "Solar Neoclassical" garden city** of seven refined places, avenues, canals and stoas (the previous `design.md` §7). Same problem at a higher finish: it was a nicer earthly city, not a wonder.
+
+## 2. Light: what the place does to everything in it
+
+These facts come from the world (`docs/world.md`, `docs/shadows.md`) and govern every design choice here.
+
+- **Always noon.** The star is fixed overhead and fills the 45° cone about the zenith. There is no golden hour, no raking light, no long shadows, and no time of day.
+- **A 90° source makes almost no cast shadows.** Shadows outdoors are a soft darkening at the foot of things, never a shape. Form has to be carried by **projections that hold shade under them**: cornices, eaves, porch roofs, window hoods, bay undersides, machine overhangs, pipe racks. Design both the house and the machines for top light, as noon architecture is designed.
+- **Vertical faces get under a fifth of the light horizontal ones do.** Roofs and tops burn near white; walls model in half-tone; undersides are dark. Colour reads on walls, not roofs.
+- **No rainbows, no glories.** A source that large smears them out. Mist reads as soft white.
+- **Gold is a mirror of the world.** An up-facing polished gold surface mirrors the star and is as bright as the star. A vertical or curved gold surface mirrors the horizon: the pale platform, the other machines, the house, the far structure's lower sky. The field reads mostly as warm reflections of everything else.
+  - So **up-facing gold is satin or foil**, never mirror: the field must not become a field of second suns. Polished gold goes on vertical and curved faces, where it reflects the world.
+- **The pale limestone pad bounces light** into every underside, the gold's lower halves and the house's porch.
+
+## 3. Site plan
+
+The Dome is ~1 km across and 251 m high at the crown (`docs/design.md` §7.2). The survey axes cross at the datum in the centre: the **Spinward axis** east–west, the **Meridian axis** north–south.
+
+![Site plan and west–east section](city_plan_site.png)
+
+The site plan ([`city_plan_site.png`](city_plan_site.png)) is drawn to scale, north up, by `tools/site-plan/sitePlan.mjs` (SVG rasterised in headless Chrome); the Dome, gate and frame come from their specs, and the tool checks every structure's clearance to the glass at its own plan radius. Regenerate it with `node tools/site-plan/sitePlan.mjs` whenever the layout here changes; the plan and this document must agree. The numbered red markers are the §8 views.
+
+| Zone | Where | What it is |
+|---|---|---|
+| **Gate Court** | Inside the West Gate, on the axis | A plain paved forecourt where the road begins; the estate's gateway opens off it to the north |
+| **The Estate** | North-west, between the Gate Court and the drum | The house and its garden on a raised terrace, about 170 × 130 m, its back edge following the drum 30 m inside the glass. The house faces inward to the field; its back garden runs to the Dome's glass |
+| **The Field** | Everywhere else | The machine compound on the bare limestone pad |
+| **Pad and Halo** | The centre, on the datum | The craft landing pad, ringed by the Halo |
+| **Craft corridor** | The Spinward axis east of the Halo | Kept clear of anything over ~20 m: craft fly it between the East Lock and the pad |
+| **East Lock** | The East Collar | The craft airlock through the Dome |
+
+### Rules of the plan
+
+- **Height follows the Dome.** The tallest structures stand near the centre (up to ~150 m, where the glass is ~240 m up) and step down outward. Everything keeps **≥ 30 m clear of the glass**. The Dome still reads as the enclosing vault; nothing presses against it.
+- **Few heroes, one network.** Five hero structures, each one of a kind, all tied together by the compound's infrastructure (§5.3), radiating from the Halo. A plant is a network, not a sculpture park.
+- **Open ground between.** The pad's pale limestone stays visible as the field's floor, with its border courses and bronze survey inlays. Machines stand on their own plinths and gratings; services run in covered trenches cut into the pad. Wide empty stretches are part of the design: the distances are what make the machines read as huge.
+- **Sightlines are designed.** Each hero is placed for how it reads from the Gate Court, the house's porch, the turret room and the road (§8).
+
+## 4. The house and the estate
+
+The emotional centre: calm, comfort and coziness inside a place of awe. Built in Blender as an exported asset (§9), inside and out, with the most care of anything in the project. Its design is set and refined during that build; what follows is the intent it is built to.
+
+### The house
+
+- **Style:** a storybook Victorian: Queen Anne / Second Empire massing, a corner turret with a tall conical roof, stacked bay windows, a mansard with dormers, a deep wraparound porch, bracketed cornices, tall chimneys. Proportions are pushed just slightly: the turret a little too tall, roofs a little too steep. It must read as a real house first and a fairy tale second.
+- **Size:** three storeys plus the turret, ~25 m to the eaves and 35–40 m to the turret's finial.
+- **Orientation:** the front faces **inward, toward the field and the centre**. The porch looks out over the lawn and the garden wall onto the gold machines. The back faces the Dome's drum.
+- **Colour and material** are the one place in the Dome with depth of colour: painted wood and stone, slate, copper, brick, glass with curtains behind it. The surroundings are already pale (limestone, white ceramic frame, washed-out gold), so the house must not be white. The palette is decided in the Blender build.
+- **Built for top light.** Deep cornices, porch roofs, window hoods and bay undersides, so the overhead star draws the façade in bands of light and shade.
+- **Lived in.** Worn thresholds, a boot scraper, a watering can, a bicycle against the rail, a window left ajar. Never staged-new.
+- **The story behind it, never told:** someone brought their home here from Earth. The keeper of the compound lives in it.
+
+### The interior
+
+Every room walkable and finished. Indicatively:
+
+- **Ground floor:** entry hall and main stair, parlour with fireplace, dining room, kitchen and pantry.
+- **First floor:** the keeper's study (charts, instruments, books), bedrooms, a bathroom.
+- **Top floor and attic:** smaller rooms under the roof.
+- **The turret room** at the top: a window seat ringed by windows. It is the payoff of the climb: the whole field laid out below, the Halo, the gold, a craft on the pad.
+
+**Light indoors:** daylight through tall windows (bright rooms toward the field, where the gold throws warm reflected light in), lamplight in the deep rooms, and dim corners. The star never moves, so all of it is static and can be baked (§9). The eye adapts on entering, but a dim room stays dim and its windows blow out (`docs/render-pipeline.md`).
+
+### The estate
+
+- **The garden is one raised bed.** The estate is a terrace of real soil, 1.2–1.8 m above the pad, held by a dressed stone retaining wall with a balustrade on its top, its gateway and steps toward the Gate Court. That makes deep soil for trees plausible, keeps every plant in a bed (nothing grows out of paving), and draws the sharp line between green and field.
+- **Inside the wall:** a gravel drive from the gateway to the porch, a mown and striped lawn, mature specimen trees, a small orchard, a kitchen garden, a lily pond (the Dome's air is 1 bar and humid), a glasshouse, clipped hedges, flower borders against the house, climbers on the walls.
+- **The carriage house** beside the drive is where the car lives.
+- **Framed openings.** The perimeter is hedge and trees with gaps cut into them (claires-voies), so from the garden the machines appear as framed pictures, not a wall of gold.
+- **The back garden ends at the glass.** A path, a bench, then the Dome's drum glass, and beyond it the bare metal deck to the horizon with the sphere rising out of the haze: the cosiest place in the game looking out at the end of the world.
+
+## 5. The Field
+
+A science, technology and industry compound: the instruments and plants that a civilisation able to build a Dyson sphere would run at its one city. Only their exteriors exist; none can be entered. They are **plausibly invented**: not copies of real machines, but each with a believable purpose and built the way such a thing would be built.
+
+### 5.1 How it looks
+
+- **Gold leads, never alone.** The gold has a physical reason: it reflects infrared, the standard thermal control for instruments, and the band's flux is 23,000 suns beyond the Veil.
+  - **Polished gold:** vertical and curved skins, where they mirror the world.
+  - **Satin and brushed gold:** up-facing and broad surfaces.
+  - **Gold foil insulation:** crinkled, quilted and stitched over vessels and pipe runs, as on spacecraft.
+  - **White ceramic** for primary structure (frames, pylons, plinths) and **glazed black** at every joint and splice, the Dome's own language, so the field and the Dome read as one hand.
+  - **Satin bronze** fittings, **graphite steel** mechanisms, chrome hydraulics.
+- **Detail at every scale.** A big form with little on it reads as a model (`docs/scale.md`). Every hero carries four levels: its silhouette; its panels and major assemblies; flanges, pipes, ladders, cable trays and hatches; bolts, stitching and seams. From any distance there is more than can be counted.
+- **No countable rhythm.** Repeated parts vary in size and spacing as real plants grow; a strict regular array reads human-scale.
+- **Motion is slow and large.** A few things move: a gimbal turning, a carriage creeping, a dish tracking, a vent breathing vapour. Slow motion on a huge body is what makes it read as huge.
+- **Clean, not grimy.** Maintained, precise, cold. Not cyberpunk, not rust.
+
+### 5.2 The heroes
+
+| Structure | Where | Size | What it is | What you see |
+|---|---|---|---|---|
+| **The Gyre** | North-east | Outer ring ~90 m across, centre ~55 m up | The compound's inertial reference: a gyroscope that holds its orientation to the stars, against which the band's spin is measured and steered | Three nested gold gimbal rings round a polished gold rotor sphere, carried on bearings in a white ceramic yoke. The band turns under it, so the rotor's axis rolls slowly about the north–south line, once every two hours (3°/min, the sky's own rate): the world's spin, visible in one object |
+| **The Resonator** | South-west, across the road from the estate | Ring ~100 m across, frame ~130 m tall | Listens to the star: a cryogenic resonant ring that the star's pressure oscillations, carried through the sphere's structure, set ringing | A flawless polished gold torus hanging free inside a tall ceramic portal frame, suspended on long cables from isolation stages so it touches nothing. Cryostat pods and sensor rings at its rim. Utterly still. The best mirror in the field: it frames the sky and reflects the house |
+| **The Loom** | South-east, parallel to the axis | ~320 m long, gantry ~40 m tall, spool ~45 m across | The materials works: draws a continuous ribbon of the sphere's refractory alloy from a travelling furnace head and winds it on a spool | Long ceramic gantry rails on legs; a gold-clad furnace carriage, glowing at its draw-slit, creeping along the rails; at the east end a great gold-flanged spool slowly turning; cable chains, coolant lines, crane trolleys |
+| **The Cold Hold** | North-west of the Halo, between the estate and the pad | Spheres 8–34 m across, about 30 of them | The craft's propellant and the compound's cryogen store | A cluster of gold-foiled spherical tanks of power-law sizes on ceramic legs, linked by foil-wrapped pipe runs, valve stations and walkways. Relief vents breathe white vapour now and then. The nearest gold to the house: the house's reflection lives in its spheres |
+| **The Mast** | Beside the Halo on the craft corridor's north side | ~150 m tall | Approach and landing control for craft | A slender tapering gold mast on a three-legged ceramic base, ringed by platforms, with phased-array panels and dish heads that track each craft in and out |
+
+### 5.3 The network
+
+- **The Halo:** a raised ring main of gold-clad conduits round the pad (~110 m radius), on ceramic portal piers ~14 m high. Power, cryogen and data branch from it to every hero. Roads pass under it.
+- **Pipe racks** along the roads, carrying foil-wrapped lines between the Halo and the heroes.
+- **Covered trenches** in the pad for cables and services, with bronze-edged cover plates.
+- **Plant:** substations, transformer yards, valve houses, pump sets.
+- **The cold plant and radiator banks** along the south: tall, thin gold radiator fins in ranks of varied height that reject the compound's heat.
+
+## 6. Craft
+
+- **The East Lock** is the craft airlock, in the East Collar opposite the West Gate on the Spinward axis. It is the West Gate's construction at a larger size: sector gates, a chamber and a gatehouse through the Dome's skin within the collar's arch (96 m wide, crown at 90 m). Sized for craft up to ~50 m. Part of the Dome, built with step 3.
+- **The pad** sits on the datum at the centre: a ~90 m disc of dark heat-resistant ceramic tiles, its markings in bronze inlay, the bronze datum disc kept at its centre, set into the limestone.
+- **Behaviour:** craft arrive and leave on their own, never boarded. An arrival comes in level along the band under the Veil (visible from outside, crossing the deck toward the Dome), waits as the East Lock cycles, then flies the craft corridor along the axis at a few tens of metres up, slows over the Halo and settles on the pad. It rests a while, then leaves the same way.
+- The craft themselves are separate assets, built in step 4.
+
+## 7. Roads and the car
+
+- **Few roads, all wide** (~20 m): the **Axis Road** from the Gate Court east to the Halo, a **ring road** under the Halo, and **spurs** from the ring to each hero and to the estate's gateway. The axis east of the Halo is the craft corridor, not a road.
+- **Surface:** dark polished basalt slabs set flush into the limestone, edged with bronze inlay. No painted markings.
+- **The car** lives in the estate's carriage house and is driven by the player round the field. It stays inside the Dome. Built separately in step 4.
+
+## 8. Moments the plan is designed for
+
+These are the acceptance views: when built, each must read as described.
+
+1. **The inner gate opens.** Overexposed for a moment, then: the road running straight into the gold field, the Halo and the Mast at its end, the house and its trees close on the left. The two halves of the dream in one frame.
+2. **The porch.** Tea-cup calm: lawn, borders, the balustrade, and over it the field. The Cold Hold's spheres hold small, curved copies of the house.
+3. **The turret room.** The whole compound below, the Dome overhead, a craft on the pad.
+4. **The back garden.** A bench, the glass, and the endless bare deck outside.
+5. **Walking the field.** The Resonator hanging motionless above you, the house reflected in its torus. The Gyre turning so slowly you doubt it.
+6. **An arrival.** A craft through the East Lock, along the axis, reflected in everything gold, settling on the pad.
+7. **Driving.** Under the Halo, past the Loom's carriage, back up the drive to the house.
+
+**Sound** follows the same split (`docs/audio.md`): inside the estate, birdless garden quiet, a clock, the creak of floorboards, a kettle; in the field, deep cryogenic hum, pumps, the Loom's furnace, the Hold's vents; the craft's arrival heard through the whole Dome. At the garden wall the one fades into the other.
+
+## 9. Build order
+
+1. **The house, inside and out** (Blender).
+   - First, a grey-box of the whole Dome (estate, house volume, heroes, Halo, roads) rendered from the §8 views, to fix the house's footprint, height and views before detailed modelling.
+   - **Bake the interior light in Blender.** The star never moves, so the lighting is static: light the bake with an HDR environment exported from the game at the house's position (a `tools/` export), and bake with Cycles into lightmaps. The interior then shares the game's one light source.
+   - **Export in parts:** the exterior shell and each floor's interior as separate glTF files, in metres with an agreed origin, KTX2 textures and meshopt compression, so rooms load and cull by portal.
+   - **Name what the engine needs:** collision meshes, door leaves with their hinge pivots, lamp empties, sound-emitter empties.
+2. **The estate around the imported house.** Procedural: terrace wall and balustrade, drive, lawn, beds, trees and plants (`threejs-procedural-vegetation`), pond, glasshouse, carriage house. Engine work this step needs:
+   - **Multi-storey walking.** Today the walkable world is one surface height plus plan walls (`docs/player.md`); stairs and upper floors need per-floor floors and walls.
+   - **Window glass** for the house. The Dome's glass is an analytic post pass for its ellipsoid only.
+   - **Interior light:** the baked lightmaps, plus a local environment capture for interior reflections.
+3. **The Field.** The Halo and pad, the five heroes, the network, roads, and the East Lock in the Dome.
+4. **Vehicles and other moving things.** The car, the craft and their behaviour, separate assets.
+
+Each part gets its own system doc in `docs/` as it is built; this plan stays the overall intent.

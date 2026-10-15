@@ -23,8 +23,8 @@ Outdoors (in the city under the Dome, and on the deck) a building does not cast 
   | Star light blocked | 50 % | 42 % | 34 % | 27 % | 15 % | 6 % | 0 |
 
 - **Only the star's share is lost.** Bounce from the pale stone and the sky still arrive, so even at the base the ground loses under a stop. The visible part is a soft band within about a third of the building's height; a 12 m pavilion darkens a strip ~4 m wide, fading to nothing.
-- **Small or thin occluders** (people, columns, posts, benches, cypresses, the platform's steps) block almost nothing: soft contact darkening within about a metre, which contact AO already gives.
-- **Broad, low roofs are the exception** and form real shade: stoas, porticoes, deep doorways, broad tree canopies (stone pines). Even these stay fairly bright, filled by bounce.
+- **Small or thin occluders** (posts, pipes, legs, thin trees, the platform's steps) block almost nothing: soft contact darkening within about a metre, which contact AO already gives.
+- **Broad, low roofs are the exception** and form real shade: the house's porch, deep doorways, broad tree canopies, the Halo and the gantries over the Field. Even these stay fairly bright, filled by bounce.
 - **The Dome dims everything evenly.** Its members are hundreds of metres up, so their penumbrae are far wider than they are: together with the glass they take ~12 % uniformly and never cast bars. Its glass counts as transmittance, not as an occluder.
 - **Rejected:** shadow maps of the star, and any outdoor shadow with an outline. A directional map models one direction and draws crisp shapes this star cannot produce.
 
@@ -32,22 +32,19 @@ Outdoors (in the city under the Dome, and on the deck) a building does not cast 
 
 The star never moves (the band's spin does not move it, `docs/sky.md`) and the city is static, so outdoor star visibility is computed once at boot and costs nothing per frame.
 
-- **Occluder height field.** The static city rasterised top-down into a plan map at ~0.25–0.5 m texels: per texel, the bottom and top of whatever stands there. Two values, not one, so roofs on columns (stoas, porticoes, canopies) shade the ground beneath them instead of filling it in.
+- **Occluder height field.** The static city rasterised top-down into a plan map at ~0.25–0.5 m texels: per texel, the bottom and top of whatever stands there. Two values, not one, so anything raised on legs (porch roofs, the Halo, gantries, tanks on legs) shades the ground beneath it instead of filling it in.
 - **Star visibility.** A worker integrates, for each texel, the share of the 45° cap whose rays clear the height field, marching a few directions over the cap. The result is a one-channel ground map. Building surfaces take the same visibility per vertex, from the same field at their own height.
 - **Runtime:** one texture read in outdoor materials, multiplying the star's share of the image-based light only, never the air's or the bounce's. Tiles exist only where something stands; open ground is fully visible and stores nothing.
 - **Fine contact** stays with GTAO.
 
 ## Indoors: ordinary shadows
 
-Inside, light arrives through openings and from lamps, so shadows look as they do in any lit room: shaped by windows, oculi, skylights and lamps, with the softness each source gives. Exceptions are designed per place (`docs/design.md` §7.8):
-
-- rooms behind large glazing behave like outdoors, with dim, soft shadows;
-- deep light wells (Thermae) and the Archive's oculus act as narrow sources: sharp-edged pools and visible beams.
+Inside, light arrives through openings and from lamps, so shadows look as they do in any lit room: shaped by windows, oculi, skylights and lamps, with the softness each source gives. Rooms behind large glazing behave like outdoors, with dim, soft shadows. The house interior is baked in Blender against the game's own light (`docs/city_plan.md` §9).
 
 How:
 
 - **Static interiors are baked**: star visibility through openings (exact soft shadows), sky, bounce and lamps.
-- **Moving parts**: the doors, the gate leaves, the Crown Car, the Engine House's rotors, the Sphere Model.
+- **Moving parts**: the doors, the gate leaves, the Field's moving machines, the car and the craft.
   - **In daylight:** horizon-based visibility from GTAO. Cap visibility in a slice is the part of the 45° cap above that slice's horizon: exact and nearly free. It also corrects today's uniform-hemisphere AO, which darkens for blocked low-sky directions that carry little of the star's light.
   - **Under lamps:** real-time shadow maps, but only for the few lamps that light a moving part.
 

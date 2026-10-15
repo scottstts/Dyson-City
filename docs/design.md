@@ -2,16 +2,16 @@
 
 ## 1. Pitch
 
-A quiet first-person walk through **Dyson**, the only city on the inner surface of a Dyson sphere. Dyson is small: a garden city a kilometre across under its own glass dome, with seven refined places. Everywhere else the sphere is bare, undeveloped megastructure.
+A quiet first-person walk through **Dyson**, the only city on the inner surface of a Dyson sphere. Dyson is small: a kilometre across under its own glass dome. Everywhere else the sphere is bare, undeveloped megastructure. What the city holds is `docs/city_plan.md`.
 
-You arrive outside, on the bare deck of the band, facing the Dome. Overhead, a real star fills the sky, a burning surface 90° across. On every side, the inner face of the sphere rises out of the horizon haze, climbs the sky as a vast pieced-together structure, and disappears into the star's glare. A gate opens, and inside is a normal, human-scale place set inside something incomprehensibly large. There are no people, no objectives and no time of day.
+You arrive outside, on the bare deck of the band, facing the Dome. Overhead, a real star fills the sky, a burning surface 90° across. On every side, the inner face of the sphere rises out of the horizon haze, climbs the sky as a vast pieced-together structure, and disappears into the star's glare. A gate opens, and inside is a place that looks entirely real and cannot be, set inside something incomprehensibly large. There are no people, no objectives and no time of day.
 
 Pillars:
 
 1. **Photoreal, not illustrated.** Every frame should read as a photograph taken by someone standing there: physically motivated light, real atmosphere, a camera-like exposure. It must not read as a stylised picture, a painted ball or a demo scene.
 2. **Astronomical scale, felt correctly.** Everything within reach is human-scale and finely detailed. Everything above the horizon is hundreds of thousands of kilometres away and must look it.
 3. **Intimate ground, incomprehensible sky.** The Dome sits between them: built at human hands' scale, large enough to frame the sky.
-4. **Quality over quantity.** A few places, each crafted inside and out.
+4. **Quality over quantity.** A few things, each crafted with great care.
 5. **Physics serves the picture.** Use physics to decide what the image looks like. Bend it freely where it would hurt the look or playability.
 
 ## 2. World frame
@@ -41,7 +41,7 @@ The facts below decide most of the image. They are the main corrections to the f
 - **The ground does not visibly curve upward near the city.** From eye height, the deck crosses eye level about 60 km away, and the whole deck beyond ~5 km compresses into a pixel-thin strip at the horizon. The shell only rises measurably at hundreds of thousands of km. **No surface ever rises steeply near the city.** The concept image is wrong about this: its walls climb right behind the buildings. Its *feel* is right: warm blazing star, vast structure climbing into glare.
 - **Anything visible on the far shell is continent-sized.** A readable structural member is thousands to tens of thousands of km wide. The habitable city is invisible from anywhere else on the sphere.
 - **Everything outside is lit by the same star.** The far shell receives exactly the light the ground at your feet receives. Brightness differences up there come from material (dark collectors versus bright deck), geometry (faces turned toward or away from the star), occlusion, atmosphere and glare. They never come from "distance darkness".
-- **Space is lifted to be seen.** A real daylight exposure would show space through the gaps as black. Here the stars, the Milky Way and large nebulae are far brighter than physical, so the sky outside reads through the air and the openings, and its motion shows the band turning (`docs/sky.md`). The telescope still reveals much more.
+- **Space is lifted to be seen.** A real daylight exposure would show space through the gaps as black. Here the stars, the Milky Way and large nebulae are far brighter than physical, so the sky outside reads through the air and the openings, and its motion shows the band turning (`docs/sky.md`).
 - **Scale must come from content.** Seeing a sphere from a point on it is a stereographic projection, so its silhouettes cannot tell 200 m from 1,000,000 km. What tells it:
   - the local air, which veils the lowest structure;
   - detail with no countable elements at any scale (a regular rhythm a few degrees apart reads as human-scale architecture);
@@ -70,7 +70,7 @@ The shell is a fictional refractory alloy: dark, warm metal that mirrors the enc
 
 The star is blinding. Even through the Veil, looking toward it you see brightness swallowing everything: pure white-hot light with no silhouette you can point to and almost no surface texture, its glare engulfing the structure beside it. The world further from it emerges from the blaze.
 
-- **What it is underneath.** A real, caged, more-active-than-the-Sun star at true scale: granulation (~620,000 granules on the visible disc), faculae, spot groups, flares; a corona, a burning chromospheric fringe, loop arcades rooted all over its surface, prominences, and gas bursts erupting off the limb. In the normal view almost all of it is lost in the blaze; the telescope, with its own exposure, reveals it.
+- **What it is underneath.** A real, caged, more-active-than-the-Sun star at true scale: granulation (~620,000 granules on the visible disc), faculae, spot groups, flares; a corona, a burning chromospheric fringe, loop arcades rooted all over its surface, prominences, and gas bursts erupting off the limb. In the normal view almost all of it is lost in the blaze; it shows in dev renders at a narrow field and low exposure.
 - **Colour.** Temperature (Planck) and per-channel limb darkening; a 5,772 K body under a daylight camera reads hot cream-white. The atmosphere's plasma runs orange to gold to white-gold.
 - **Motion.** Real time, never time-lapsed: the surface drifts ~0.8°/min with the shell's spin; the energetic star's flows run at hundreds to a few thousand km/s. The gas bursts alone are time-lapsed, so they visibly billow. Flares echo in the far shell's mirrors seconds later.
 
@@ -81,18 +81,17 @@ The star is blinding. Even through the Veil, looking toward it you see brightnes
   - the Spinward axis runs east–west;
   - the Meridian axis runs north–south.
   A bronze datum disc marks the centre. Darker border courses run every 24 m, half a bay off the axes.
-- The city phase builds everything in §7 on this platform. The deck outside stays bare.
+- The city phase builds on this platform (`docs/city_plan.md`). The deck outside stays bare.
 
-## 7. Dyson — the city
+## 7. The Dome and the West Gate
 
-### 7.1 Concept
+Built in the world phase. What fills the Dome is `docs/city_plan.md`.
 
-- **The Dome holds the city's air.** The band's air is a working atmosphere: 0.55 bar, dry, oxygen-enriched and dusty at deck level, breathable for a walk but not for living. The city keeps Earth-normal air under a pressurised glass dome: **1 bar**, still, mild and humid enough for gardens and open water, and free of the deck's dust. That is why the city is pristine, why it is enclosed at all, and why its only way in is an airlock. The Engine House makes that air from the band's, through the South Collar. The Veil stays as it is: it shields the whole band; the Dome only encloses the city.
+### 7.1 Why a Dome
+
+- **The Dome holds the city's air.** The band's air is a working atmosphere: 0.55 bar, dry, oxygen-enriched and dusty at deck level, breathable for a walk but not for living. The city keeps Earth-normal air under a pressurised glass dome: **1 bar**, still, mild and humid enough for gardens and open water, and free of the deck's dust. That is why the city is pristine, why it is enclosed at all, and why its ways in are airlocks. The Veil stays as it is: it shields the whole band; the Dome only encloses the city.
 - **The Dome is glass first.** From inside it must nearly vanish: the whole sky, the star and the far structure seen through it, with the frame as a sparse, clean drawing across it.
-- **One city, one hand.** The Dome speaks the megastructure's language (twin-rail bands, ring collars: the logo's grammar) at city scale. Inside, Solar Neoclassical (§9) at human scale.
-- **A cross of axes, a garden plan.** The survey axes become the plan: the **Spinward axis** is walked (gate to Archive), the **Meridian axis** is water (Engine House to North Station). They cross at the datum under the Dome's crown. The four quadrants between them hold gardens, water and the places.
-- **The Dome dominates.** Nothing inside rises above ~40 m. Buildings stay human-scale; the Dome is the only large made thing, and beyond it, the sky.
-- **Tone:** pristine, maintained, empty. Serene, not eerie.
+- **The megastructure's language at city scale.** The Dome speaks the logo's grammar: twin-rail bands and ring collars.
 
 ### 7.2 The Dome
 
@@ -112,16 +111,16 @@ The star is blinding. Even through the Veil, looking toward it you see brightnes
 | **Coffer ribs** | Ribs parallel to the axes every 96 m (four pad bays), in vertical planes, forming a two-way grid of coffers in each quadrant. Ribs end on the band rails, with a cross-tie spanning the band at each junction (the logo's posts across the open bands). Nothing crosses a band |
 | **Eave Ring** | The hoop at 74 m (r = 480 m). The ribs at 288 m and 384 m meet it at shared nodes (288² + 384² = 480²), so the edge coffers close as clean triangles and quads with an arc side, never clipped slivers |
 | **Drum** | Below the eave, 24 posts carry the rib nodes down to the sill, glazed between |
-| **Collars** | A 96 m round arch at each cardinal point standing in the drum: a semicircle (radius 48 m, crown at 90 m) on two vertical legs down to the sill, the ring cut open at the bottom (as the logo's hub collars are cut open over the band). The band passes through it; the Eave Ring frames into its flanks. West: the Gate. North: the Crown Car. East: the Archive's window. South: the Engine House's air intakes |
-| **Crown** | The crossing of the two bands at 251 m: a lantern hung beneath it, a telescope turret above it, and a ring balcony outside (§7.6) |
+| **Collars** | A 96 m round arch at each cardinal point standing in the drum: a semicircle (radius 48 m, crown at 90 m) on two vertical legs down to the sill, the ring cut open at the bottom (as the logo's hub collars are cut open over the band). The band passes through it; the Eave Ring frames into its flanks. West: the Gate. East: the craft's East Lock (`docs/city_plan.md` §6). North and South: glazed |
+| **Crown** | The crossing of the two bands at 251 m |
 
 - **Mostly transparent.** About **90 % of the Dome is clear glass**; from anywhere in the city the frame covers roughly a tenth of the sky. Members are sized to read as solid but no larger: band rails 5 m wide × 8 m deep, ribs 3.5 × 5 m, collars 6 × 8 m, the Eave Ring 4.5 × 7 m, drum posts 4 m wide.
 - **Glazing: no bars.** Each coffer (and each drum bay between verticals) is **one monolithic curved pane** of transparent ceramic, pressed against the frame: the glass itself carries no pattern. Anti-reflection coated (faint reflections from inside) and **tinted neutral grey like sunglasses, ~50 % transmission**: from outside the Dome reads dark (two passes, ~25 %); from inside the city is a stop darker, the star still clips white, and its glare and bloom are halved. Each pane is set a milliradian or two off its neighbours, so reflections seen from outside break pane by pane (as the deck's plates do).
   - *Rejected:* a 12 m grid of glazing bars. From inside it read as graph paper over the whole sky.
 - **Materials.** The frame is honed warm-white ceramic composite (albedo ~0.6) dressed like stone: arrises and block joints. The cast nodes are the same ceramic. **Glazed black ceramic** gives the contrast, and it marks construction: the bolted splice plates at every joint, the base plates and the black linings in each girder's web fillets. Fittings are satin bronze: bolts, the nodes' bearing caps and the sill. In the blaze every face toward the star washes out near white, as intended; the frame reads by its modelling, edges and silhouette, not its colour. The glass is spectrally neutral, never tinted: a tint would split the light into a warm inside and a white outside, for the same reason the amber Veil was rejected (`docs/world.md`).
 - **From outside.** On the plain it is the only made thing. Tops facing the star burn near white; vertical faces receive under a fifth of the light a horizontal one does (the star is overhead), so the drum models strongly; undersides see only the dark deck. The shoulders mirror the star, broken pane by pane: the Dome's brightest feature.
-- **From inside.** The entire sky through clear glass: the star, the far structure climbing out of the haze on every side, the open bands and the stars. The frame is a sparse drawing over it: bars near the zenith dissolve into the glare, those lower down stand out lit by bounce from the pale city. The frame and the stars turn slowly past the fixed ribs: the coffers are a reference grid that makes the band's spin legible.
-- **Light inside.** The frame and glass take ~10–15 % of the star's light, about a quarter stop. Bounce from pale stone makes the city brighter in its shadows than the dark deck outside.
+- **From inside.** The entire sky through clear glass: the star, the far structure climbing out of the haze on every side, the open bands and the stars. The frame is a sparse drawing over it: bars near the zenith dissolve into the glare, those lower down stand out lit by bounce from the pale platform. The frame and the stars turn slowly past the fixed ribs: the coffers are a reference grid that makes the band's spin legible.
+- **Light inside.** The frame and glass take ~10–15 % of the star's light, about a quarter stop. Bounce from the pale platform makes the inside brighter in its shadows than the dark deck outside.
 - **Rejected:**
   - ribs radiating from the crown with concentric rings, and triangulated geodesic or cable nets: both read as webs;
   - a shallow cap: it meets the step at an angle and pushes outward, needing buttresses or a thrust ring outside the step;
@@ -132,9 +131,9 @@ The star is blinding. Even through the Veil, looking toward it you see brightnes
 
 ### 7.3 The West Gate
 
-The only way in or out, on the Spinward axis, facing west along the band. It is an **airlock**: an outer gate, a chamber and an inner gate, which never stand open together.
+The only way in or out on foot, on the Spinward axis, facing west along the band. (Craft use the East Lock.) It is an **airlock**: an outer gate, a chamber and an inner gate, which never stand open together.
 
-- **The gatehouse** passes through the Dome's skin inside the West Collar: two massive piers (7 m thick, 31 m tall) running 48 m from the trunnion piers outside to the Gate Court inside, the outer gate's hood slung between them outside, the chamber's vault between them inside. The Spinward Band descends through the collar and lands on the piers; the glass stops on a bronze trim round the gatehouse.
+- **The gatehouse** passes through the Dome's skin inside the West Collar: two massive piers (7 m thick, 31 m tall) running 48 m from the trunnion piers outside to the city inside, the outer gate's hood slung between them outside, the chamber's vault between them inside. The Spinward Band descends through the collar and lands on the piers; the glass stops on a bronze trim round the gatehouse.
 - **Both gates are sector gates**, as on a dam spillway: a curved leaf 18 m wide and 14 m tall (radius 16 m) on two radial arm frames that pivot on bronze trunnions. Each leaf's convex face meets the higher pressure it holds back, so the load runs down the arms into the trunnions. Opening, a leaf lifts and rotates up about its trunnions, sweeping along its own circle, so it needs almost no clearance.
   - **Outer gate:** it holds the chamber's 1 bar against the band, so its skin faces the chamber and its arms, trunnions and hoists stand **outside, between the trunnion piers**: the mechanism faces you on arrival. It lifts up under the hood.
   - **Inner gate:** it holds the city's 1 bar against the vented chamber, so its smooth convex skin faces the Gate Court and its arms are in the chamber. It lifts up into the chamber vault.
@@ -154,82 +153,8 @@ The only way in or out, on the Spinward axis, facing west along the band. It is 
 ### 7.4 Arrival
 
 - **Spawn:** on the apron ~30 m in front of the West Gate's piers, facing the closed gate, the view pitched a little up: the whole gatehouse front with the collar arches either side. The gate opens as you walk up to it (within ~9 m).
-- **Why west:** the gate faces anti-spinward, so the arrival view looks east, the established first-impression direction. The plan (§7.5) is laid out from the gate: the Spinward axis is the processional route from it.
-- **The reveal:** walk to the gate; it opens onto the Spinward axis: the Gate Court, the avenue, the Mirror Basin and the Archive's portico ~750 m away, under the coffered sky with the Spinward Band running overhead along the axis.
-
-### 7.5 City plan
-
-```
-                                     N
-                           North Collar · North Station
-                                     │  ← Crown Car up the Meridian Band
-                                     │
-           The Parterres        Meridian Canal          The Grove
-                                     │
-  West Gate ═ Gate Court ═ Spinward Avenue ═ ( Datum · Mirror Basin ) ═ Avenue ═ Archive ═ East Collar
-                                     │
-        Canal Quarter ── branch canal┤                  Thermae
-          · Canal House              │
-                                 Water Stair
-                           Engine House · South Collar
-                                     S
-                    (the Ring Walk follows the Dome's drum all round)
-```
-
-- **The ground is the platform.** Avenues and plazas show its limestone paving, border courses and bronze inlays. The datum stays at the centre. The Spinward inlay runs the length of the avenue; the Meridian inlay continues on the canal floor, seen through clear water.
-- **Water is recessed into the platform** with real openings (the platform's mesh is rebuilt with them), never a sheet laid on the paving.
-- **Planting** grows in built beds and terraces with stone copings.
-- **Still air.** The climate plant circulates the Dome's air slowly; leaves stir gently, water stays a mirror.
-- **Clearances.** The Ring Walk keeps buildings ~30 m clear of the drum; no building rises above ~40 m.
-
-### 7.6 Places
-
-Seven places. Each has a fully detailed exterior **and** interior and a distinct identity.
-
-| # | Place | Where | Exterior | Interior | Why go there |
-|---|---|---|---|---|---|
-| 1 | **West Gate** | West Collar | The collar front and the outer gate's arms and trunnions (§7.3) | The airlock chamber: the inner gate's arms, the vents, the pressure dial | The way in and out, and the first view down the axis |
-| 2 | **North Station** | North Collar | Station hall at the collar's foot; the cars' track descends the Meridian Band through the collar into it | Concourse and platform, a car waiting | The Crown Car |
-| 3 | **The Crown** | The apex, 251 m | Lantern and telescope turret at the crossing of the bands | A glazed gallery ring looking straight down into the city, round an instrument room of brass, gold and dark wood. A small airlock up to the **Crown Walk**, a ring balcony outside on top of the Dome | The telescope, and the only unobstructed panorama of the band |
-| 4 | **Archive** | East end of the Spinward axis | Colonnaded hall with a deep portico closing the axis vista | Tall library hall; the **Sphere Model** in the apse, in front of the East Collar's window, where the real band climbs toward the real hub | Understand where you are |
-| 5 | **Thermae** | South-east quadrant | Low, long bathhouse under a deep coffered roof | Still pools, steam, polished stone, beams of starlight through deep oculi | Light and water |
-| 6 | **Canal House** | Canal Quarter, south-west | Refined residence on a canal: terraces, pergola, mooring | Living spaces, study, roof terrace, as if someone just stepped out | Human intimacy in an empty world |
-| 7 | **Engine House** | South Collar | Machine hall behind the collar's louvred intakes; the Water Stair falls from its header tank | Filter galleries, slow compressor rotors, humidifiers, pumps and the header tank: the machinery that turns the band's thin air into the city's, and keeps its water moving | The city alive, without people |
-
-- **The Crown Car.** Two counterbalanced cars, one on each rail of the Meridian Band, so one always waits at each end. The track turns from vertical at the drum to horizontal at the crown (~600 m). Each glazed cabin hangs in a ring that keeps its floor level. A ride takes ~40 s.
-- **The Crown** is the city's panorama and its observatory in one: the highest point and the telescope's home. The turret sits outside the pressure, its slit open to the band's air, so the telescope looks out through no glass; its light comes down a coudé path through a small pressure window to the eyepiece in the instrument room. On the Crown Walk, at band pressure, the Dome falls away on every side, the band runs to both horizons, and the star stands overhead.
-- **The Sphere Model** is a bronze armillary of the logo's frame. Its band turns at the true rate, so it is also the city's clock: it shows where the hubs are. Its star is a crystal sphere under the hall's oculus, refracting the real star's light: it blazes with it. A gold pin, far larger than scale, marks the city.
-- **The Thermae's oculi are deep light wells.** Under a 90° star a shallow opening throws a soft pool, not a beam. A deep well passes only the part of the cap near its axis, so it throws a narrow cone that shows in the steam.
-- **The Canal Quarter** is a short street of houses on a branch canal, with footbridges. Only Canal House opens; the others are complete exteriors.
-
-### 7.7 Public spaces
-
-| Space | Character |
-|---|---|
-| **Gate Court** | Colonnaded forecourt beyond the inner gate; the axis opens ahead |
-| **Spinward Avenue** | Cypress avenue between twin stoas: the city's broad shade. The Spinward Band runs overhead along it |
-| **Datum Court & Mirror Basin** | The datum on a round court ringed by still water, bridged on the axes. Directly overhead, 251 m up, the bands cross at the Crown |
-| **Meridian Canal & Water Stair** | Still canal on the axis from the Water Stair below the Engine House to a basin before the North Station |
-| **The Parterres** (north-west) | Terraced parterres stepping up from the avenue: clipped box, lavender, fountains, water stairs |
-| **The Grove** (north-east) | Stone pine and olive on lawn, a small tempietto with a bench framing the Crown |
-| **Ring Walk** | Promenade along the inside of the drum, 3 km round, along the platform's bronze boundary ring: the bare plain outside, through glass |
-
-### 7.8 Interior light
-
-Each interior's exposure to the star is designed, not left to chance. Some rooms are glazed to soak up the blaze; others are deliberately dim, lit by deep openings, bounce and lamps, so stepping in is a real change of light. The eye adapts (§12), but only so far: a dim room still reads dim, and its windows blow out.
-
-| Place | Light | How |
-|---|---|---|
-| Gate chamber | Dim, enclosed | A sealed vault lit by lamps. The gates open onto blazing light at both ends: the strongest exposure swing in the game, and the reveal of the city overexposed for a moment |
-| North Station | Bright | A glazed hall inside the North Collar's glass, the car shaft rising through it |
-| Crown gallery | Blazing | A glass ring hung under the crossing, open to the star overhead and the city below |
-| Crown instrument room | Dim | Shaded lamps on brass and dark wood; the eyepiece; the airlock stair a bright slot of daylight |
-| Archive | Dim hall, two blazes | Reading hall under high clerestories, lamps at the desks. Two blinding things at its end: the crystal star under the oculus and the East Collar's window behind it |
-| Thermae | Dark, with beams | Narrow cones from deep light wells through steam onto still water; light bounced up from the pools; corners near dark |
-| Canal House | Bright, soaked in light | Glass walls onto the terraces and canal: the living rooms take in the whole outside. The study is the exception: small, wood-lined, lamp-lit |
-| Engine House | Half-light | A tall clerestory band over the machine floor, working lamps over each machine, highlights running along polished metal |
-
-- **Lamps are real light sources** in the one radiance scale, at the star's colour temperature (~5,000 K) so interiors keep the single warm cast. Outdoors they would be invisible in the blaze, so the city has no outdoor lamps.
+- **Why west:** the gate faces anti-spinward, so the arrival view looks east, the established first-impression direction. The city is laid out from the gate along the Spinward axis.
+- **The reveal:** the inner gate opens onto the city (`docs/city_plan.md` §8).
 
 ## 8. Interactions
 
@@ -238,24 +163,12 @@ A single **"Press E to …"** prompt. No menus, inventories or multi-step mechan
 | Interaction | Prompt | Behaviour |
 |---|---|---|
 | West Gate | none | The airlock cycles automatically as you approach and pass through (§7.3) |
-| Doors | *Press E to open* | Sliding or pivoting doors animate open. The Crown Walk's small airlock cycles in a few seconds on the same prompt |
-| Crown Car | *Press E to ride up / down* | Seated ride between the North Station and the Crown. Mouse-look stays free |
-| Telescope | *Press E to use telescope* | In the Crown. Steerable view: mouse aim, scroll zoom, its own exposure |
-| Sphere Model | *Press E to examine* | The camera settles on the slowly turning model |
-| Benches | *Press E to sit* | Framed, slow look |
-
-**The telescope** resolves what the eye cannot:
-
-- granulation, spot fine structure, flare ribbons, prominences;
-- the far structure's plates, lights and hubs.
-
-Its exposure adapts to its narrow field. Through a gap in the structure it resolves the nebulae's filaments and dust, faint stars and the galaxy's star clouds beyond what the eye sees.
+| Doors | *Press E to open* | Doors swing or slide open |
+| The car | *Press E to drive* | Get in and drive round the Dome (`docs/city_plan.md` §7) |
 
 **Movement:** WASD + mouse look, sprint (Shift), jump, crouch. Grounded and slightly unhurried; the view moves as a walking or running person's head does (`docs/player.md`). You can walk out through the gate onto the band and round the Dome.
 
 ## 9. Visual style
-
-### The world
 
 The style is photoreal megastructure: engineering at a scale beyond comprehension, rendered with physical light. The look is derived, not painted.
 
@@ -263,41 +176,24 @@ The style is photoreal megastructure: engineering at a scale beyond comprehensio
 - A patchwork of warm metal tiles reflecting real pieces of the enclosure and glowing faintly with heat, the star blazing in the tiles near the limb; through the gaps, a starry sky with nebulae, turning slowly past the band.
 - Distance shown by content, light and motion (`docs/scale.md`): blue habitat air in front of everything, a crisp cavity behind it.
 
-### The city: Solar Neoclassical
-
-Classical proportion, colonnades, domes and porticoes, built with futuristic precision. Calm, luminous and warm. No grime, no cyberpunk.
-
-- Every edge resolved: bevels, chamfers, coursing, seams, mullions, copings.
-- Interiors are equally considered.
-
-| Material | Use |
-|---|---|
-| Honed pale limestone/travertine | Podiums, terraces, the Garden Deck |
-| White ceramic composite | Façades, the Dome's frame |
-| Brushed champagne-gold / satin bronze | Rings, the Dome's bolts and bearing caps, mullions, railings, survey inlays |
-| Dark bronze, machined steel | The West Gate and the city's machinery |
-| Neutral low-iron glass | The Dome, curtain walls, the Crown Car's cabins |
-| Dark polished basalt | Accent bands, water edges, steps |
-| Warm dark wood, leather, fabric, brass | Interiors |
-| Water | Basins, canals, fountains, pools |
-
-**Vegetation:** Italian cypress, stone pine, olive, clipped boxwood, lawn, lavender, flowering shrubs, vines, water lilies.
+The city's own style is `docs/city_plan.md`.
 
 ### Lighting mood
 
-The key light is a 90° area source straight overhead, seen through the Dome's coffers. It produces:
+The key light is a 90° area source straight overhead. It produces:
 
 - very soft, short shadows and strong contact occlusion;
-- bright warm bounce from the pale stone;
+- bright warm bounce from pale stone;
 - strong sheen on glossy surfaces;
 - the star reflected in water and glass, crossed by the Dome's frame.
 
-Outdoor shadows are very dim and short: a soft darkening at the foot of each building, never a cast shape (`docs/shadows.md`). Interiors are where shadows look ordinary, each lit by its own design (§7.8).
+Outdoor shadows are very dim and short: a soft darkening at the foot of each object, never a cast shape (`docs/shadows.md`). Interiors are where shadows look ordinary, each lit by its own openings and lamps.
+
+- **Lamps are real light sources** in the one radiance scale, at the star's colour temperature (~5,000 K) so interiors keep the single warm cast. Outdoors they would be invisible in the blaze.
 
 ## 10. UI / HUD
 
 - **In play:** nothing on screen. Looking at an interactable shows a small dot and the prompt.
-- **Place titles:** fade in briefly on entering a place or a named public space.
 - **Entry screen:** title, loading progress, "Enter". It shows platform-gate and boot/GPU errors.
 - **Pause:** resume, mouse sensitivity, FOV.
 - **Typography:** one refined sans-serif, generous letter-spacing, translucent panels.
@@ -334,25 +230,26 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
   - hue-preserving filmic tone map (overexposed colour runs toward yellow and white, never pastel) and grade;
   - subtle lens response.
 
-### What the city adds
+### What the local scene needs
 
-- **Shadows** (`docs/shadows.md`): outdoors, a cheap baked field of how much of the star each point sees, giving the dim, short darkening at the feet of buildings; indoors, ordinary shadows from openings and lamps. *Not built yet* (see shadows.md for what exists).
+- **Shadows** (`docs/shadows.md`): outdoors, a cheap baked field of how much of the star each point sees, giving the dim, short darkening at the feet of things; indoors, ordinary shadows from openings and lamps. *Not built yet* (see shadows.md for what exists).
 - **The star's exact glare follows what the eye sees of it** (built): scaled by the star's visibility at the eye (less under the Dome, none under a roof), and the disc replaces only sky pixels.
 - **Eye adaptation** (built). A metered, global exposure: a weighted average of scene luminance, never local.
   - **Floor:** pinned at the star key, so outdoors and under the Dome nothing changes.
   - **Ceiling:** about +4 stops, so dim rooms stay dim.
   - **Speed:** asymmetric, as an eye. Going in it opens over ~4 s; going out it clamps down in ~1 s after a moment of overexposure.
-- **Bounce light.** The pale city lights the Dome's underside, the stoas and every interior. Indirect light (star, sky and lamps) is to be baked for the static city; the environment capture inside the Dome includes the Dome (built).
+- **Bounce light.** The pale platform lights the Dome's underside and every interior. Indirect light is baked for static content; the environment capture inside the Dome includes the Dome (built).
 - **The Dome's glass** (built) is one thin neutral layer composited analytically in post over the sky and the scene behind it.
-- **Local reflections** for water and glass (the Mirror Basin, the canals, the Dome seen in the glazed deck), with the environment capture as fallback.
-- **Altitude.** The Crown is 0.26 km up a 1.2 km air column: the sky and aerial perspective tables need the eye's altitude.
+- **Local reflections** for water, glass and polished metal, with the environment capture as fallback.
 
-**Performance stance:** no hard frame-rate target while building, but no known performance pitfalls. Repeated elements (trees, balusters, posts) are instanced; the Dome is a few merged meshes; baked light costs nothing per frame.
+**Performance stance:** no hard frame-rate target while building, but no known performance pitfalls. Repeated elements are instanced; the Dome is a few merged meshes; baked light costs nothing per frame.
 
 ## 13. Out of scope
 
 - NPCs, dialogue, quests, inventory, combat.
 - Time of day, weather, seasons.
 - Leaving the habitable band. The far structure is only seen, never walked.
-- Building on the band outside the Dome: no roads, outbuildings or transit there. The only transport is the Crown Car.
+- Building on the band outside the Dome: no roads, outbuildings or transit there.
+- Boarding craft, or taking the car out of the Dome.
+- A telescope. The star's fine detail exists at true scale but is lost in the blaze in play.
 - Non-Chromium browsers and mobile.

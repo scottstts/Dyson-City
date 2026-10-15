@@ -27,7 +27,7 @@ The standing test for every sky render is whether the star reads as a 1.4-millio
 
 ## Tools
 
-- `node tools/render.mjs [--query ...] spot…`: fixed views. Use `ev=` below the default and `fov=`/`look=` to inspect the star's texture and the structure at telescope zoom.
+- `node tools/render.mjs [--query ...] spot…`: fixed views. Use `ev=` below the default and `fov=`/`look=` to inspect the star's texture and the structure at narrow-field zoom.
 - `node tools/flicker.mjs --wobble 3 --steady spot…`: temporal stability under camera motion (see `docs/runtime.md`).
 - `node tools/clip.mjs [--query ...] spot`: a real-time motion clip (MP4), for judging the star's activity and anything else that moves.
-- Inspect the star's atmosphere pre-glare with `view=hdr` and a low `ev=` at telescope zoom: in the final image it is lost in the blaze.
+- Inspect the star's atmosphere pre-glare with `view=hdr` and a low `ev=` at narrow-field zoom: in the final image it is lost in the blaze.

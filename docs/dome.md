@@ -1,6 +1,6 @@
 # The Dome
 
-Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel in `src/geometry/`, the audit kit in `tools/geometry-kit/`. Design intent is `docs/design.md` §7.2.
+Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel in `src/geometry/`, the audit kit in `tools/geometry-kit/`. Design intent is `docs/design.md` §7.2; the East Lock is planned in `docs/city_plan.md` §6.
 
 ## Construction
 
@@ -36,7 +36,7 @@ Code: `src/city/dome/` (`spec.ts` holds every dimension), the modelling kernel i
 ## Light
 
 - **Two environment captures** (`world.ts`): the open sky (the deck) and the view from the platform centre inside the Dome: the sky ×0.97 with the frame, platform and deck rendered into it (cube far plane 4 km, depth buffer on). Everything under the Dome takes the interior capture.
-- **The frame blends both** by which way each face looks relative to S's normal (`materials/ceramic.ts` `domeEnvironment`): outward faces see the sky and the dark deck; inward faces see the pale city.
+- **The frame blends both** by which way each face looks relative to S's normal (`materials/ceramic.ts` `domeEnvironment`): outward faces see the sky and the dark deck; inward faces see the pale platform and the city.
 
 ## Gates (tests)
 
