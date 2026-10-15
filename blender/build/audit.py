@@ -600,6 +600,8 @@ def run(write=True, full=True):
     lines += ["", f"INTERPENETRATION (vertices of A > 4 mm inside closed solid B): {len(pen)}"]
     for b, a, n, w, where in pen:
         lines.append(f"  {b}  inside  {a}: {n} verts, deepest {w * 100:.1f} cm @ {where}")
+    from . import doorswing
+    lines += ["", f"DOORS (shut / swing / slide checks): {len(doorswing.REPORT)}"] + [f"  {x}" for x in doorswing.REPORT]
     mh2 = material_health()
     lines += ["", f"MATERIALS: {len(mh2)}"] + [f"  {x}" for x in mh2]
     lines += ["", f"PART INTERPENETRATION inside one object (part of material A > 8 mm inside closed part of B): {len(pp)}"]

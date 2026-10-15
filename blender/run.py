@@ -42,7 +42,7 @@ def go(*targets):
 ALL = [
     "shell.build", "siding.build", "windows.build", "doors.build", "roofs.build", "cornice.build",
     "gables.build", "turret.build", "porch.build", "details.build", "stairs.build", "fireplaces.build", "interior.build", "rooms.build", "cuts.build", "finalize.build",
-    "collision.build",
+    "doorswing.build", "collision.build",
 ]
 
 
@@ -65,3 +65,23 @@ def build_all(save=True):
     audit.run()
     if save:
         bpy.ops.wm.save_mainfile()
+
+
+def bake_all(save=True):
+    """The interior light under the game's light (bake/house_env.hdr from tools/house-env.mjs):
+    lightmaps, probe grid, reflection captures. Run after build_all (which drops the lightmap UVs);
+    takes about 20 minutes. Long call: run bl.py with BL_TIMEOUT=7200."""
+    import bpy
+    reload()
+    from build import bake
+    bake.run()
+    if save:
+        bpy.ops.wm.save_mainfile()
+
+
+def export_all():
+    """assets/house.pack: material texture bake, glTF parts, lightmaps/probes/reflections, index.
+    Run after bake_all."""
+    reload()
+    from build import export
+    return export.run()

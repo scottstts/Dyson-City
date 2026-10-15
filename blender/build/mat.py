@@ -303,12 +303,33 @@ def _lead(nb):
     nb.set(normal=nb.bump(n, strength=0.1, dist=0.003))
 
 
+def thin_pane(nb, tint):
+    """A pane is a thin sheet: light crosses it without bending. Cycles only carries light through a
+    refracting surface as caustics (off), so shadow and diffuse rays see a plain transparent filter of
+    the glass's tint; camera and glossy rays still see the real glass. Without this every room lit
+    through a window renders black in Cycles."""
+    lp = nb.n("ShaderNodeLightPath", x=300, y=300)
+    fac = nb.math("MAXIMUM", (lp, "Is Shadow Ray"), (lp, "Is Diffuse Ray"), x=500)
+    tr = nb.n("ShaderNodeBsdfTransparent", x=500, y=200)
+    if isinstance(tint, tuple) and not isinstance(tint[0], bpy.types.Node):
+        tr.inputs["Color"].default_value = tint
+    else:
+        node, sock = tint if isinstance(tint, tuple) else (tint, 0)
+        nb.link(node, sock, tr, "Color")
+    mx = nb.n("ShaderNodeMixShader", x=700)
+    nb.link(fac, 0, mx, 0)
+    nb.link(nb.bsdf, 0, mx, 1)
+    nb.link(tr, 0, mx, 2)
+    nb.link(mx, 0, nb.out, "Surface")
+
+
 @define("glass")
 def _glass(nb):
     """Cylinder glass: slight waviness of old panes."""
     n = nb.noise(nb.vec(scale=(1.5, 0.3, 1)), scale=6, detail=2)
     nb.set(base=(0.92, 0.95, 0.94, 1), rough=0.0, trans=1.0, ior=1.52, spec=0.5)
     nb.set(normal=nb.bump(n, strength=0.03, dist=0.002))
+    thin_pane(nb, (0.9, 0.92, 0.92, 1.0))
 
 
 @define("sandstone")
@@ -446,6 +467,13 @@ def _stained(nb):
     nb.link(lead, 0, nb.bsdf, "Transmission Weight")
     n = nb.noise(nb.vec(scale=(30, 30, 30)), scale=4, detail=2)
     nb.set(normal=nb.bump(n, strength=0.08, dist=0.002))
+    tm = nb.n("ShaderNodeMix", x=400, y=150)
+    tm.data_type = "RGBA"
+    tm.blend_type = "MULTIPLY"
+    tm.inputs["Factor"].default_value = 1.0
+    nb.link(t, 0, tm, 6)
+    nb.link(lead, 0, tm, 7)                                  # lead lines block, the glass passes its colour
+    thin_pane(nb, tm)
 
 
 @define("trim_int")

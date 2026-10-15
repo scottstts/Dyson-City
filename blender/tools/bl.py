@@ -8,13 +8,14 @@ Usage:
   bl.py -b mod.fn:args ...    reload blender/build and run builders (see blender/run.py)
 """
 import json
+import os
 import socket
 import sys
 
 HOST, PORT = "127.0.0.1", 9876
 
 
-def run(code: str, timeout: float = 600.0) -> dict:
+def run(code: str, timeout: float = float(os.environ.get("BL_TIMEOUT", "600"))) -> dict:
     s = socket.create_connection((HOST, PORT), timeout=timeout)
     s.sendall(json.dumps({"type": "execute_code", "params": {"code": code}}).encode())
     buf = b""

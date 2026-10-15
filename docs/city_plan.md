@@ -60,28 +60,29 @@ The site plan ([`city_plan_site.png`](city_plan_site.png)) is drawn to scale, no
 
 ## 4. The house and the estate
 
-The emotional centre: calm, comfort and coziness inside a place of awe. Built in Blender as an exported asset (§9), inside and out, with the most care of anything in the project. Its design is set and refined during that build; what follows is the intent it is built to.
+The emotional centre: calm, comfort and coziness inside a place of awe. Built in Blender as an exported asset (§9), inside and out, with the most care of anything in the project. The build and its decisions are documented in `blender/docs/house.md`; what follows is the house as built.
 
 ### The house
 
-- **Style:** a storybook Victorian: Queen Anne / Second Empire massing, a corner turret with a tall conical roof, stacked bay windows, a mansard with dormers, a deep wraparound porch, bracketed cornices, tall chimneys. Proportions are pushed just slightly: the turret a little too tall, roofs a little too steep. It must read as a real house first and a fairy tale second.
-- **Size:** three storeys plus the turret, ~25 m to the eaves and 35–40 m to the turret's finial.
-- **Orientation:** the front faces **inward, toward the field and the centre**. The porch looks out over the lawn and the garden wall onto the gold machines. The back faces the Dome's drum.
-- **Colour and material** are the one place in the Dome with depth of colour: painted wood and stone, slate, copper, brick, glass with curtains behind it. The surroundings are already pale (limestone, white ceramic frame, washed-out gold), so the house must not be white. The palette is decided in the Blender build.
+- **Style:** a storybook Victorian: Queen Anne / Second Empire massing. A main block under a slate mansard with five dormers and a widow's-walk deck with iron cresting; a front cross gable with fish-scale shingles, bargeboards and an oculus over a two-storey canted bay; a round corner turret under a bell-cast slate cone; a canted bay at the back; a library/dressing wing on the left and a morning-room/chart-room wing on the right; a deep wraparound porch with a pedimented portico on the door axis, a quarter round about the turret and an east run; bracketed cornices, brick chimneys. It reads as a real house first and a fairy tale second.
+- **Size:** true human scale, three storeys plus the attic and the turret room. Floors at 1.05, 5.25 and 9.15 m above grade; the main cornice tops out at 10.25 m, the mansard breaks at 13.5 m, the deck is at 15 m, and the turret's finial at ~20 m. The plan is about 23 × 17 m.
+- **Orientation:** the front faces **inward, toward the datum**. The house stands at `HOUSE_SITE` (−372, −112), its front along (0.958, 0.288) in the game plane. The porch looks out over the lawn and the garden wall onto the gold machines; the back faces the Dome's drum.
+- **Colour and material** are the one place in the Dome with depth of colour. The house is pale-blue painted clapboard with cream trim, dark slate roofs, green standing-seam metal on the porch roofs, copper finials, red-brick chimneys with terracotta pots, a sandstone base and stained-glass transoms, with curtains behind the glass. Every surface is a procedural PBR material, baked to texture sets for the game.
 - **Built for top light.** Deep cornices, porch roofs, window hoods and bay undersides, so the overhead star draws the façade in bands of light and shade.
-- **Lived in.** Worn thresholds, a boot scraper, a watering can, a bicycle against the rail, a window left ajar. Never staged-new.
+- **Lived in.** A boot scraper and a coir mat at the door, a watering can, a bicycle against the porch rail, a tea table set for two on the porch. Never staged-new.
 - **The story behind it, never told:** someone brought their home here from Earth. The keeper of the compound lives in it.
 
 ### The interior
 
-Every room walkable and finished. Indicatively:
+Every room walkable and furnished:
 
-- **Ground floor:** entry hall and main stair, parlour with fireplace, dining room, kitchen and pantry.
-- **First floor:** the keeper's study (charts, instruments, books), bedrooms, a bathroom.
-- **Top floor and attic:** smaller rooms under the roof.
-- **The turret room** at the top: a window seat ringed by windows. It is the payoff of the climb: the whole field laid out below, the Halo, the gold, a craft on the pad.
+- **Ground floor:** a vestibule and the hall with the main stair; the parlour in the front bay; the dining room in the back bay (walnut wainscot); the library in the left wing; the music room in the turret; the morning room in the right wing; the kitchen with its range and pantry; a rear hall and a WC.
+- **First floor:** a landing; the master bedroom in the front bay, with a dressing room and bathroom in the left wing; a second bedroom in the back bay; the keeper's study in the turret (books, globe, desk) and the chart room beside it (plan chest, orrery); a guest room; a bathroom.
+- **Top floor, under the mansard:** a top hall, the gable room behind the cross gable's window, the maid's room and a box room.
+- **The turret room** at the top: a curved window seat ringed by five windows, a telescope. It is the payoff of the climb: the whole field laid out below, the Halo, the gold, a craft on the pad.
+- **Doors work.** Every hinged door opens on its hinge pin as far as the walls and furniture beside it allow; the hall's and parlour's pocket doors slide into the walls.
 
-**Light indoors:** daylight through tall windows (bright rooms toward the field, where the gold throws warm reflected light in), lamplight in the deep rooms, and dim corners. The star never moves, so all of it is static and can be baked (§9). The eye adapts on entering, but a dim room stays dim and its windows blow out (`docs/render-pipeline.md`).
+**Light indoors:** daylight through the windows, baked in Cycles under an HDR of the game's own light at the house site (§9). The lace sheers are drawn back in the day rooms and in the rooms that look out over the field (parlour, dining, library, music room, morning room, study, chart room, landing, gable room, turret room); the bedrooms, the dressing room, the attic service rooms and the kitchen (a valance) keep them drawn. The lamps are lit at their real output, which barely registers against daylight at noon. Indoors is physically dim: the day rooms sit around 6–7 stops below a sunlit white wall outside, the curtained bedrooms and the windowless middle of the house (the hall and the landing) far lower. The eye adapts on entering, but a dim room stays dim and its windows blow out (`docs/render-pipeline.md`). The adaptation range decides how dark the rooms read in play; that is settled when the bake is brought into the engine (§9 step 2).
 
 ### The estate
 
@@ -170,15 +171,30 @@ These are the acceptance views: when built, each must read as described.
 
 ## 9. Build order
 
-1. **The house, inside and out** (Blender).
-   - First, a grey-box of the whole Dome (estate, house volume, heroes, Halo, roads) rendered from the §8 views, to fix the house's footprint, height and views before detailed modelling.
-   - **Bake the interior light in Blender.** The star never moves, so the lighting is static: light the bake with an HDR environment exported from the game at the house's position (a `tools/` export), and bake with Cycles into lightmaps. The interior then shares the game's one light source.
-   - **Export in parts:** the exterior shell and each floor's interior as separate glTF files, in metres with an agreed origin, KTX2 textures and meshopt compression, so rooms load and cull by portal.
-   - **Name what the engine needs:** collision meshes, door leaves with their hinge pivots, lamp empties, sound-emitter empties.
+1. **The house, inside and out** (Blender). Built: `blender/docs/house.md`. The plan was drawn from the reference images at true scale and placed on the existing site plan; no separate grey-box of the Dome was made.
+   - **The interior light is baked in Blender.** The star never moves, so the lighting is static. `tools/house-env.mjs` captures the game's HDR at the house site, and Cycles bakes the following under it, all in the game's one radiance scale:
+     - lightmaps for the static architecture of each floor;
+     - an SH probe grid through every room for the furniture, doors and windows;
+     - a reflection capture for each room.
+     
+     The capture sees the open site; it is re-run and the house re-baked once the estate exists.
+   - **Exported as one bundle, `assets/house.pack`, nothing compressed.** Every entry is used straight from its byte range, with no decoding beyond the browser's own image decoding. The bundle holds:
+     - the exterior and each floor as a separate glTF part, so rooms load and cull by portal;
+     - textures stored once and shared by all parts, baked from the procedural materials;
+     - lightmaps and reflection captures as GPU-ready RGB9E5;
+     - the probe grid, and an index with the placement.
+     
+     *Rejected:* KTX2 textures and meshopt geometry (a decode step at load).
+   - **Named for the engine:**
+     - collision proxies: shared trimeshes for walls and floors, boxes for furniture, windows and door leaves, ramps for the stairs;
+     - door leaves on static rigs, hinged or sliding, with their travel limits and handle positions;
+     - lamp empties and sound-emitter empties.
 2. **The estate around the imported house.** Procedural: terrace wall and balustrade, drive, lawn, beds, trees and plants (`threejs-procedural-vegetation`), pond, glasshouse, carriage house. Engine work this step needs:
-   - **Multi-storey walking.** Today the walkable world is one surface height plus plan walls (`docs/player.md`); stairs and upper floors need per-floor floors and walls.
+   - **Loading the bundle** and placing the house at `HOUSE_SITE` on the terrace, facing the datum.
+   - **Multi-storey walking.** Today the walkable world is one surface height plus plan walls (`docs/player.md`); stairs and upper floors need per-floor floors and walls (the bundle's collision and stair ramps).
+   - **Doors** opened and shut by the player, from the rig data in the bundle.
    - **Window glass** for the house. The Dome's glass is an analytic post pass for its ellipsoid only.
-   - **Interior light:** the baked lightmaps, plus a local environment capture for interior reflections.
+   - **Interior light:** the bundle's lightmaps, probe grid and room reflection captures, and the eye-adaptation range that decides how dark the rooms read (§4).
 3. **The Field.** The Halo and pad, the five heroes, the tower clusters, the network, roads, and the East Lock in the Dome. Built: `docs/field.md`, `docs/east-lock.md`. The East Lock is a foundation the craft (step 4) will drive.
 4. **Vehicles and other moving things.** The car, the craft and their behaviour, separate assets.
 

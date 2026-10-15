@@ -62,6 +62,10 @@ def sound_empty(name, loc, clip, loop=True, gain=1.0):
 
 NO_CURTAINS = {"WC", "Pantry", "MasterBath", "Bath"}
 SHEER_ONLY = {"Kitchen", "BoxRoom", "MaidsRoom", "TopHall"}
+# day rooms and the rooms that look out over the field have their sheers drawn back; bedrooms,
+# dressing room, attic service rooms and the kitchen's valance stay drawn
+SHEERS_OPEN = {"Parlour", "Dining", "Library", "Music", "Morning", "Study", "ChartRoom", "Landing", "GableRoom",
+               "TurretRoom"}
 
 
 def build_curtains():
@@ -93,13 +97,14 @@ def build_curtains():
         sheer_only = r["name"] in SHEER_ONLY or o["level"] == 2
         fabric = {"Parlour": "velvet_drape", "Dining": "velvet_mustard", "Music": "velvet_rust", "Library": "velvet_teal",
                   "Study": "velvet_teal", "Master": "velvet_drape", "Bedroom": "velvet_rust"}.get(r["name"], "velvet_drape")
-        key = f"curtain_{round(W, 2)}_{round(head, 2)}_{fabric}_{sheer_only}_{drapes}_{round(pole_over, 3)}_{round(o['sill'], 2)}_{r['name'] == 'Kitchen'}"
+        opn = r["name"] in SHEERS_OPEN
+        key = f"curtain_{round(W, 2)}_{round(head, 2)}_{fabric}_{sheer_only}_{drapes}_{round(pole_over, 3)}_{round(o['sill'], 2)}_{r['name'] == 'Kitchen'}_{opn}"
         Hc = head + 0.22
         # over the kitchen sink the lace is a short valance (taps and splashes below)
         drop = o["head"] - 0.75 if r["name"] == "Kitchen" else o["sill"]
-        maker = (lambda W=W, Hc=Hc, fabric=fabric, sheer_only=sheer_only, po=pole_over, dr=drapes, sill=drop:
-                 F.curtains(W, Hc, 0.02, sheer=True, fabric=fabric, tie=not sheer_only, pole_over=po, drapes=dr) if not sheer_only else
-                 _sheer_only(W, Hc, sill))
+        maker = (lambda W=W, Hc=Hc, fabric=fabric, sheer_only=sheer_only, po=pole_over, dr=drapes, sill=drop, opn=opn:
+                 F.curtains(W, Hc, 0.02, sheer=True, fabric=fabric, tie=not sheer_only, pole_over=po, drapes=dr, sheer_open=opn)
+                 if not sheer_only else _sheer_only(W, Hc, sill, opn))
         src = proto(key, maker)
         # curtains hang in front of the inner wall face: local y into the room, z from the floor
         M = frame_matrix(o) @ Matrix.Translation((0, -P.TE - (0.14 if o.get("curved") else 0.0), -o["sill"])) @ Matrix.Rotation(math.pi, 4, "Z")
@@ -135,9 +140,9 @@ def _side_room(o):
     return best
 
 
-def _sheer_only(W, Hc, sill):
-    """Lace panel from the pole to the sill (kitchen, attics)."""
-    k = F.curtains(W, Hc, sill - 0.02, sheer=True, fabric="velvet_drape", tie=False)
+def _sheer_only(W, Hc, sill, opn=False):
+    """Lace panel from the pole to the sill (kitchen, attics), drawn back in the rooms with a view."""
+    k = F.curtains(W, Hc, sill - 0.02, sheer=True, fabric="velvet_drape", tie=False, sheer_open=opn)
     k.pop("velvet_drape", None)
     return k
 

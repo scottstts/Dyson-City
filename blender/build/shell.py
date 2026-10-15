@@ -179,6 +179,25 @@ def opening_box(o, depth_out=0.35, depth_in=0.65, extra=0.0):
     return geo.prism([tuple(c) for c in corners], z0, z1)
 
 
+def pocket_boxes(o):
+    """The cavities in the wall either side of a pocket-door opening that the leaves slide into."""
+    from .doors import POCKET_GAP
+    z0 = P.LEVELS[o["level"]] + o["sill"]
+    z1 = P.LEVELS[o["level"]] + o["head"]
+    a = o["ang"]
+    n = np.array([math.cos(a), math.sin(a)])
+    t = np.array([-n[1], n[0]])
+    p = np.array(o["p"])
+    hw = o["w"] / 2
+    out = []
+    for sg in (-1, 1):
+        t0, t1 = hw - 0.04, o["w"] + 0.03
+        c = [p + t * sg * t0 - n * POCKET_GAP, p + t * sg * t1 - n * POCKET_GAP,
+             p + t * sg * t1 + n * POCKET_GAP, p + t * sg * t0 + n * POCKET_GAP]
+        out.append(geo.prism(geo.ccw([tuple(q) for q in c]), z0, z1))
+    return out
+
+
 def stair_void(st, z0, z1, open_side="x0"):
     """Void in the floor above a stair, wide enough for its open string (0.04 on the open side)."""
     run = (st["risers"] // 2 - 1) * st["going"] * 2 + st["landing"]
@@ -346,6 +365,9 @@ def build_level(level):
     # openings
     for o in P.openings(level):
         cutters.append(core.geo_obj(opening_box(o), "_open"))
+        if o["kind"] == "pocket":
+            for pb in pocket_boxes(o):
+                cutters.append(core.geo_obj(pb, "_pocket"))
     if level == 2:
         for d in P.DORMERS:
             cutters.append(core.geo_obj(dormer_window_box(d), "_dw"))

@@ -8,6 +8,7 @@ already includes open_angle; the shut pose is open_angle = 0.
 """
 import math
 
+import bpy
 import numpy as np
 from mathutils import Matrix
 
@@ -188,17 +189,39 @@ def place_leaf(o, M, x_hinge, y, angle, pivot_dy=0.0, lift=0.008):
         v.co.z += lift
         v.co.y -= dy
     y += dy
-    o.matrix_world = M @ Matrix.Translation((x_hinge, y, 0.0)) @ Matrix.Rotation(angle, 4, "Z")
+    rig(o, M @ Matrix.Translation((x_hinge, y, 0.0)), Matrix.Rotation(angle, 4, "Z"))
+
+
+def rig(o, frame, pose):
+    """Parent a leaf to a static `DoorRig_*` empty at its shut pose: the engine drives only the leaf's
+    local transform (rotation about local Z = glTF Y for a hinge, translation along local X for a
+    slide); `pose` is the rest pose relative to the rig."""
+    e = bpy.data.objects.new("DoorRig_" + o.name[len("Door_"):], None)
+    e.empty_display_type = "ARROWS"
+    e.empty_display_size = 0.25
+    for c in o.users_collection:
+        c.objects.link(e)
+        break
+    e.matrix_world = frame
+    o.parent = e
+    o.matrix_parent_inverse = Matrix.Identity(4)
+    o.matrix_basis = pose
+    return e
 
 
 # ---------------------------------------------------------------- frames and casings
 
-def door_frame(W, H, depth, t_jamb=0.032, stop=True, threshold=None, ext=False, stop_y=None):
-    """Jamb lining across the wall thickness (y from -depth to 0), head, stops. Local coords."""
+def door_frame(W, H, depth, t_jamb=0.032, stop=True, threshold=None, ext=False, stop_y=None, slot=None):
+    """Jamb lining across the wall thickness (y from -depth to 0), head, stops. Local coords.
+    slot: (y0, y1) gap left in both side linings for pocket leaves to run through."""
     g = core.Geo()
     xa, xb = -W / 2, W / 2
-    g.add(box(xa, xa + t_jamb, -depth, 0.0, 0.0, H))
-    g.add(box(xb - t_jamb, xb, -depth, 0.0, 0.0, H))
+    for x0, x1 in ((xa, xa + t_jamb), (xb - t_jamb, xb)):
+        if slot:
+            g.add(box(x0, x1, -depth, slot[0], 0.0, H))
+            g.add(box(x0, x1, slot[1], 0.0, 0.0, H))
+        else:
+            g.add(box(x0, x1, -depth, 0.0, 0.0, H))
     g.add(box(xa + t_jamb, xb - t_jamb, -depth, 0.0, H - t_jamb, H))
     if stop:
         ys = stop_y or ((-depth / 2 - 0.01 - LEAF_T, -depth / 2 - 0.03 - LEAF_T) if not ext else (-0.04, -0.06))
@@ -253,13 +276,13 @@ def build_ext_door(o):
             lo, _ = make_leaf(f"Door_{o['name']}_{side}", lw, H - 0.034, rows, side, 0.0, M, COL_LEAF, mat,
                               stile=0.11 if o["kind"] == "door" else 0.085)
             place_leaf(lo, M, xh, -0.1 - LEAF_T / 2 - 0.002, 0.0, pivot_dy=-(LEAF_T / 2 + KNUCKLE), lift=0.03)   # over the sill
-            lo["hinge"], lo["swing"], lo["open_angle"] = side, (-1 if side == "L" else 1), 0.0   # inward
+            lo["kind"], lo["hinge"], lo["swing"], lo["open_angle"] = "hinge", side, (-1 if side == "L" else 1), 0.0   # inward
     else:
         lw = W - 0.1 - 0.009
         rows = [(0.42, "panel2"), (0.58, "glass")]
         lo, _ = make_leaf(f"Door_{o['name']}", lw, H - 0.034, rows, "L", 0.0, M, COL_LEAF, "door_paint")
         place_leaf(lo, M, -W / 2 + 0.056, -0.1 - LEAF_T / 2 - 0.002, 0.0, pivot_dy=-(LEAF_T / 2 + KNUCKLE), lift=0.03)
-        lo["hinge"], lo["swing"], lo["open_angle"] = "L", -1, 0.0      # inward
+        lo["kind"], lo["hinge"], lo["swing"], lo["open_angle"] = "hinge", "L", -1, 0.0      # inward
 
 
 # ---------------------------------------------------------------- interior doors
@@ -285,6 +308,41 @@ def _rooms_both_sides(o):
     return ra, rb
 
 
+POCKET_GAP = 0.045                 # half-width of the jamb slot and wall cavity: leaf mouldings stand 39 mm off its centre
+POCKET_TAIL = 0.06                  # a shut pocket leaf keeps this much inside the pocket
+
+
+def pocket_travel(W):
+    """Slide from shut (lead edges meeting at the centre) to open (lead edge 15 mm proud of the jamb)."""
+    return W / 2 - 0.032 - 0.0015 - 0.015
+
+
+def build_pocket_leaves(o, M, W, H, th, wood):
+    """A pair of panelled leaves running in a cavity in the wall. Each leaf's origin is its lead edge
+    at floor level; its rig sits at the shut position (lead edges 3 mm apart on the centre line); the
+    rest pose is open (withdrawn into the pocket), travel along local X."""
+    lw = W / 2 - 0.032 + POCKET_TAIL - 0.0015
+    h = H - 0.045
+    travel = pocket_travel(W)
+    for side, sg in (("L", -1), ("R", 1)):
+        lf = leaf(lw, h, LEAF_T, [(0.3, "panel2"), (0.7, "panel2")], stile=0.11)
+        hw = core.Geo()
+        for f in (1, -1):        # flush cup pulls near the lead edge, both faces, and an edge pull
+            hw.add(escutcheon().xf(Matrix.Translation((0.06, f * LEAF_T / 2, 1.0)) @ Matrix.Scale(f, 4, (0, 1, 0))))
+        hw.add(box(-0.002, 0.0, -0.008, 0.008, 0.95, 1.05))
+        g = core.Geo()
+        g.add(lf["wood"], 0)
+        g.add(lf["glass"], 1)
+        g.add(hw, 2)
+        # geometry runs from the lead edge (x=0) away from the centre
+        g = g.xf(Matrix.Scale(sg, 4, (1, 0, 0)))
+        lo = core.obj(f"Door_{o['name']}_{side}", g, COL_LEAF, [wood, "glass", "brass"], smooth=35, clean=True)
+        for v in lo.data.vertices:
+            v.co.z += 0.008
+        rig(lo, M @ Matrix.Translation((sg * 0.0015, -th / 2, 0.0)), Matrix.Translation((sg * travel, 0.0, 0.0)))
+        lo["kind"], lo["travel"], lo["open_offset"] = "slide", sg * travel, sg * travel
+
+
 def build_int_door(o):
     th = o.get("thick", P.TI)
     a = o["ang"]
@@ -300,7 +358,8 @@ def build_int_door(o):
     jmat = "walnut" if "walnut" in (mat_a, mat_b) else "trim_int"
     kind = o["kind"]
     # leaves hang flush with the +n face (the side they open to), stops behind them
-    fr = door_frame(W, H, th, stop=(kind == "door"), stop_y=(-LEAF_T - 0.001, -LEAF_T - 0.021))
+    slot = (-th / 2 - POCKET_GAP, -th / 2 + POCKET_GAP) if kind == "pocket" else None
+    fr = door_frame(W, H, th, stop=(kind == "door"), stop_y=(-LEAF_T - 0.001, -LEAF_T - 0.021), slot=slot)
     g = core.Geo()
     g.add(fr, 0)
     # casings: side B (the -n side) is int_trim at depth th; side A (+n face) mirrored
@@ -313,12 +372,7 @@ def build_int_door(o):
     if kind == "arch":
         return
     if kind == "pocket":
-        # leaves stand withdrawn into the wall pocket; only their lead edges and pulls show
-        for side in (-1, 1):
-            xe = side * (W / 2 - 0.032)
-            g = box(xe - 0.012 * side, xe + 0.0 * side, -th / 2 - LEAF_T / 2, -th / 2 + LEAF_T / 2, 0.01, H - 0.035)
-            gg = core.Geo().add(g)
-            core.obj(f"Door_{o['name']}_Pocket{'L' if side < 0 else 'R'}", gg.xf(M), COL_INT, mat_a, smooth=None)
+        build_pocket_leaves(o, M, W, H, th, jmat)
         return
     double = o.get("double", False)
     glazed = o.get("glazed", False)
@@ -332,13 +386,13 @@ def build_int_door(o):
             lo, _ = make_leaf(f"Door_{o['name']}_{side}", lw, H - 0.04, rows, side, 0.0, M, COL_LEAF, jmat,
                               stile=0.1, swing=-1)
             place_leaf(lo, M, xh, yl, sg * ang, pivot_dy=pdy)
-            lo["hinge"], lo["swing"], lo["open_angle"] = side, sg, sg * ang
+            lo["kind"], lo["hinge"], lo["swing"], lo["open_angle"] = "hinge", side, sg, sg * ang
     else:
         lw = W - 0.064 - 0.006
         lo, _ = make_leaf(f"Door_{o['name']}", lw, H - 0.04, [(0.36, "panel2"), (0.64, "panel2")], "L", 0.0, M,
                           COL_LEAF, jmat, stile=0.11, hw="porcelain" if jmat == "trim_int" else "brass", swing=-1)
         place_leaf(lo, M, -W / 2 + 0.035, yl, ang, pivot_dy=pdy)
-        lo["hinge"], lo["swing"], lo["open_angle"] = "L", 1, ang
+        lo["kind"], lo["hinge"], lo["swing"], lo["open_angle"] = "hinge", "L", 1, ang
 
 
 def fretwork(W, H):

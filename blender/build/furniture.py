@@ -958,7 +958,7 @@ def rug(w, d, mat, t=0.012, fringe=True):
 TIE_Z = 1.15        # holdback height: above the dado rails and wainscot caps (about 1.0 m)
 
 
-def curtains(W, Hc, drop_to, sheer=True, fabric="velvet_drape", tie=True, rng=None, pole_over=0.25, drapes=True):
+def curtains(W, Hc, drop_to, sheer=True, fabric="velvet_drape", tie=True, rng=None, pole_over=0.25, drapes=True, sheer_open=False):
     """Window dressing hung from a pole above the opening (local x across the window, y into the
     room from the wall face, z up from the floor): brass pole with finials and rings, a gathered
     sheer across the glass and heavy drapes tied back to each side."""
@@ -995,10 +995,20 @@ def curtains(W, Hc, drop_to, sheer=True, fabric="velvet_drape", tie=True, rng=No
         g = core.Geo(np.array(V), F, [[UV[q] for q in f] for f in F])
         return g
 
-    if sheer:
+    if sheer and not sheer_open:
         sh = panel(-W / 2 - 0.1, W / 2 + 0.1, drop_to + 0.02, pole_z - 0.04, 0.09, W * 5, 0.012)
         k.put("sheer", sh)
         k.put("sheer", sh.move(0, 0.002, 0).flip())
+    elif sheer:
+        # drawn back: each half pushed along the pole into a narrow stack of deep folds at the side,
+        # leaving the glass clear
+        stack = max(0.1, min(0.16, pole_over + 0.04))
+        for sx in (-1, 1):
+            x_out = sx * (W / 2 + pole_over - 0.03)
+            x_in = x_out - sx * stack
+            sh = panel(min(x_in, x_out), max(x_in, x_out), drop_to + 0.02, pole_z - 0.04, 0.09, 6, 0.022)
+            k.put("sheer", sh)
+            k.put("sheer", sh.move(0, 0.002, 0).flip())
     for sx in ((-1, 1) if drapes else ()):
         x0, x1 = (-half + 0.05, -W / 2 + 0.1) if sx < 0 else (W / 2 - 0.1, half - 0.05)
         gx = (x0 + 0.05) if sx < 0 else (x1 - 0.05)
