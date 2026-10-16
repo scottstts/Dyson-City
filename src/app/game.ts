@@ -18,6 +18,7 @@ import type { AtmosphereTextures } from '../atmosphere/luts';
 import { loadSettings, PauseMenu, type PlayerSettings } from '../ui/pauseMenu';
 import type { EntryScreen } from '../ui/entryScreen';
 import { EyeAdaptation } from '../render/adaptation';
+import { InteractionPrompt } from '../ui/prompt';
 import type { GameAudio } from '../audio/gameAudio';
 
 /** Frames per period of the debug yaw wobble (?wobble). */
@@ -44,6 +45,7 @@ export class Game {
   private readonly adaptation: EyeAdaptation | null;
   private frameIndex = 0;
   private readonly audio: GameAudio;
+  private readonly prompt: InteractionPrompt;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
     this.handle = handle;
@@ -92,6 +94,7 @@ export class Game {
     if (debug.vent) world.field.vents.lift(0);
     if (debug.lock) world.city.lock.setOpenness(debug.lock === 'outer' || debug.lock === 'open' ? 1 : 0, debug.lock === 'inner' || debug.lock === 'open' ? 1 : 0);
 
+    this.prompt = new InteractionPrompt(host);
     this.pause = new PauseMenu(host, this.settings, (s) => {
       this.player.sensitivity = s.sensitivity;
       this.camera.fov = s.fov;
@@ -162,6 +165,14 @@ export class Game {
     this.world.update(this.gameTime);
     if (this.playing) this.player.update(dt);
     this.world.city.update(dt, this.player.feet);
+    this.camera.updateMatrixWorld();
+    this.world.house.update(dt, this.camera, this.player.feet, this.playing && this.input.consumePress('KeyE'));
+    const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);
+    this.world.indoors = indoors;
+    this.world.estate.view(this.camera, indoors);
+    this.world.house.culling.update(this.camera, indoors);
+    const aimed = this.world.house.doors.aimed;
+    this.prompt.set(this.playing && aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null);
     if (this.debug.wobble !== null) {
       // Flicker review: a yaw sweep that returns to the same view every period, with a different
       // amplitude (so a different motion history and speed) each time; the period is prime so the
@@ -177,7 +188,8 @@ export class Game {
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
     const star = this.world.city.starVisibility(this.camera.position);
-    (this.pipeline.camera.starVisibility as unknown as { value: number }).value = star.visible;
+    // Under the house's roofs the star is not seen at all.
+    (this.pipeline.camera.starVisibility as unknown as { value: number }).value = indoors ? 0 : star.visible;
     (this.pipeline.camera.starTransmission as unknown as { value: number }).value = star.transmission;
     this.pipeline.render();
     if (this.adaptation) (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);

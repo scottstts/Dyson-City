@@ -37,7 +37,7 @@ Energy-conserving glare cannot hide the limb: just outside it, at most half the 
 
 ## Exposure and colour (`exposure.ts`, `adaptation.ts`, `tsl/toneMap.ts`)
 
-- **Eye adaptation** (`adaptation.ts`): a multiplier on the star-keyed exposure, floor 1 (outdoors and under the Dome nothing changes), ceiling 16. A 64 × 36 centre-weighted log-luminance meter of the post-TAA scene is read back asynchronously every 4 frames; target = clamp(0.12 / log-average). Opens with τ = 1.4 s, clamps down with τ = 0.3 s. Disabled when `?ev` fixes the exposure.
+- **Eye adaptation** (`adaptation.ts`): a multiplier on the star-keyed exposure, floor 1 (outdoors and under the Dome nothing changes), ceiling 64 (+6 stops: set for the house, whose day rooms sit ~7–8 stops under a sunlit wall; they read dim but legible, the curtained bedrooms and the hall stay dark, the windows blow out). A 64 × 36 centre-weighted log-luminance meter of the post-TAA scene is read back asynchronously every 4 frames; target = clamp(0.12 / log-average). Opens with τ = 1.4 s, clamps down with τ = 0.3 s. Disabled when `?ev` fixes the exposure.
   - The meter stores ln L offset and scaled into [0, 1]: the material's output is clamped on the way into the target, and raw negative logs read back as 0 (adaptation then never moved).
 
 - **The star is blinding.** The Veil cuts the light a great deal, but what passes is still overwhelming. Looking toward the star you see brightness swallowing everything: no surface texture, no silhouette. The disc mean maps to `STAR_KEY` (~4.6 stops over mid-grey), so the disc clips to white and sunlit stone facing it burns near white. Its surface (granulation, spots, activity) exists at true scale but is lost in the blaze.

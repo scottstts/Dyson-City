@@ -236,7 +236,7 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
 - **The star's exact glare follows what the eye sees of it** (built): scaled by the star's visibility at the eye (less under the Dome, none under a roof), and the disc replaces only sky pixels.
 - **Eye adaptation** (built). A metered, global exposure: a weighted average of scene luminance, never local.
   - **Floor:** pinned at the star key, so outdoors and under the Dome nothing changes.
-  - **Ceiling:** about +4 stops, so dim rooms stay dim.
+  - **Ceiling:** +6 stops (set for the house's baked rooms), so dim rooms stay dim.
   - **Speed:** asymmetric, as an eye. Going in it opens over ~4 s; going out it clamps down in ~1 s after a moment of overexposure.
 - **Bounce light.** The pale platform lights the Dome's underside and every interior. Indirect light is baked for static content; the environment capture inside the Dome includes the Dome (built).
 - **The Dome's glass** (built) is one thin neutral layer composited analytically in post over the sky and the scene behind it.

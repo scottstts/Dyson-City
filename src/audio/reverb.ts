@@ -7,7 +7,7 @@
  * the stone chamber is wet, while the Dome's air, huge as it is, returns only a faint long wash.
  */
 import { Biquad, decayPerSample, rng } from './dsp';
-import { SPEED_OF_SOUND } from './acoustics';
+import { SPEED_OF_SOUND, type Zone } from './acoustics';
 import { GATE } from '../city/gate/spec';
 
 /** Octave band centres (Hz) for the decay times. */
@@ -71,8 +71,15 @@ const CHAMBER_T60 = [3.4, 4.0, 4.3, 4.1, 3.7, 3.0, 2.2, 1.3];
  */
 const CITY_T60 = [6.5, 7.5, 7.5, 7.0, 6.2, 4.6, 3.0, 1.6];
 const CITY_LIFT = 10;
+/**
+ * The house: furnished rooms of ~6 × 5 × 3.8 m (the ground floor's ceilings), plaster walls, timber
+ * floors with rugs, upholstery and curtains. One response stands for every room (a zone's
+ * reverberation is diffuse): ~0.5 s in the mids, less at the top where the soft furnishings drink.
+ */
+const HOUSE_SIZE: [number, number, number] = [6, 5, 3.8];
+const HOUSE_T60 = [0.75, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.32];
 
-export const REVERBS: Record<'chamber' | 'city' | 'outside', ReverbSpec> = {
+export const REVERBS: Record<Zone, ReverbSpec> = {
   chamber: {
     length: 5.5,
     t60: CHAMBER_T60,
@@ -105,6 +112,20 @@ export const REVERBS: Record<'chamber' | 'city' | 'outside', ReverbSpec> = {
    * The band: open deck to the horizon. Only the Dome's posts and frame scatter a little back; the
    * big slap off the drum and gatehouse is a moving delay (engine.ts), not part of this IR.
    */
+  house: {
+    length: 1.4,
+    t60: HOUSE_T60,
+    onset: 0.012,
+    buildup: 0.03,
+    energy: diffuseEnergy(HOUSE_SIZE[0] * HOUSE_SIZE[1] * HOUSE_SIZE[2], HOUSE_T60[4]),
+    shoebox: {
+      size: HOUSE_SIZE,
+      source: [2.2, 0.1, 1.9],
+      listener: [2.6, 1.6, 2.4],
+      reflect: [0.82, 0.8, 0.7],
+      window: 0.04,
+    },
+  },
   outside: {
     length: 1.6,
     t60: [1.2, 1.2, 1.1, 1.0, 0.9, 0.7, 0.5, 0.3],

@@ -54,10 +54,11 @@ How:
   - the Dome's even dimming (its frame is in the interior environment capture);
   - the West Gate chamber's light (lamps without shadow maps, daylight through the openings by solid angle, `docs/gate.md`);
   - the star's glare scaled by its visibility at the eye;
-  - the outdoor star-visibility field for the Field's structures (`src/lighting/starShade.ts`, `docs/field.md`).
-    - It applies to the platform and to surfaces within ~8 m of it; higher surfaces keep contact AO only.
+  - the outdoor star-visibility field for the Field's structures and the estate (`src/lighting/starShade.ts`, `docs/field.md`, `docs/estate.md`).
+    - It applies near each texel's floor (the platform, or the estate's terrace 1.6 m up) and fades out within ~8 m above it; higher surfaces keep contact AO only.
+    - A face samples visibility 0.7 m ahead along its normal (a wall's or hedge's side is not shaded by its own footprint). A face on top of an occluder at least 0.4 m tall sees the whole cap; lower occluders (kerbs) never shade the cap.
     - The West Gate's gatehouse and the Dome's plinths are not yet in the occluder map.
+  - the house's interior light, baked (`docs/house.md`).
 - **Not built yet:**
   - visibility on raised surfaces (per vertex, as above);
-  - baked interior light;
   - lamp shadow maps for the gate's moving leaves.

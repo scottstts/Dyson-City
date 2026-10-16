@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { PerspectiveCamera } from 'three/webgpu';
-import { airCutoff, aperture, gatePath, mediumFactor, transmission, wallDistance, zoneAt } from '../src/audio/acoustics';
+import { airCutoff, aperture, facadePath, gatePath, mediumFactor, transmission, wallDistance, zoneAt } from '../src/audio/acoustics';
+import { H } from '../src/estate/layout';
 import { BANDS, REVERBS, synthesizeImpulse } from '../src/audio/reverb';
-import { Biquad, energyDecayDb, peak, rng, t60FromDecay } from '../src/audio/dsp';
-import { FOOT_GAITS, synthFootstep } from '../src/audio/synth/footstep';
+import { Biquad, energyDecayDb, filter, peak, rng, t60FromDecay } from '../src/audio/dsp';
+import { FOOT_GAITS, FOOT_SURFACES, synthFootstep } from '../src/audio/synth/footstep';
+import { synthTick } from '../src/audio/synth/house';
 import { synthValve } from '../src/audio/synth/valve';
 import { addPrint, BAND_COUNT, printLength, synthTexture, texturePsd, THIRD_OCTAVES, type SpectralPrint } from '../src/audio/synth/spectral';
 import { buildAudioBank } from '../src/audio/bank';
@@ -92,8 +94,51 @@ describe('acoustic spaces', () => {
   });
 });
 
+describe('the house', () => {
+  it('hears the estate through its shell: faint and dull shut, nearly open with an outer door wide', () => {
+    const shut = transmission('city', 'house', 0, 0, 0);
+    expect(20 * Math.log10(shut.gain)).toBeLessThan(-25);
+    expect(shut.cutoff).toBeLessThan(1000);
+    const open = transmission('house', 'city', 0, 0, 1);
+    expect(open.gain).toBeGreaterThan(0.4);
+    expect(open.cutoff).toBeGreaterThan(15000);
+    // A door ajar already lets a good deal through.
+    expect(facadePath(0.1).gain).toBeGreaterThan(5 * shut.gain);
+    // To the band: the shell and then the Dome's glass.
+    expect(transmission('house', 'outside', 0, 0, 1).gain).toBeLessThan(0.01);
+    expect(mediumFactor('house', 0.55)).toBe(1);
+  });
+
+  it('returns a slap off its walls to the terrace, continuously, never nearer than 2.5 m', () => {
+    const [x0, z0] = H(0, 12);
+    const [x1, z1] = H(0, 40);
+    let prev = wallDistance('city', x0, z0);
+    expect(prev).toBeLessThan(10);
+    for (let i = 1; i <= 400; i++) {
+      const d = wallDistance('city', x0 + ((x1 - x0) * i) / 400, z0 + ((z1 - z0) * i) / 400);
+      expect(d).toBeGreaterThanOrEqual(2.5);
+      expect(Math.abs(d - prev)).toBeLessThan(0.2);
+      prev = d;
+    }
+    // The house is no zone of its own in plan (its rooms are: AudioEngine.locate).
+    expect(zoneAt(x0, z0)).toBe('city');
+  });
+
+  it('beats its clocks as tick and tock: same modes, a different blow', () => {
+    for (const kind of ['longcase', 'mantel'] as const) {
+      const tick = synthTick(kind, 0, SR, 1);
+      const tock = synthTick(kind, 1, SR, 2);
+      expect(finite(tick) && finite(tock)).toBe(true);
+      expect(band(tock, 3000, 12000) / energy(tock)).toBeLessThan(band(tick, 3000, 12000) / energy(tick));
+    }
+    // The longcase's trunk: a deeper body than the mantel clock's case.
+    const low = (x: Float32Array) => band(x, 80, 400) / energy(x);
+    expect(low(synthTick('longcase', 0, SR, 3))).toBeGreaterThan(low(synthTick('mantel', 0, SR, 3)));
+  });
+});
+
 describe('impulse responses', () => {
-  const irs = { chamber: synthesizeImpulse(REVERBS.chamber, SR, 1), city: synthesizeImpulse(REVERBS.city, SR, 2), outside: synthesizeImpulse(REVERBS.outside, SR, 3) };
+  const irs = { chamber: synthesizeImpulse(REVERBS.chamber, SR, 1), city: synthesizeImpulse(REVERBS.city, SR, 2), outside: synthesizeImpulse(REVERBS.outside, SR, 3), house: synthesizeImpulse(REVERBS.house, SR, 4) };
 
   it('are finite and fade out', () => {
     for (const [l, r] of Object.values(irs)) {
@@ -102,8 +147,8 @@ describe('impulse responses', () => {
     }
   });
 
-  it('decay at the specified rate (1 kHz octave, chamber and city)', () => {
-    for (const zone of ['chamber', 'city'] as const) {
+  it('decay at the specified rate (1 kHz octave, chamber, city and house)', () => {
+    for (const zone of ['chamber', 'city', 'house'] as const) {
       const x = Float32Array.from(irs[zone][0]);
       new Biquad('bandpass', 1000, 1.41, SR).process(x);
       new Biquad('bandpass', 1000, 1.41, SR).process(x);
@@ -184,15 +229,38 @@ describe('cloned sounds', () => {
       for (const v of loop) ms += v * v;
       expect(Math.sqrt(ms / loop.length)).toBeCloseTo(1, 3);
     }
-    for (const x of [...Object.values(bank.footsteps).flat(), bank.hydraulicStart, ...bank.hydraulicStop, ...bank.leafShut, ...bank.latch, bank.valveOpen, bank.valveClose]) {
+    for (const x of [...Object.values(bank.footsteps).flat(), bank.hydraulicStart, ...bank.hydraulicStop, ...bank.leafShut, ...bank.latch, bank.valveOpen, bank.valveClose, ...bank.door.open, ...bank.door.shut, ...Object.values(bank.ticks).flat(2)]) {
       expect(finite(x)).toBe(true);
       expect(Math.abs(x[x.length - 1])).toBeLessThan(1e-2 * peak(x));
     }
+    // The door: the shut peaks at 1, its strike inside it and near its peak; the open quieter, as recorded.
+    const shut = bank.door.shut[0];
+    let at = 0;
+    for (let i = 0; i < shut.length; i++) if (Math.abs(shut[i]) > Math.abs(shut[at])) at = i;
+    expect(Math.abs(at / SR - bank.door.strike)).toBeLessThan(0.06);
+    expect(peak(bank.door.open[0])).toBeLessThan(0.5);
+    // The kettle and the rustle loop seamlessly at RMS 1.
+    for (const loop of [bank.kettle, bank.rustle]) {
+      expect(finite(loop)).toBe(true);
+      let ms = 0;
+      let step = 0;
+      for (let i = 0; i < loop.length; i++) {
+        ms += loop[i] * loop[i];
+        if (i > 0) step = Math.max(step, Math.abs(loop[i] - loop[i - 1]));
+      }
+      expect(Math.sqrt(ms / loop.length)).toBeCloseTo(1, 3);
+      // Periodic: the wrap is no bigger a step than the loop's own (clicks make big steps anywhere).
+      expect(Math.abs(loop[0] - loop[loop.length - 1])).toBeLessThanOrEqual(step);
+    }
+    // A walking step on turf is quieter than on stone; on gravel, louder than on turf.
+    const loud = (k: keyof typeof bank.footsteps) => bank.footsteps[k].reduce((m, x) => m + band(x, 250, 16000), 0);
+    expect(loud('grass:walk')).toBeLessThan(loud('stone:walk') / 4);
+    expect(loud('gravel:walk')).toBeGreaterThan(loud('grass:walk'));
   }, 30000);
 });
 
 describe('footsteps', () => {
-  const surfaces: GroundSurface[] = ['stone', 'basalt', 'bronze', 'deck'];
+  const surfaces = FOOT_SURFACES;
 
   it('strike harder running than walking, and harder still landing', () => {
     for (const s of surfaces) {
@@ -215,6 +283,37 @@ describe('footsteps', () => {
       return band(x, 140, 300) / energy(x);
     };
     expect(body('deck')).toBeGreaterThan(body('stone'));
+  });
+
+  it('crunch on gravel, swish on grass, thud on rugs, boom on boards', () => {
+    // Gravel crunches (grains giving way: sharp peaks over the step's highs); grass is a brush of
+    // blades (smooth, mostly above 2 kHz, little thud), as recorded.
+    const crest = (s: GroundSurface) => [0, 1, 2].reduce((m, v) => m + crestOf(s, v), 0) / 3;
+    const crestOf = (s: GroundSurface, v: number) => {
+      const x = filter(synthFootstep(s, 'walk', v, SR, 13 + v), SR, ['highpass', 2000, 0.7], ['lowpass', 12000, 0.7]);
+      let pk = 0;
+      let e = 0;
+      const w = Math.round(0.3 * SR);
+      for (let i = 0; i < x.length; i++) {
+        pk = Math.max(pk, Math.abs(x[i]));
+        if (i < w) e += x[i] * x[i];
+      }
+      return pk / Math.sqrt(e / w);
+    };
+    expect(crest('gravel')).toBeGreaterThan(1.8 * crest('grass'));
+    const grass = synthFootstep('grass', 'walk', 0, SR, 15);
+    expect(band(grass, 2000, 16000)).toBeGreaterThan(band(grass, 20, 2000));
+    const bright = (s: GroundSurface) => {
+      const x = synthFootstep(s, 'walk', 2, SR, 17);
+      return band(x, 2000, 12000) / energy(x);
+    };
+    expect(bright('rug')).toBeLessThan(0.3 * bright('wood'));
+    const low = (s: GroundSurface) => {
+      const x = synthFootstep(s, 'walk', 0, SR, 19);
+      return band(x, 70, 250) / energy(x);
+    };
+    expect(low('boards')).toBeGreaterThan(low('wood'));
+    expect(low('wood')).toBeGreaterThan(low('stone'));
   });
 });
 

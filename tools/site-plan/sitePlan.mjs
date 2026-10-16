@@ -5,7 +5,7 @@
  * The field is drawn from the source of truth: tools/site-plan/planData.ts is bundled (rolldown)
  * and reads src/field/layout.ts and the builders' own layouts (roads, viaducts, the Halo's arches,
  * the Cold Hold's tanks, the radiator forest, the tower clusters, the East Lock), so the plan cannot
- * disagree with the build. The Dome, the West Gate and the estate (step 2) are drawn here.
+ * disagree with the build; the estate comes from src/estate/ the same way. The Dome and the West Gate are drawn here.
  *
  * Frame: plan x = world X (east), plan y = world Z (south), so north (−Z) is up. Units are metres.
  * The drawing is built as SVG and rasterised to PNG in headless Chrome (as tools/render.mjs is).
@@ -45,7 +45,6 @@ const domeHeight = (r) => (r >= GLASS_A ? 0 : GLASS_C * Math.sqrt(1 - (r / GLASS
 const GATE_COURT = D.court;
 const HALO_R = D.halo.r;
 const CORRIDOR = D.corridor;
-const ESTATE = D.estate;
 const HOUSE = { x: D.house[0], z: D.house[1] };
 const MAST = D.mast;
 const GYRE = D.gyre;
@@ -57,11 +56,6 @@ const GATEWAY = D.gateway;
 // ── Helpers ──────────────────────────────────────────────────────────────────────────────────
 const f = (n) => (Math.round(n * 10) / 10).toString();
 const pts = (arr) => arr.map(([x, z]) => `${f(x)},${f(z)}`).join(' ');
-let seed = 7;
-const rand = () => {
-  seed = (seed * 16807) % 2147483647;
-  return (seed - 1) / 2147483646;
-};
 const out = [];
 const add = (s) => out.push(s);
 const text = (x, y, s, cls = 'lbl', extra = '') => add(`<text x="${f(x)}" y="${f(y)}" class="${cls}" ${extra}>${s}</text>`);
@@ -292,97 +286,42 @@ add(`<circle r="${HALO_R}" fill="none" stroke="${C.gold}" stroke-width="10.8"/>`
 add(`<circle r="${HALO_R - 4}" fill="none" stroke="${C.goldLight}" stroke-width="1.2"/>`);
 checkClear('Halo', HALO_R + 6, 0, 0, 20);
 
-// ── The Estate ───────────────────────────────────────────────────────────────────────────────
-const arcX = (z) => -Math.sqrt(ESTATE.backR ** 2 - z * z);
-const estatePoly = [];
-estatePoly.push([ESTATE.east, ESTATE.south], [ESTATE.east, ESTATE.north], [arcX(ESTATE.north), ESTATE.north]);
-for (let i = 1; i < 24; i++) {
-  const a0 = Math.atan2(ESTATE.north, arcX(ESTATE.north));
-  const a1 = Math.atan2(ESTATE.south, arcX(ESTATE.south));
-  const a = a0 + ((a1 - a0) * i) / 24;
-  estatePoly.push(polar(ESTATE.backR, a));
-}
-estatePoly.push([arcX(ESTATE.south), ESTATE.south]);
-add(`<clipPath id="estateClip"><polygon points="${pts(estatePoly)}"/></clipPath>`);
-// Retaining wall (stone) with the balustrade on top, then the lawn inside.
-add(`<polygon points="${pts(estatePoly)}" fill="${C.wall}" stroke="#a89c84" stroke-width="5" stroke-linejoin="round"/>`);
-add(`<polygon points="${pts(estatePoly)}" fill="url(#lawnStripes)" stroke="${C.ceramic}" stroke-width="1.6" stroke-dasharray="1.2 1.6"/>`);
-add(`<g clip-path="url(#estateClip)">`);
-// Gateway steps and ramp down to the Gate Court.
-add(`<rect x="${GATEWAY.x0}" y="${ESTATE.south - 5}" width="${GATEWAY.x1 - GATEWAY.x0}" height="10" fill="${C.gravel}"/>`);
-// Drive and forecourt.
-const fx = Math.cos(Math.atan2(-HOUSE.z, -HOUSE.x));
-const fz = Math.sin(Math.atan2(-HOUSE.z, -HOUSE.x));
-const fore = [HOUSE.x + fx * 31, HOUSE.z + fz * 31];
-add(`<path d="M-430 ${ESTATE.south} L-430 -52 C-430 -74 -400 -86 ${f(fore[0] - 14)} ${f(fore[1] + 3)}" fill="none" stroke="${C.gravel}" stroke-width="7" stroke-linecap="round"/>`);
-add(`<circle cx="${f(fore[0])}" cy="${f(fore[1])}" r="13" fill="${C.gravel}"/>`);
-add(`<circle cx="${f(fore[0])}" cy="${f(fore[1])}" r="5" fill="${C.lawn}" stroke="#7d9558" stroke-width="0.6"/>`);
-// Carriage house (where the car lives).
-add(`<rect x="-417" y="-71" width="20" height="11" fill="${C.slate}" stroke="${C.ink}" stroke-width="0.5"/>`);
-add(`<line x1="-417" y1="-65.5" x2="-397" y2="-65.5" stroke="#8a909a" stroke-width="0.6"/>`);
-// Kitchen garden: kerbed beds.
-for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) add(`<rect x="${-458 + i * 8}" y="${-96 + j * 10}" width="6" height="8" fill="#8a6f4e" stroke="#6d5539" stroke-width="0.4"/>`);
-// Glasshouse.
-add(`<rect x="-412" y="-151" width="24" height="9" fill="#d7e5ea" stroke="#7d97a3" stroke-width="0.7"/>`);
-for (let x = -409; x < -388; x += 3) add(`<line x1="${x}" y1="-151" x2="${x}" y2="-142" stroke="#7d97a3" stroke-width="0.3"/>`);
-// Pond.
-add(`<ellipse cx="-318" cy="-147" rx="15" ry="9" transform="rotate(-18 -318 -147)" fill="${C.water}" stroke="#6b8c9b" stroke-width="0.8"/>`);
-// Back path to the bench at the terrace edge.
-add(`<path d="M${f(HOUSE.x - fx * 20)} ${f(HOUSE.z - fz * 20)} L-452 -116" stroke="${C.gravel}" stroke-width="2.4" fill="none"/>`);
-add(`<rect x="-458" y="-120" width="3" height="8" fill="${C.porch}"/>`);
-// Trees: belts along the walls with claires-voies on the sightlines, an orchard, specimens.
-const trees = [];
-const porch = [HOUSE.x + fx * 15, HOUSE.z + fz * 15];
-const gaps = [];
-for (const [tx, tz] of [[0, 0], [GYRE.x, GYRE.z], [RESONATOR.x, RESONATOR.z], [HOLD.x, HOLD.z]]) {
-  gaps.push(Math.atan2(tz - porch[1], tx - porch[0]));
-}
-const inGap = (x, z) => {
-  const a = Math.atan2(z - porch[1], x - porch[0]);
-  return gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) < 0.085);
-};
-const belt = (x0, z0, x1, z1, step) => {
-  const len = Math.hypot(x1 - x0, z1 - z0);
-  for (let s = step / 2; s < len; s += step * (0.8 + rand() * 0.4)) {
-    const x = x0 + ((x1 - x0) * s) / len + (rand() - 0.5) * 3;
-    const z = z0 + ((z1 - z0) * s) / len + (rand() - 0.5) * 3;
-    if (!inGap(x, z)) trees.push([x, z, 4.5 + rand() * 3.5]);
-  }
-};
-belt(ESTATE.east + 8, ESTATE.north + 8, ESTATE.east + 8, ESTATE.south - 10, 10);
-belt(ESTATE.east + 8, ESTATE.north + 8, arcX(ESTATE.north + 8) + 10, ESTATE.north + 8, 11);
-belt(-300, ESTATE.south - 8, -395, ESTATE.south - 8, 12);
-for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) trees.push([-447 + i * 9 + (rand() - 0.5) * 2, -141 + j * 9 + (rand() - 0.5) * 2, 3.2]);
-trees.push([-338, -70, 8.5], [-305, -120, 7], [-352, -150, 9], [-395, -95, 6.5], [-447, -63, 5.5]);
-for (const [x, z, r] of trees) {
-  add(`<circle cx="${f(x + 1)}" cy="${f(z + 1.2)}" r="${f(r)}" fill="#000" fill-opacity="0.12"/>`);
-  add(`<circle cx="${f(x)}" cy="${f(z)}" r="${f(r)}" fill="${C.tree}" stroke="${C.treeDark}" stroke-width="0.6"/>`);
-}
-add(`</g>`);
-// House: main block, rear wing, front bay, wrap porch, turret (front corner toward the axis).
+// ── The Estate (as built: src/estate/, via planData) ─────────────────────────────────────────
 {
-  const ux = fx;
-  const uz = fz;
-  const vx = -uz;
-  const vz = ux;
-  const P = (u, v) => [HOUSE.x + ux * u + vx * v, HOUSE.z + uz * u + vz * v];
-  const poly = (list, fill, stroke = C.ink, w = 0.6) => add(`<polygon points="${pts(list.map(([u, v]) => P(u, v)))}" fill="${fill}" stroke="${stroke}" stroke-width="${w}"/>`);
-  poly([[11, -15], [15.5, -15], [15.5, 19.5], [-5, 19.5], [-5, 15], [11, 15]], C.porch, '#8d7d64', 0.5);
-  poly([[-11, -12], [-20, -12], [-20, 3], [-11, 3]], C.slate);
-  poly([[-11, -15], [11, -15], [11, 15], [-11, 15]], C.slate);
-  poly([[11, -4], [14, -2.5], [14, 3.5], [11, 5]], C.slate);
-  // Ridge lines.
-  add(`<polyline points="${pts([P(-5, -15), P(-5, 15)])}" stroke="#878d97" stroke-width="0.6" fill="none"/>`);
-  add(`<polyline points="${pts([P(-11, -15), P(-5, -9), P(5, -9), P(11, -15)])}" stroke="#878d97" stroke-width="0.5" fill="none"/>`);
-  add(`<polyline points="${pts([P(-11, 15), P(-5, 9), P(5, 9), P(11, 15)])}" stroke="#878d97" stroke-width="0.5" fill="none"/>`);
-  const [tx, tz] = P(11, 15);
-  add(`<circle cx="${f(tx)}" cy="${f(tz)}" r="5" fill="${C.slate}" stroke="${C.ink}" stroke-width="0.6"/>`);
-  add(`<circle cx="${f(tx)}" cy="${f(tz)}" r="1" fill="#b87333"/>`);
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    add(`<line x1="${f(tx)}" y1="${f(tz)}" x2="${f(tx + 5 * Math.cos(a))}" y2="${f(tz + 5 * Math.sin(a))}" stroke="#878d97" stroke-width="0.35"/>`);
+  const E = D.estatePlan;
+  const loopPath = (loops) => loops.map((l) => `M${l.map(([x, z]) => `${f(x)} ${f(z)}`).join(' L')} Z`).join(' ');
+  // Retaining wall and balustrade: the terrace's outer face, the wall's thickness inside it.
+  add(`<polygon points="${pts(E.terrace)}" fill="${C.wall}" stroke="#a89c84" stroke-width="1.2" stroke-linejoin="round"/>`);
+  const FILL = { lawn: 'url(#lawnStripes)', meadow: '#b3bf86', gravel: C.gravel, ramp: C.gravel, flag: '#e3dccb', brick: '#a8644a', soil: '#8a6f4e', water: C.water };
+  for (const [cls, fill] of Object.entries(FILL)) {
+    for (const loops of E.regions[cls] ?? []) add(`<path d="${loopPath(loops)}" fill="${fill}" fill-rule="evenodd" stroke="${cls === 'lawn' || cls === 'meadow' ? 'none' : '#00000022'}" stroke-width="0.25"/>`);
   }
-  checkClear('House turret', tx, tz, 5, 40);
+  // Hedges: yew dark, box lighter.
+  for (const h of E.hedges) {
+    const tag = h.closed ? 'polygon' : 'polyline';
+    add(`<${tag} points="${pts(h.path)}" fill="none" stroke="${h.kind === 'yew' ? '#3f5a2c' : '#55703b'}" stroke-width="${f(h.width)}" stroke-linejoin="round" stroke-linecap="round"/>`);
+  }
+  add(`<polygon points="${pts(E.pool)}" fill="${C.water}" stroke="#d9d2c0" stroke-width="0.6"/>`);
+  // Kitchen garden walls (brick), the glasshouse, the carriage house.
+  const K = E.kitchen;
+  add(`<rect x="${K.x0}" y="${K.z0}" width="${K.x1 - K.x0}" height="${K.z1 - K.z0}" fill="none" stroke="#9a5340" stroke-width="${K.wall * 2}"/>`);
+  const G = E.glasshouse;
+  add(`<rect x="${G.x0}" y="${G.z0}" width="${G.x1 - G.x0}" height="${G.z1 - G.z0}" fill="#d7e5ea" stroke="#7d97a3" stroke-width="0.4"/>`);
+  for (let x = G.x0 + 1; x < G.x1; x += 1) add(`<line x1="${f(x)}" y1="${G.z0}" x2="${f(x)}" y2="${G.z1}" stroke="#7d97a3" stroke-width="0.12"/>`);
+  const CH = E.carriage;
+  add(`<rect x="${CH.x - CH.hx}" y="${CH.z - CH.hz}" width="${2 * CH.hx}" height="${2 * CH.hz}" fill="${C.slate}" stroke="${C.ink}" stroke-width="0.4"/>`);
+  add(`<line x1="${CH.x - CH.hx}" y1="${CH.z}" x2="${CH.x + CH.hx}" y2="${CH.z}" stroke="#8a909a" stroke-width="0.4"/>`);
+  // The house: foundation in slate, porches and steps in the porch's colour.
+  E.house.forEach((p, i) => add(`<polygon points="${pts(p)}" fill="${i === 0 ? C.slate : C.porch}" stroke="${C.ink}" stroke-width="0.35"/>`));
+  checkClear('House', E.houseCentre[0], E.houseCentre[1], 16, 17);
+  // Trees and topiary, crowns with a soft shadow.
+  for (const t of E.trees) {
+    const fill = t.species === 'copperBeech' ? '#7a4a44' : t.species === 'cedar' ? '#4f6848' : C.tree;
+    add(`<circle cx="${f(t.x + 0.8)}" cy="${f(t.z + 1)}" r="${f(t.r)}" fill="#000" fill-opacity="0.12"/>`);
+    add(`<circle cx="${f(t.x)}" cy="${f(t.z)}" r="${f(t.r)}" fill="${fill}" fill-opacity="0.92" stroke="${C.treeDark}" stroke-width="0.4"/>`);
+    checkClear(`Tree (${t.species})`, t.x, t.z, t.r, t.top);
+  }
+  for (const t of E.topiary) add(`<circle cx="${f(t.x)}" cy="${f(t.z)}" r="0.55" fill="#2f4722"/>`);
 }
 
 // ── The Cold Hold: foil-wrapped spheres of power-law sizes on columns ────────────────────────

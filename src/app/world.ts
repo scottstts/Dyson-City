@@ -30,8 +30,13 @@ import { buildField, type Field } from '../field/field';
 import { fieldPaving } from '../field/paving';
 import { createFieldProbes } from '../field/probes';
 import { addFieldWalls } from '../field/walk';
-import { createStarShade, rasterOccluders } from '../lighting/starShade';
+import { createStarShade, floorMap, rasterOccluders } from '../lighting/starShade';
+import { estateFloor } from '../estate/layout';
+import { createEstateProbe } from '../estate/probe';
 import { FIELD_Y } from '../field/layout';
+import { House } from '../house/house';
+import { buildEstate, type Estate } from '../estate/estate';
+import type { HouseAssets } from '../house/assets';
 
 export interface World {
   readonly scene: Scene;
@@ -47,6 +52,12 @@ export interface World {
   readonly city: City;
   /** The Field: the Halo, the heroes and the network (docs/field.md). */
   readonly field: Field;
+  /** The house on the estate's terrace (docs/house.md). */
+  readonly house: House;
+  /** The estate round it (docs/estate.md). */
+  readonly estate: Estate;
+  /** The eye is inside the house (Game sets it): outdoor captures do not refresh. */
+  indoors: boolean;
   /** The star's atmosphere, composited onto sky pixels by the pipeline. */
   readonly starAtmosphere: StarAtmosphere;
   /** The star's erupting gas: a fluid stepped on the GPU each frame. */
@@ -54,7 +65,7 @@ export interface World {
   update(gameTime: number): void;
 }
 
-export async function buildWorld(renderer: WebGPURenderer, atmoTextures: AtmosphereTextures, startTime: number, skyDebug: string | null = null): Promise<World> {
+export async function buildWorld(renderer: WebGPURenderer, atmoTextures: AtmosphereTextures, houseAssets: HouseAssets, startTime: number, skyDebug: string | null = null): Promise<World> {
   const atmo = createAtmosphereNodes(atmoTextures);
   const star = new StarState();
   star.update(startTime);
@@ -100,6 +111,15 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   scene.add(city.group);
   const field = buildField();
   scene.add(field.group);
+  // The house: its exterior now, the floors streamed in once the game runs.
+  const house = await House.create(houseAssets, { renderer, scene, look: { envTexture: environment.target.texture } });
+  scene.add(house.root);
+  city.walk.walls.meshes.push(house.walk);
+  const estate = buildEstate();
+  scene.add(estate.group);
+  city.walk.walls.meshes.push(estate.walk);
+  const houseCopies = [...house.captureCopies(), ...estate.captureCopies()];
+  house.culling.track([...field.statics, ...field.moving, ...estate.outdoorMeshes]);
   const tWalls = performance.now();
   const fieldWalls = addFieldWalls(city.walk.walls, [...field.statics, ...field.moving]);
   console.info(`[Dyson] field walls: ${fieldWalls} segments, ${(performance.now() - tWalls).toFixed(0)} ms`);
@@ -111,7 +131,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     return c;
   });
   const interior = createEnvironment(renderer, sky, INTERIOR_CAPTURE_Y, startTime, {
-    extras: [...city.captureExtras(), ...captureSite],
+    extras: [...city.captureExtras(), ...captureSite, ...houseCopies],
     extrasEnvironment: environment.target.texture,
     transmittance: GLASS_TRANSMISSION,
     name: 'environment.interior',
@@ -122,18 +142,24 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const composites = [...city.bindEnvironments(environment.target.texture, interior.target.texture), field.vapour.composite];
   // The star-shade under the field (lighting/starShade.ts), baked once: the platform and the field take it.
   const tShade = performance.now();
-  const occluders = rasterOccluders([...field.statics, ...field.moving]);
+  const occluders = rasterOccluders([...field.statics, ...field.moving, ...house.exteriorMeshes, ...estate.occluders]);
   const tRaster = performance.now();
-  const shade = await createStarShade(renderer, occluders, FIELD_Y);
+  const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, estateFloor));
   console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
   platformMaterial.aoNode = shade.ao();
   platformMaterial.needsUpdate = true;
+  house.setLook({ shade: shade.ao, envTexture: interior.target.texture });
+  estate.setLook({ shade: shade.ao, envTexture: interior.target.texture });
   // The field's reflection probes, each captured where its zone stands (field/probes.ts).
   const tProbes = performance.now();
-  const probes = createFieldProbes(renderer, sky, field, startTime, { extras: [...city.captureExtras(), ...captureSite], interior, transmittance: GLASS_TRANSMISSION, shade: shade.ao });
+  const probes = createFieldProbes(renderer, sky, field, startTime, { extras: [...city.captureExtras(), ...captureSite, ...houseCopies], interior, transmittance: GLASS_TRANSMISSION, shade: shade.ao });
   console.info(`[Dyson] field probes: ${(performance.now() - tProbes).toFixed(0)} ms`);
+  // The estate's own probe: the house, its garden's walls and buildings, the field beyond.
+  const estateProbe = createEstateProbe(renderer, sky, startTime, { extras: [...city.captureExtras(), ...captureSite.map((m) => m.clone()), ...house.captureCopies(), ...estate.captureCopies(), ...field.captureCopies({})], interior, transmittance: GLASS_TRANSMISSION });
+  house.setLook({ env: estateProbe.env, envTexture: estateProbe.environment.target.texture });
+  estate.setLook({ shade: shade.ao, env: estateProbe.env, envTexture: interior.target.texture });
 
-  return {
+  const world: World = {
     scene,
     star,
     sky,
@@ -143,6 +169,9 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     composites,
     city,
     field,
+    house,
+    estate,
+    indoors: false,
     gas,
     starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame, gas),
     update: (t) => {
@@ -150,10 +179,16 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
       gas.update(star.time.value);
       updateFrameSpin(t);
       field.update(t);
+      estate.update(t);
       environment.update(t);
       interior.update(t);
-      probes.update(t);
+      // Indoors the outdoors is only what the windows frame: its local captures wait.
+      if (!world.indoors) {
+        probes.update(t);
+        estateProbe.update(t);
+      }
       (sky.options.frame as unknown as { value: number }).value += 1;
     },
   };
+  return world;
 }

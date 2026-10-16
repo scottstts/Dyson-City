@@ -4,12 +4,13 @@
  * their sources, and lets the engine re-derive every path.
  */
 import { AudioEngine, type ListenerState } from './engine';
-import { zoneAt } from './acoustics';
 import { AirlockWatcher } from './airlockEvents';
 import { Footsteps } from './sounds/footsteps';
 import { GateSounds } from './sounds/gate';
 import { VentSounds } from './sounds/vents';
 import { FieldSounds, type AudioField } from './sounds/field';
+import { HouseSounds, type AudioHouse } from './sounds/house';
+import { EstateSounds, type AudioCrown } from './sounds/estate';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
 import type { Airlock } from '../city/gate/airlock';
@@ -19,9 +20,13 @@ import type { FootEvent } from '../player/controller';
 /** What the sound needs from the world. */
 export interface AudioWorld {
   airlock: Airlock;
-  surface(x: number, z: number): GroundSurface;
+  /** What is underfoot at a point (feet height y: the house has storeys). */
+  surface(x: number, z: number, y: number): GroundSurface;
   /** The field's machines (absent in tools that only drive the airlock). */
   field?: AudioField;
+  /** The house and the estate's trees (absent in tools without them). */
+  house?: AudioHouse;
+  crowns?: readonly AudioCrown[];
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -43,6 +48,9 @@ export class GameAudio {
   private readonly gate: GateSounds;
   private readonly vents: VentSounds;
   private readonly field: FieldSounds | null;
+  private readonly house: HouseSounds | null;
+  private readonly estate: EstateSounds | null;
+  private readonly houseDoors: AudioHouse['doors'] | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
   private readonly listener: ListenerState = {
@@ -55,6 +63,7 @@ export class GameAudio {
     outerOpen: 0,
     innerOpen: 0,
     bar: 0.55,
+    houseOpen: 0,
   };
 
   constructor(ctx: BaseAudioContext, world: AudioWorld, bank: AudioBank) {
@@ -62,10 +71,15 @@ export class GameAudio {
     this.engine.master.gain.value = LEVEL.master;
     this.airlock = world.airlock;
     this.watcher = new AirlockWatcher(world.airlock);
-    this.footsteps = new Footsteps(this.engine, (x, z) => world.surface(x, z));
+    this.footsteps = new Footsteps(this.engine, (x, z, y) => world.surface(x, z, y));
     this.gate = new GateSounds(this.engine, world.airlock.outer, world.airlock.inner);
     this.vents = new VentSounds(this.engine, world.airlock);
     this.field = world.field ? new FieldSounds(this.engine, world.field) : null;
+    const house = world.house;
+    if (house) this.engine.interior = (x, y, z) => house.inside(x, y, z);
+    this.house = house ? new HouseSounds(this.engine, house) : null;
+    this.houseDoors = house?.doors ?? null;
+    this.estate = world.crowns ? new EstateSounds(this.engine, world.crowns) : null;
   }
 
   /**
@@ -94,10 +108,13 @@ export class GameAudio {
     l.up[0] = m[4];
     l.up[1] = m[5];
     l.up[2] = m[6];
-    l.zone = zoneAt(l.x, l.z);
+    l.zone = this.engine.locate(l.x, l.y, l.z);
     l.outerOpen = this.airlock.outer.openness;
     l.innerOpen = this.airlock.inner.openness;
     l.bar = this.airlock.bar;
+    let open = 0;
+    if (this.houseDoors) for (const d of this.houseDoors.list) if (d.spec.exterior && d.amount > open) open = d.amount;
+    l.houseOpen = open;
 
     const ev = this.watcher.step(this.airlock);
     for (const g of ev.gates) this.gate.play(g.gate, g.event, t);
@@ -106,12 +123,14 @@ export class GameAudio {
     // The body's horizontal right, for the feet's stance.
     const rl = Math.hypot(m[0], m[2]) || 1;
     this.footsteps.follow(feet.x, feet.y, feet.z, m[0] / rl, m[2] / rl);
-    for (const e of this.pending) this.footsteps.play(e, feet.x, feet.z, t);
+    for (const e of this.pending) this.footsteps.play(e, feet.x, feet.y, feet.z, t);
     this.pending.length = 0;
 
     this.gate.update(dt, t);
     this.vents.update(dt, t, this.airlock);
     this.field?.update(dt, t, l);
+    this.house?.update(t, l);
+    this.estate?.update(t, l);
     this.engine.update(l, t);
   }
 

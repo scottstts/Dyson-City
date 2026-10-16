@@ -17,7 +17,7 @@
  * where the listener stands in that zone). Nothing bypasses this to play "2D".
  */
 import type { AudioEngine, ListenerState } from './engine';
-import { airCutoff, mediumFactor, SPEED_OF_SOUND, transmission, zoneAt, ZONES, type Path, type Zone } from './acoustics';
+import { airCutoff, mediumFactor, SPEED_OF_SOUND, transmission, ZONES, type Path, type Zone } from './acoustics';
 import { glide } from './params';
 
 export interface Directivity {
@@ -42,9 +42,17 @@ export interface EmitterOptions {
   refDistance: number;
   /** Reverb send relative to the direct sound at 1 m (1 = physical diffuse-field level). */
   send?: number;
+  /**
+   * Per frame, a further factor on the send into each zone (default 1). The house's sounds use it
+   * to feed their reverb at their level at 1 m (the input is the level at `refDistance`) and only
+   * into the room they are in (sounds/house.ts).
+   */
+  sendScale?: (zone: Zone) => number;
   directivity?: Directivity;
   /** Equal-power instead of HRTF panning, for small, numerous sources. */
   simplePanning?: boolean;
+  /** Where the direct sound arrives at the ears (default the engine's dry bus). */
+  out?: AudioNode;
 }
 
 const MAX_DELAY = 2.5;
@@ -61,15 +69,19 @@ export class Emitter {
   private readonly panner: PannerNode;
   private readonly sends: { zone: Zone; gain: GainNode }[];
   private readonly sendLevel: number;
+  private readonly sendScale: ((zone: Zone) => number) | undefined;
   private readonly directivity: Directivity | undefined;
+  private readonly engine: AudioEngine;
   private first = true;
 
   constructor(engine: AudioEngine, opts: EmitterOptions) {
     const ctx = engine.ctx;
+    this.engine = engine;
     this.name = opts.name;
     this.zones = opts.zones;
     this.directivity = opts.directivity ? { ...opts.directivity, axis: [...opts.directivity.axis] } : undefined;
     this.sendLevel = opts.send ?? 1;
+    this.sendScale = opts.sendScale;
     this.input = ctx.createGain();
     this.delay = ctx.createDelay(MAX_DELAY);
     this.lowpass = ctx.createBiquadFilter();
@@ -83,7 +95,7 @@ export class Emitter {
       rolloffFactor: 1,
       maxDistance: 20000,
     });
-    this.input.connect(this.delay).connect(this.lowpass).connect(this.gain).connect(this.panner).connect(engine.dry);
+    this.input.connect(this.delay).connect(this.lowpass).connect(this.gain).connect(this.panner).connect(opts.out ?? engine.dry);
     this.sends = (opts.zones === 'located' ? ZONES : opts.zones).map((zone) => {
       const g = ctx.createGain();
       g.gain.value = 0;
@@ -121,11 +133,11 @@ export class Emitter {
     const d = Math.max(Math.hypot(dx, dy, dz), 0.05);
 
     // The loudest path from any zone the source radiates into.
-    const zones = this.zones === 'located' ? [zoneAt(x, z)] : this.zones;
+    const zones = this.zones === 'located' ? [this.engine.locate(x, y, z)] : this.zones;
     let path: Path = { gain: 0, cutoff: 20 };
     let medium = 0;
     for (const zone of zones) {
-      const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen);
+      const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen, l.houseOpen);
       const m = mediumFactor(zone, l.bar);
       if (p.gain * m > path.gain * medium) {
         path = p;
@@ -153,7 +165,10 @@ export class Emitter {
     glide(this.delay.delayTime, Math.min(d / SPEED_OF_SOUND, MAX_DELAY), t, this.first ? 0 : 0.08);
     glide(this.lowpass.frequency, cutoff, t, tc);
     glide(this.gain.gain, path.gain * medium * dirGain, t, tc);
-    for (const s of this.sends) glide(s.gain.gain, zones.includes(s.zone) ? (this.sendLevel * mediumFactor(s.zone, l.bar)) / zones.length : 0, t, tc);
+    for (const s of this.sends) {
+      const g = zones.includes(s.zone) ? (this.sendLevel * mediumFactor(s.zone, l.bar)) / zones.length : 0;
+      glide(s.gain.gain, g > 0 && this.sendScale ? g * this.sendScale(s.zone) : g, t, tc);
+    }
     this.first = false;
   }
 }

@@ -5,7 +5,7 @@
  *
  *  - Lamps: two RectAreaLights the size of the luminaires' diffusers, applied only to the gate's
  *    own materials. Their radiance is set so the floor sees ~1/200 of the outdoor illuminance
- *    (≈500 lx against ≈100 klx): readable once the eye has opened up its +4 stops, still dim.
+ *    (≈500 lx against ≈100 klx): readable once the eye has opened up (the gate meters ~+4 stops), still dim.
  *  - Daylight through an opening: the chamber's surfaces take the environment (outdoor through the
  *    outer gate, the city's through the inner) scaled by the solid angle of the opening as each
  *    point sees it (closed form for a rectangle) and by how squarely the surface faces it. The

@@ -1,6 +1,8 @@
 /** Keyboard + pointer-lock mouse input. Accumulates look deltas between frames. */
 export class Input {
   private readonly keys = new Set<string>();
+  /** Keys pressed (not auto-repeated) since they were last consumed. */
+  private readonly presses = new Set<string>();
   lookX = 0;
   lookY = 0;
   locked = false;
@@ -12,6 +14,7 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (!this.locked) return;
       this.keys.add(e.code);
+      if (!e.repeat) this.presses.add(e.code);
       if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
     });
     window.addEventListener('keyup', (e) => this.keys.delete(e.code));
@@ -23,7 +26,10 @@ export class Input {
     });
     document.addEventListener('pointerlockchange', () => {
       this.locked = document.pointerLockElement === this.element;
-      if (!this.locked) this.keys.clear();
+      if (!this.locked) {
+        this.keys.clear();
+        this.presses.clear();
+      }
       this.onLockChange?.(this.locked);
     });
   }
@@ -37,6 +43,13 @@ export class Input {
 
   down(code: string): boolean {
     return this.keys.has(code);
+  }
+
+  /** Was the key pressed since the last call (a single action, e.g. opening a door)? */
+  consumePress(code: string): boolean {
+    const hit = this.presses.has(code);
+    this.presses.delete(code);
+    return hit;
   }
 
   consumeLook(): [number, number] {

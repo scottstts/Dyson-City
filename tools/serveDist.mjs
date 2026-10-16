@@ -32,3 +32,29 @@ export async function serveDist(context, dir) {
     return route.fulfill({ status: 200, body: fs.readFileSync(file), contentType: MIME[path.extname(file)] ?? 'application/octet-stream' });
   });
 }
+
+/**
+ * The house bundle (src/house/pack.ts) lives on the asset host, whose CORS policy admits only the dev
+ * server's origin. The tools answer its Range requests from the local export (assets/house.pack,
+ * byte-identical to the upload) instead, which is also far faster than the network.
+ */
+export const HOUSE_PACK_URL = 'https://pub-f86f1e8e87f44fa0b55fb73275682731.r2.dev/house.pack';
+const LOCAL_PACK = path.resolve('assets/house.pack');
+
+export async function serveHousePack(context) {
+  if (!fs.existsSync(LOCAL_PACK)) return;
+  const fd = fs.openSync(LOCAL_PACK, 'r');
+  const size = fs.fstatSync(fd).size;
+  await context.route(HOUSE_PACK_URL, async (route) => {
+    const req = route.request();
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Accept-Ranges': 'bytes', 'Content-Type': 'application/octet-stream' };
+    if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...headers, 'Access-Control-Allow-Headers': 'Range' } });
+    const m = /bytes=(\d+)-(\d+)?/.exec(req.headers()['range'] ?? '');
+    if (!m) return route.fulfill({ status: 416, headers, body: '' });
+    const start = Number(m[1]);
+    const end = Math.min(m[2] !== undefined ? Number(m[2]) : size - 1, size - 1);
+    const body = Buffer.alloc(end - start + 1);
+    fs.readSync(fd, body, 0, body.length, start);
+    return route.fulfill({ status: 206, headers: { ...headers, 'Content-Range': `bytes ${start}-${end}/${size}` }, body });
+  });
+}

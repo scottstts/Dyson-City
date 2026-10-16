@@ -18,6 +18,7 @@
  * of pixels with σ above 4/255. Writes <out>/<spot>-flicker.png: a heat map of σ.
  */
 import { chromium } from 'playwright-core';
+import { serveHousePack } from './serveDist.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -54,6 +55,7 @@ const browser = await chromium.launch({
 try {
   for (const spot of spots) {
     const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+    await serveHousePack(page.context());
     const logs = [];
     page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
     page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));

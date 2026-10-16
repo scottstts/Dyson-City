@@ -20,14 +20,20 @@ const STEP_UP = 0.45;
 const CROUCH_EYE = 1.05;
 const LOOK_RAD_PER_PX = 0.0021;
 
-/** The walkable world: surface height and walls (default: the bare site, no walls). */
+/**
+ * The walkable world: surface height and walls (default: the bare site, no walls). `ground` is
+ * the highest surface over (x, z) at or below `yMax` (storeys: the floor the feet are on, not the
+ * one above).
+ */
 export interface Walkable {
-  ground(x: number, z: number): number;
+  ground(x: number, z: number, yMax?: number): number;
   walls?: CollisionWorld;
 }
 
 /** Radius of the walker's body for wall collisions. */
 const BODY_RADIUS = 0.3;
+/** The body's height band above the feet that walls block (below it is a step; above, headroom). */
+const BODY_BAND: [number, number] = [STEP_UP - 0.03, 1.75];
 
 /**
  * Something the feet did, for footstep sounds: a step of the gait (in time with the head's strike),
@@ -46,6 +52,8 @@ const FOOT_REFRACTORY = 0.15;
 
 export interface Spawn {
   position: [number, number];
+  /** Storeyed places: the height to stand at or below (default: the highest surface). */
+  height?: number;
   yaw: number;
   pitch: number;
 }
@@ -80,7 +88,7 @@ export class PlayerController {
 
   spawn(s: Spawn): void {
     this.feet.set(s.position[0], 0, s.position[1]);
-    this.feet.y = this.world.ground(this.feet.x, this.feet.z);
+    this.feet.y = this.world.ground(this.feet.x, this.feet.z, s.height ?? Infinity);
     this.yaw = s.yaw;
     this.pitch = s.pitch;
     this.velocity.set(0, 0, 0);
@@ -127,13 +135,13 @@ export class PlayerController {
     // Horizontal move: slide along walls, then a soft bound.
     let nx = this.feet.x + this.velocity.x * dt;
     let nz = this.feet.z + this.velocity.z * dt;
-    if (this.world.walls) [nx, nz] = this.world.walls.move(this.feet.x, this.feet.z, this.velocity.x * dt, this.velocity.z * dt, BODY_RADIUS);
+    if (this.world.walls) [nx, nz] = this.world.walls.move(this.feet.x, this.feet.z, this.velocity.x * dt, this.velocity.z * dt, BODY_RADIUS, [this.feet.y + BODY_BAND[0], this.feet.y + BODY_BAND[1]]);
     const r = Math.hypot(nx, nz);
     const limit = SITE.walkRadius;
     const scale = r > limit ? limit / r : 1;
     const tx = nx * scale;
     const tz = nz * scale;
-    const target = this.world.ground(tx, tz);
+    const target = this.world.ground(tx, tz, this.feet.y + STEP_UP);
 
     if (this.grounded) {
       const rise = target - this.feet.y;
@@ -159,8 +167,11 @@ export class PlayerController {
 
     if (!this.grounded) {
       this.velocity.y -= GRAVITY * dt;
+      // Swept: any floor the feet passed through this frame catches them (a fast fall over a thin
+      // deck must not tunnel through it to whatever is under it).
+      const from = this.feet.y;
       this.feet.y += this.velocity.y * dt;
-      const floor = this.world.ground(this.feet.x, this.feet.z);
+      const floor = this.world.ground(this.feet.x, this.feet.z, Math.max(from, this.feet.y) + 0.05);
       if (this.feet.y <= floor) {
         this.stepOffset += this.feet.y - floor;
         this.feet.y = floor;

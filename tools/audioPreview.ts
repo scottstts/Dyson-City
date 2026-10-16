@@ -163,7 +163,7 @@ export async function directionCheck(sampleRate = 48000): Promise<{ yaw: number;
   for (let i = 0; i < seconds * 60; i++) {
     const t = i / 60;
     const yaw = (Math.PI / 2) * t;
-    engine.update({ x: 0, y: 1.6, z: 0, forward: [-Math.sin(yaw), 0, -Math.cos(yaw)], up: [0, 1, 0], zone: 'outside', outerOpen: 0, innerOpen: 0, bar: 0.55 }, t);
+    engine.update({ x: 0, y: 1.6, z: 0, forward: [-Math.sin(yaw), 0, -Math.cos(yaw)], up: [0, 1, 0], zone: 'outside', outerOpen: 0, innerOpen: 0, bar: 0.55, houseOpen: 0 }, t);
   }
   const out = await ctx.startRendering();
   const L = out.getChannelData(0);

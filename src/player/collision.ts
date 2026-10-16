@@ -3,8 +3,11 @@
  * player's circle. The walker moves in short sub-steps and is pushed out of every segment it
  * overlaps, so it slides along walls and cannot tunnel through thin ones.
  *
- * Segments live in a uniform grid; dynamic sets (a gate's leaf) are switched by tag.
+ * Segments live in a uniform grid; dynamic sets (a gate's leaf) are switched by tag. Segments are
+ * walls of unbounded height. Where the world has storeys (the house, the estate), its walls are
+ * triangles in 3D (walkMesh.ts), resolved within the body's height band.
  */
+import type { WalkMesh } from './walkMesh';
 
 interface Segment {
   ax: number;
@@ -19,6 +22,8 @@ const CELL = 8;
 export class CollisionWorld {
   private readonly grid = new Map<string, Segment[]>();
   private readonly disabled = new Set<string>();
+  /** 3D walls (and floors) of storeyed places. */
+  readonly meshes: WalkMesh[] = [];
 
   addSegment(ax: number, az: number, bx: number, bz: number, tag: string | null = null): void {
     const s: Segment = { ax, az, bx, bz, tag };
@@ -56,9 +61,9 @@ export class CollisionWorld {
 
   /**
    * Moves a circle of radius r from (x, z) by (dx, dz), sliding along walls. Returns the new
-   * position.
+   * position. `band` is the body's height span (3D walls only block within it).
    */
-  move(x: number, z: number, dx: number, dz: number, r: number): [number, number] {
+  move(x: number, z: number, dx: number, dz: number, r: number, band: [number, number] = [-Infinity, Infinity]): [number, number] {
     const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (r * 0.5)));
     let px = x;
     let pz = z;
@@ -66,6 +71,7 @@ export class CollisionWorld {
       px += dx / steps;
       pz += dz / steps;
       [px, pz] = this.resolve(px, pz, r);
+      for (const m of this.meshes) [px, pz] = m.resolve(px, pz, r, band[0], band[1]);
     }
     return [px, pz];
   }

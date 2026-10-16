@@ -16,6 +16,34 @@ import { LOCK } from '../../src/city/eastLock/spec';
 import { plantLots } from '../../src/field/plant/lots';
 import { servicePlan } from '../../src/field/plant/services';
 import { PORTAL_ARCH } from '../../src/field/cordon';
+import { groundRegions } from '../../src/estate/regions';
+import { CARRIAGE_HOUSE, GLASSHOUSE, H, HOUSE_FOOTPRINT, KITCHEN, TERRACE_OUTLINE } from '../../src/estate/layout';
+import { hedgeSpecs } from '../../src/estate/hedges';
+import { poolOutline } from '../../src/estate/pond';
+import { topiaryPlan, treePlan } from '../../src/estate/plants/planting';
+import { growTree } from '../../src/estate/plants/tree';
+import { SPECIES } from '../../src/estate/plants/species';
+
+/** The estate as built (src/estate/): ground regions by class, the house, hedges, the pool, buildings, trees. */
+function estatePlan() {
+  const regions = groundRegions(0.25);
+  return {
+    terrace: TERRACE_OUTLINE,
+    regions: Object.fromEntries(Object.entries(regions).map(([k, list]) => [k, list.map((r) => [r.outer, ...r.holes])])),
+    house: HOUSE_FOOTPRINT.map((p) => p.map(([x, z]) => H(x, z))),
+    houseCentre: H(-1.7, -5.6),
+    hedges: hedgeSpecs().map((h) => ({ path: h.path, closed: h.closed, width: h.base, kind: h.kind })),
+    pool: poolOutline(),
+    kitchen: KITCHEN,
+    glasshouse: GLASSHOUSE,
+    carriage: CARRIAGE_HOUSE,
+    trees: treePlan().map((t) => {
+      const g = growTree(SPECIES[t.species], t.seed);
+      return { x: t.x, z: t.z, r: Math.max(g.crown.radius[0], g.crown.radius[2]) * 1.6 * t.scale, top: (g.crown.centre[1] + g.crown.radius[1]) * t.scale, species: t.species };
+    }),
+    topiary: topiaryPlan(),
+  };
+}
 
 export function planData() {
   const { T, N } = resonatorFrame();
@@ -46,6 +74,7 @@ export function planData() {
     gateway: ESTATE_GATEWAY,
     estate: ESTATE,
     house: HOUSE_SITE,
+    estatePlan: estatePlan(),
     corridor: CORRIDOR,
     gyre: { ...GYRE, towerIn: YOKE.towerIn, towerOut: YOKE.towerOut, top: GYRE.centreY + 46 },
     resonator: { ...RESONATOR, T, N, pylonHalf: PYLON.baseHalf },

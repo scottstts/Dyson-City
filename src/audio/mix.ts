@@ -34,4 +34,12 @@ export const LEVEL = {
    */
   field: { hum: 0.11, cryo: 0.12, pump: 0.14, furnace: 0.18, crane: 0.07, slew: 0.06, vent: 0.4 },
   ventValve: 0.55,
+  /** A house door's shut, peak, at 1 m (its opening on the same scale, as recorded). */
+  door: 0.8,
+  /** A clock's beat, peak, at the movement (0.3 m); scaled by its marker's gain. */
+  tick: 0.12,
+  /** The kettle simmering, RMS, at 0.3 m; scaled by its marker's gain. */
+  kettle: 0.09,
+  /** A tree's rustle, RMS, at its crown's radius. */
+  rustle: 0.012,
 } as const;

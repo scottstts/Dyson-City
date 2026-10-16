@@ -11,6 +11,7 @@
  * ahead (seconds of game time) before capture.
  */
 import { chromium } from 'playwright-core';
+import { serveHousePack } from './serveDist.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -47,6 +48,7 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
+  await serveHousePack(page.context());
   await page.goto(`${base}/?autostart&manual&spot=${encodeURIComponent(spot)}${query ? `&${query}` : ''}`);
   const ok = await page
     .waitForFunction(() => window.__dyson?.ready === true || document.querySelector('.entry.is-error') !== null, null, { timeout: 180_000 })

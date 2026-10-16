@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { fieldSoundSources } from '../src/field/sources';
 import { FIELD_AUDIBLE, machineLevel } from '../src/audio/sounds/field';
-import { FIELD_Y } from '../src/field/layout';
+import { ESTATE, ESTATE_GATEWAY, FIELD_Y, HOUSE_SITE } from '../src/field/layout';
+import { estateSilenced } from '../src/estate/silencer';
 
 const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 
@@ -30,5 +31,20 @@ describe('field sound is local', () => {
       s.at(0, q);
       expect(Math.hypot(q[0] - p[0] - 6, q[2] - p[2]), s.name).toBeLessThan(160);
     }
+  });
+});
+
+describe('the estate silencer', () => {
+  it('cuts the machines within the walls and nowhere else', () => {
+    const gate = (ESTATE_GATEWAY.x0 + ESTATE_GATEWAY.x1) / 2;
+    // In the house, on the lawn, at the gateway just past the piers (the ramp's foot).
+    expect(estateSilenced(HOUSE_SITE[0], HOUSE_SITE[1])).toBe(true);
+    expect(estateSilenced(-330, -100)).toBe(true);
+    expect(estateSilenced(gate, ESTATE.south - 0.2)).toBe(true);
+    // A step out through the gateway, and the field around the walls.
+    expect(estateSilenced(gate, ESTATE.south + 0.2)).toBe(false);
+    expect(estateSilenced(ESTATE.east + 0.5, -100)).toBe(false);
+    expect(estateSilenced(-200, -100)).toBe(false);
+    expect(estateSilenced(0, 0)).toBe(false);
   });
 });

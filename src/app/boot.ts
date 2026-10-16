@@ -8,8 +8,8 @@ import { createRenderer } from '../core/renderer';
 import { computeAtmosphereTextures } from '../atmosphere/luts';
 import { generateNoiseVolumes, setNoiseVolumes } from '../render/tsl/volumeNoise';
 import { buildWorld } from './world';
-import { fieldSurface } from '../field/walk';
-import { fieldSoundSources } from '../field/sources';
+import { loadHouseAssets } from '../house/assets';
+import { audioWorld } from './audioWorld';
 import { Game } from './game';
 import { GameAudio } from '../audio/gameAudio';
 import { loadAudioBank } from '../audio/loadBank';
@@ -49,16 +49,16 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   stage('atmosphere', entry, 0.2, 'Integrating the atmosphere');
   // The sound is synthesised in a worker alongside (docs/audio.md); its context sets the rate.
   const audioContext = GameAudio.context();
-  const [atmosphere, noise, audioBank] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate)]);
+  // The house's exterior is fetched and compiled alongside (house/assets.ts).
+  const [atmosphere, noise, audioBank, houseAssets] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadHouseAssets()]);
   setNoiseVolumes(noise);
 
   stage('environment', entry, 0.4, 'Lighting the world');
   await nextFrame();
-  const world = await buildWorld(handle.renderer, atmosphere, debug.time ?? 0, debug.sky);
+  const world = await buildWorld(handle.renderer, atmosphere, houseAssets, debug.time ?? 0, debug.sky);
 
   stage('compile', entry, 0.6, 'Compiling shaders');
-  const walk = world.city.walk;
-  const audio = new GameAudio(audioContext, { airlock: world.city.gate.airlock, surface: (x, z) => fieldSurface(walk.surface, x, z), field: { sources: fieldSoundSources(), vents: world.field.vents, time: () => world.field.time } }, audioBank);
+  const audio = new GameAudio(audioContext, audioWorld(world), audioBank);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
   await handle.renderer.compileAsync(world.scene, game.camera);
 
@@ -76,6 +76,8 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   console.info(`[Dyson] boot: ${fatal.stage} took ${(performance.now() - stageStart).toFixed(0)} ms`);
   fatal.stage = 'running';
   if (!debug.manual) game.start();
+  // The house's floors stream in while the game runs (a failure is fatal: never a half-built house).
+  world.house.streamInteriors(game.camera, (e) => fatal.report('The house failed to load', e));
   if (debug.autostart) entry.hide();
   else entry.showReady(() => game.enter());
   // Review tooling hooks (tools/*.mjs), on local hosts only.

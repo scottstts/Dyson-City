@@ -1,25 +1,37 @@
 /**
- * Footsteps (docs/audio.md, "Footsteps"), resynthesised from steps recorded on polished stone
- * (models/footsteps.ts): six measured steps, each a variant, every playback with new fine structure.
+ * Footsteps (docs/audio.md, "Footsteps"), resynthesised from three recordings: six steps on polished
+ * stone (models/footsteps.ts), three through lawn grass (models/footstepsGrass.ts) and six on fine
+ * gravel over sand (models/footstepsGravel.ts). Each recorded step is a variant; every playback has
+ * new fine structure.
  *
- * Walking on stone is the recording itself. The other gaits reshape it as a body would: running
- * plants the foot harder and quicker (the heel-to-ball roll compressed, more force), landing brings
- * both feet down nearly together with the body's weight behind them (more low end), stopping is a
- * light half-step, and pushing off is mostly the ball and the sole's scuff. The floors differ from
- * the recorded stone by what they are: the chamber's basalt is harder (a little brighter), the deck's
- * glazed plates over structure are hollow (a low-mid body, a glassy ring, dust underfoot) and the
- * bronze sills ring. Pure: returns sample arrays.
+ * Walking on stone, grass and gravel are the recordings themselves. The other gaits reshape them as a
+ * body would: running plants the foot harder and quicker (the heel-to-ball roll compressed, more
+ * force), landing brings both feet down nearly together with the body's weight behind them (more
+ * low end), stopping is a light half-step, and pushing off is mostly the ball and the sole's scuff.
+ *
+ * The other floors differ from their recording by what they are:
+ *  - basalt is harder than the recorded stone (a little brighter); bronze sills ring;
+ *  - the deck's glazed plates over structure are hollow (a low-mid body, a glassy ring, dust);
+ *  - the house's timber floors are boards on joists: a low-mid body and the boards' short ring;
+ *    the porches' boards span a void, hollower and longer;
+ *  - rugs and stair runners keep the heel's thud and swallow the click.
+ * Pure: returns sample arrays.
  */
-import { addPrint, BAND_COUNT, printLength, THIRD_OCTAVES } from './spectral';
-import { addBurst, addMode, between, logBetween, rng } from '../dsp';
+import { addPrint, BAND_COUNT, printLength, THIRD_OCTAVES, type SpectralPrint } from './spectral';
+import { addBurst, addMode, between, filter, logBetween, rng } from '../dsp';
 import { FOOTSTEP_WALK } from '../models/footsteps';
+import { FOOTSTEP_GRASS } from '../models/footstepsGrass';
+import { FOOTSTEP_GRAVEL } from '../models/footstepsGravel';
 import type { GroundSurface } from '../../city/walk';
 
 export type FootGait = 'walk' | 'run' | 'land' | 'takeoff' | 'stop';
 export const FOOT_GAITS: readonly FootGait[] = ['walk', 'run', 'land', 'takeoff', 'stop'];
-export const FOOT_SURFACES: readonly GroundSurface[] = ['stone', 'basalt', 'bronze', 'deck'];
-/** Recorded steps (variants). */
-export const FOOT_VARIANTS = FOOTSTEP_WALK.length;
+export const FOOT_SURFACES: readonly GroundSurface[] = ['stone', 'basalt', 'bronze', 'deck', 'grass', 'gravel', 'wood', 'rug', 'boards'];
+
+/** The recording a floor's steps are made from. */
+export function footSource(surface: GroundSurface): readonly SpectralPrint[] {
+  return surface === 'grass' ? FOOTSTEP_GRASS : surface === 'gravel' ? FOOTSTEP_GRAVEL : FOOTSTEP_WALK;
+}
 
 /** Per-band gain (dB) as a function of band centre. */
 function tilt(fn: (f: number) => number): number[] {
@@ -28,6 +40,8 @@ function tilt(fn: (f: number) => number): number[] {
 
 /** 0 below f0, 1 above f1, log-linear between. */
 const ramp = (f: number, f0: number, f1: number) => Math.min(Math.max(Math.log(f / f0) / Math.log(f1 / f0), 0), 1);
+/** A bump of `db` at `f0`, `width` octaves wide (standard deviation). */
+const bump = (f: number, f0: number, width: number, db: number) => db * Math.exp(-0.5 * Math.pow(Math.log2(f / f0) / width, 2));
 
 interface GaitShape {
   /** Time scale of the step (heel-to-ball roll). */
@@ -55,21 +69,32 @@ const SURFACES: Record<GroundSurface, number[]> = {
   basalt: tilt((f) => 1.5 * ramp(f, 800, 4000)),
   bronze: tilt((f) => ramp(f, 1000, 4000)),
   // Hollow plates over structure: a low-mid body.
-  deck: tilt((f) => 5 * Math.exp(-0.5 * Math.pow(Math.log2(f / 200) / 0.8, 2)) + ramp(f, 2000, 6000)),
+  deck: tilt((f) => bump(f, 200, 0.8, 5) + ramp(f, 2000, 6000)),
+  grass: tilt(() => 0),
+  gravel: tilt(() => 0),
+  // Boards on joists: a low-mid body; a leather heel on oak clicks less than on marble.
+  wood: tilt((f) => bump(f, 180, 0.9, 5) - 3 * ramp(f, 2500, 8000)),
+  // Boards over the porch's void: hollower, lower.
+  boards: tilt((f) => bump(f, 140, 0.8, 7) - 4 * ramp(f, 2000, 8000)),
+  // Pile and underlay: the heel's thud stays, the click is swallowed (with a low-pass: addSurface).
+  rug: tilt((f) => -4 - 6 * ramp(f, 400, 3000)),
 };
 
 /** The step's length (s) for a gait, with room for the floor's ring. */
-export function footstepLength(gait: FootGait): number {
+export function footstepLength(gait: FootGait, surface: GroundSurface = 'stone'): number {
   const g = GAITS[gait];
-  return printLength(FOOTSTEP_WALK[0], g.stretch * 1.06) + (g.second ? g.second[0] * 1.4 : 0) + 0.25;
+  const src = footSource(surface);
+  const longest = Math.max(...src.map((p) => printLength(p)));
+  return longest * g.stretch * 1.06 + (g.second ? g.second[0] * 1.4 : 0) + 0.25;
 }
 
-/** One footfall: mono samples at `sr`, at the recording's level (gaits and floors keep their force). */
+/** One footfall: mono samples at `sr`, at its recording's level (gaits and floors keep their force). */
 export function synthFootstep(surface: GroundSurface, gait: FootGait, variant: number, sr: number, seed: number): Float32Array {
   const r = rng(seed);
   const g = GAITS[gait];
-  const out = new Float32Array(Math.ceil(footstepLength(gait) * sr));
-  const print = FOOTSTEP_WALK[variant % FOOT_VARIANTS];
+  const src = footSource(surface);
+  const out = new Float32Array(Math.ceil(footstepLength(gait, surface) * sr));
+  const print = src[variant % src.length];
   // A little variation across the bands: no two steps land the same.
   const wobble = between(r, -1.5, 1.5);
   const phase = r() * 6.28;
@@ -78,27 +103,52 @@ export function synthFootstep(surface: GroundSurface, gait: FootGait, variant: n
   const stretch = g.stretch * between(r, 0.94, 1.06);
   addPrint(out, print, sr, r, { gain, stretch });
   if (g.second) {
-    const other = FOOTSTEP_WALK[(variant + 3) % FOOT_VARIANTS];
+    const other = src[(variant + 3) % src.length];
     addPrint(out, other, sr, r, { gain: gain.map((v) => v + g.second![1]), stretch, at: g.second[0] * between(r, 0.6, 1.4) });
   }
   addSurface(out, surface, gait, sr, r);
   return out;
 }
 
-/** What a floor adds beyond the recorded stone: the deck's glassy ring and grit, the bronze's ring. */
-function addSurface(out: Float32Array, surface: GroundSurface, gait: FootGait, sr: number, r: () => number): void {
-  if (surface !== 'deck' && surface !== 'bronze') return;
-  // Scale the floor's response to the step's own strength at the heel.
+/** The heel's peak in the first 80 ms: a floor's own response scales with the step's strength. */
+function heelForce(out: Float32Array, gait: FootGait, sr: number): number {
   let peak = 0;
   for (let i = 0; i < Math.min(out.length, Math.round(0.08 * sr)); i++) peak = Math.max(peak, Math.abs(out[i]));
-  const force = peak * (gait === 'land' ? 1.3 : gait === 'stop' || gait === 'takeoff' ? 0.5 : 1);
+  return peak * (gait === 'land' ? 1.3 : gait === 'stop' || gait === 'takeoff' ? 0.5 : 1);
+}
+
+/** What a floor adds beyond its recording: rings, grit, the boards' body. */
+function addSurface(out: Float32Array, surface: GroundSurface, gait: FootGait, sr: number, r: () => number): void {
   const heel = 0.03;
-  if (surface === 'deck') {
-    for (let i = 0; i < 6; i++) addMode(out, sr, heel, logBetween(r, 1800, 5500), logBetween(r, 0.05, 0.12), force * between(r, 0.02, 0.05), r() * 6.28);
-    // Dust crushed under the sole.
-    for (let i = 0; i < 10; i++) addBurst(out, sr, r, heel + between(r, 0, 0.12), 0.0001, 0.002, force * between(r, 0.01, 0.05), [['highpass', 4000, 0.7]]);
-  } else {
-    // A 20 mm plate bolted into stone: a bright ring a few tenths of a second long.
-    for (let i = 0; i < 10; i++) addMode(out, sr, heel, logBetween(r, 1100, 7000), logBetween(r, 0.2, 0.6), force * between(r, 0.04, 0.1), r() * 6.28);
+  switch (surface) {
+    case 'deck': {
+      const force = heelForce(out, gait, sr);
+      for (let i = 0; i < 6; i++) addMode(out, sr, heel, logBetween(r, 1800, 5500), logBetween(r, 0.05, 0.12), force * between(r, 0.02, 0.05), r() * 6.28);
+      // Dust crushed under the sole.
+      for (let i = 0; i < 10; i++) addBurst(out, sr, r, heel + between(r, 0, 0.12), 0.0001, 0.002, force * between(r, 0.01, 0.05), [['highpass', 4000, 0.7]]);
+      return;
+    }
+    case 'bronze': {
+      // A 20 mm plate bolted into stone: a bright ring a few tenths of a second long.
+      const force = heelForce(out, gait, sr);
+      for (let i = 0; i < 10; i++) addMode(out, sr, heel, logBetween(r, 1100, 7000), logBetween(r, 0.2, 0.6), force * between(r, 0.04, 0.1), r() * 6.28);
+      return;
+    }
+    case 'rug':
+      // The pile takes the click: band gains alone cannot (each strike's band leaks 6 dB/octave).
+      filter(out, sr, ['lowpass', 1300, 0.6], ['lowpass', 2000, 0.7]);
+      return;
+    case 'wood':
+    case 'boards': {
+      // The boards and joists: a few low modes struck at the heel, and the boards' short ring.
+      const force = heelForce(out, gait, sr);
+      const hollow = surface === 'boards';
+      for (let i = 0; i < 4; i++) addMode(out, sr, heel, logBetween(r, hollow ? 75 : 95, hollow ? 190 : 240), logBetween(r, hollow ? 0.1 : 0.06, hollow ? 0.2 : 0.11), force * between(r, 0.05, 0.1), r() * 6.28);
+      for (let i = 0; i < 5; i++) addMode(out, sr, heel, logBetween(r, 500, 1600), logBetween(r, 0.03, 0.07), force * between(r, 0.01, 0.025), r() * 6.28);
+      return;
+    }
+    default:
+      return;
   }
 }
+

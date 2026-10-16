@@ -12,12 +12,17 @@ import { GATE } from './gate/spec';
 import { DIAL, VENTS } from './gate/gatehouse';
 import { LOCK, LOCK_OPENING } from './eastLock/spec';
 
-/** What is underfoot (footstep sounds): pale stone, the chamber's basalt, a bronze sill, the bare deck. */
-export type GroundSurface = 'stone' | 'basalt' | 'bronze' | 'deck';
+/**
+ * What is underfoot (footstep sounds): pale stone (and the estate's flags, brick and the house's
+ * tiles), the chamber's basalt, a bronze sill, the bare deck; the estate's lawns and gravel; the
+ * house's timber floors, its rugs and runners, and the porches' boards over a void.
+ */
+export type GroundSurface = 'stone' | 'basalt' | 'bronze' | 'deck' | 'grass' | 'gravel' | 'wood' | 'rug' | 'boards';
 
 export interface CityWalk {
   readonly walls: CollisionWorld;
-  ground(x: number, z: number): number;
+  /** Highest walkable surface over (x, z) at or below yMax: the site and the city's floors, and the storeyed meshes (walls.meshes). */
+  ground(x: number, z: number, yMax?: number): number;
   surface(x: number, z: number): GroundSurface;
 }
 
@@ -32,6 +37,19 @@ function inApron(x: number, z: number, r: number): boolean {
 }
 
 const RING_SEGMENTS = 2880;
+
+/** The site's own surface: the platform, the deck, the gate chamber's floor slab and the apron. */
+function siteGround(x: number, z: number): number {
+  const g = groundHeight(x, z);
+  // Chamber floor slab (chamfered ends).
+  if (Math.abs(z) < GATE.passageHalf && x > -499.6 && x < -472.4) {
+    const ramp = Math.min(1, (x + 499.6) / 0.035, (-472.4 - x) / 0.035);
+    return Math.max(g, DOME.centreY + 0.015 + (GATE.floor - DOME.centreY - 0.015) * Math.max(ramp, 0));
+  }
+  // Apron outside the outer gate.
+  if (inApron(x, z, Math.hypot(x, z))) return g + 0.015;
+  return g;
+}
 
 export function buildWalk(layout: FrameLayout): CityWalk {
   const walls = new CollisionWorld();
@@ -73,15 +91,12 @@ export function buildWalk(layout: FrameLayout): CityWalk {
   }
   return {
     walls,
-    ground(x, z) {
-      const g = groundHeight(x, z);
-      // Chamber floor slab (chamfered ends).
-      if (Math.abs(z) < GATE.passageHalf && x > -499.6 && x < -472.4) {
-        const ramp = Math.min(1, (x + 499.6) / 0.035, (-472.4 - x) / 0.035);
-        return Math.max(g, DOME.centreY + 0.015 + (GATE.floor - DOME.centreY - 0.015) * Math.max(ramp, 0));
+    ground(x, z, yMax = Infinity) {
+      let g = siteGround(x, z);
+      for (const m of walls.meshes) {
+        const h = m.height(x, z, yMax);
+        if (h > g) g = h;
       }
-      // Apron outside the outer gate.
-      if (inApron(x, z, Math.hypot(x, z))) return g + 0.015;
       return g;
     },
     surface(x, z) {

@@ -3,7 +3,8 @@
  *
  * The exposure stays keyed to the star; adaptation only multiplies it upward when the view is dim
  * (an interior), between a floor of 1 (so outdoors and under the Dome nothing changes) and a
- * ceiling of 16 (+4 stops: a dim room stays dim). Asymmetric like an eye: it opens slowly going in
+ * ceiling of 64 (+6 stops: the house's day rooms, ~7–8 stops under a sunlit wall, read dim but
+ * legible; a curtained bedroom stays dark). Asymmetric like an eye: it opens slowly going in
  * (~4 s) and clamps down fast going out (~1 s, after a moment of overexposure).
  *
  * Meter: a 64 × 36 log-luminance image of the scene after TAA (centre-weighted), read back
@@ -15,7 +16,7 @@ import type { Node } from 'three/webgpu';
 
 /** Log-average scene luminance below which the eye starts to open up (scene units). */
 export const ADAPT_REF = 0.12;
-export const ADAPT_MAX = 16;
+export const ADAPT_MAX = 64;
 /** Time constants (s): opening up (scene got darker) and clamping down (scene got brighter). */
 export const ADAPT_TAU = { open: 1.4, close: 0.3 } as const;
 

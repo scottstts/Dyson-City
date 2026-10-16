@@ -15,6 +15,10 @@
  * The Cold Hold's relief stacks (field/vents.ts) take their own voices when one lifts: the valve
  * pops, the roar follows the stack's flow (brighter at full lift), and the valve thunks as it
  * reseats.
+ *
+ * Where the field is `silenced` (the estate's device), every machine's sound is cut at the ears:
+ * all of it arrives through one bus after the emitters, so the cut is immediate wherever the
+ * machine is, and the voices, levels and wander carry on unchanged behind it.
  */
 import { Emitter } from '../emitter';
 import type { AudioEngine } from '../engine';
@@ -33,12 +37,16 @@ export interface AudioField {
   vents: ReliefVents;
   /** Game time (the machines' state is a function of it). */
   time(): number;
+  /** Whether a listener here hears no machines at all (the estate's silencer, docs/audio.md). */
+  silenced?(x: number, z: number): boolean;
 }
 
 /** Voices for the machines, and the quietest a machine may be (at the listener) to get one. */
 export const FIELD_VOICES = 6;
 const AUDIBLE = 0.003;
 const FADE = 0.35;
+/** The silencer's switching time constant (s): quick, never a click. */
+const CUT_TC = 0.05;
 
 interface Voice {
   emitter: Emitter;
@@ -86,23 +94,27 @@ export class FieldSounds {
   private readonly random = rng(0xf1e1d);
   private readonly p: Vec3 = [0, 0, 0];
   private readonly audibility: Float32Array;
+  /** Every field emitter's direct sound, on its way to the ears: the silencer's switch. */
+  private readonly cut: GainNode;
   private ventStarted = false;
 
   constructor(engine: AudioEngine, field: AudioField) {
     this.engine = engine;
     this.field = field;
     const ctx = engine.ctx;
+    this.cut = new GainNode(ctx, { gain: 1 });
+    this.cut.connect(engine.dry);
     this.buffers = Object.fromEntries(Object.entries(engine.bank.field).map(([k, x]) => [k, engine.buffer(x)])) as Record<FieldLoop, AudioBuffer>;
     this.audibility = new Float32Array(field.sources.length);
     this.loads = field.sources.map(() => ({ db: 0, rate: 1, dbTarget: 0, rateTarget: 1 }));
     this.voices = Array.from({ length: FIELD_VOICES }, (_, k) => {
-      const emitter = new Emitter(engine, { name: `field:voice${k}`, zones: ['city'], refDistance: 1, send: 0 });
+      const emitter = new Emitter(engine, { name: `field:voice${k}`, zones: ['city'], refDistance: 1, send: 0, out: this.cut });
       const gain = new GainNode(ctx, { gain: 0 });
       gain.connect(emitter.input);
       return { emitter, gain, node: null, source: -1, freeAt: 0 };
     });
     this.vents = Array.from({ length: VENT_VOICES }, (_, k) => {
-      const emitter = new Emitter(engine, { name: `field:vent${k}`, zones: ['city'], refDistance: 1, send: 0 });
+      const emitter = new Emitter(engine, { name: `field:vent${k}`, zones: ['city'], refDistance: 1, send: 0, out: this.cut });
       const tone = new BiquadFilterNode(ctx, { type: 'lowpass', frequency: 4000, Q: 0.5 });
       const gain = new GainNode(ctx, { gain: 0 });
       tone.connect(gain).connect(emitter.input);
@@ -118,6 +130,7 @@ export class FieldSounds {
     const ctx = this.engine.ctx;
     const gt = this.field.time();
     const r = this.random;
+    glide(this.cut.gain, this.field.silenced?.(listener.x, listener.z) ? 0 : 1, t, CUT_TC);
     // Load wander per machine (slow, its own).
     for (const l of this.loads) {
       if (r() < dt / 4) {

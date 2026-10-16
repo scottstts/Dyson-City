@@ -54,8 +54,10 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
 - `node tools/house-env.mjs --dist <vite build>` boots the game headless on its HDR view, stands a 90°
   camera 6 m above the ground at `HOUSE_SITE`, brackets five exposures per cube face and writes
   `bake/house_env.hdr` (+ `.json`): linear game radiance, resampled into the house frame (front toward
-  the datum). The house is not in the game yet, so the capture sees the open site; re-run it once the
-  terrace and garden exist (step 2) and re-bake.
+  the datum). The first capture saw the open site; the estate now exists, and the re-capture and re-bake
+  wait for its approval. The re-bake lights the lamps at a warm, generous domestic level, strongest in
+  the windowless hall, landing and top hall (decided with the user; the engine shows the bulbs and
+  shades glowing).
 - That map is the .blend's world (`GameLight`): Cycles in the viewport shows the house in the game's light.
 - Everything baked is in the game's one radiance scale. Lightmaps are a white Lambertian surface's
   outgoing radiance (the engine shades `albedo × lightmap`); the capture's white sunlit radiance (~2.0)
@@ -115,8 +117,10 @@ host serves Range requests), so there is no decode step beyond the browser's own
 
 ## Integration: using the bundle in the game
 
-How the engine side (city_plan.md §9 step 2) should consume `assets/house.pack`. Nothing here is built
-yet; this is the contract the export was made to.
+How the engine side (city_plan.md §9 step 2) consumes `assets/house.pack`: the contract the export was
+made to. The engine side is built (`docs/house.md`); where it departs from this contract it says so
+there (its own glTF reader in a worker rather than GLTFLoader; steps without a COL_ twin, like the west
+porch's, walk as their visible mesh).
 
 **1. Read the index.**
 - Fetch bytes 0–11: the magic `DCPK`, the version (1) and the index length L, as u32 little-endian.

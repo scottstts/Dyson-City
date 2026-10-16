@@ -1,9 +1,9 @@
 /**
- * The audio engine: one context, the listener, the three spaces' reverberation, and the emitters
+ * The audio engine: one context, the listener, the four spaces' reverberation, and the emitters
  * (docs/audio.md). Works on any BaseAudioContext, so the offline preview tool renders exactly what
  * the game plays. All timing is explicit (`t`), never read from the context inside updates.
  */
-import { SPEED_OF_SOUND, transmission, wallDistance, ZONES, type Zone } from './acoustics';
+import { SPEED_OF_SOUND, transmission, wallDistance, zoneAt, ZONES, type Zone } from './acoustics';
 import { glide } from './params';
 import type { Emitter } from './emitter';
 import type { AudioBank } from './bank';
@@ -21,6 +21,8 @@ export interface ListenerState {
   outerOpen: number;
   innerOpen: number;
   bar: number;
+  /** The house's outer doors: the widest open leaf (0..1). */
+  houseOpen: number;
 }
 
 /** Amplitude of the drum's/gatehouse's slap echo relative to the direct sound at 1 m, per metre of distance. */
@@ -45,6 +47,8 @@ export class AudioEngine {
   private readonly buses: Record<Zone, ZoneBus>;
   private readonly emitters: Emitter[] = [];
   private listenerFirst = true;
+  /** Is a world point inside the house's rooms? (Set once the house is known.) */
+  interior: ((x: number, y: number, z: number) => boolean) | null = null;
 
   /** The synthesised samples (bank.ts), at the context's rate. */
   readonly bank: AudioBank;
@@ -84,7 +88,7 @@ export class AudioEngine {
       conv.buffer = ir;
       input.connect(conv).connect(retFilter);
       const bus: ZoneBus = { input, ret, retFilter };
-      if (zone !== 'chamber') {
+      if (zone === 'outside' || zone === 'city') {
         // The nearest big face (the drum, the gatehouse) returns a slap that moves with the listener.
         const delay = ctx.createDelay(MAX_SLAP + 0.1);
         const lp = ctx.createBiquadFilter();
@@ -105,6 +109,11 @@ export class AudioEngine {
     const b = this.ctx.createBuffer(1, samples.length, this.ctx.sampleRate);
     b.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
     return b;
+  }
+
+  /** The space a world point is in: the house's rooms, or the plan's zones. */
+  locate(x: number, y: number, z: number): Zone {
+    return this.interior?.(x, y, z) ? 'house' : zoneAt(x, z);
   }
 
   zoneInput(zone: Zone): AudioNode {
@@ -132,7 +141,7 @@ export class AudioEngine {
 
     for (const zone of ZONES) {
       const bus = this.buses[zone];
-      const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen);
+      const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen, l.houseOpen);
       glide(bus.ret.gain, p.gain, t, 0.05);
       glide(bus.retFilter.frequency, p.cutoff, t, 0.05);
       if (bus.slap) {

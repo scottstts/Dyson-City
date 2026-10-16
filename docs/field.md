@@ -121,7 +121,7 @@ The user's reference (a soaring metallic city) is borrowed for its language, not
 
 - A top-down 1 m plan map of the lowest and highest surface over each texel, rasterised from the field's meshes (~90 ms).
 - A GPU compute pass integrating 24 cap directions per texel.
-- Materials read it as an AO term on the star's share of the light (0.42 for vertical faces up to 0.82 for up-facing ones). It applies at the ground and fades out over 8 m above it: object surfaces higher up keep only GTAO.
+- Materials read it as an AO term on the star's share of the light (0.42 for vertical faces up to 0.82 for up-facing ones). It applies at each texel's floor (the platform, or the estate's terrace) and fades out over 8 m above it: object surfaces higher up keep only GTAO. Faces sample it ahead along their normals, and the tops of occluders at least 0.4 m tall see the whole cap (`docs/shadows.md`, Status).
 
 ## Motion
 

@@ -6,7 +6,7 @@
  *   node tools/fps.mjs [--url http://localhost:5174 | --dist <vite build dir>] [--size 1920x1080] [--seconds 4] [--query "..."] spot…
  */
 import { chromium } from 'playwright-core';
-import { DIST_ORIGIN, serveDist } from './serveDist.mjs';
+import { DIST_ORIGIN, serveDist, serveHousePack } from './serveDist.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -34,6 +34,7 @@ try {
   for (const spot of spots) {
     const context = await browser.newContext({ viewport: { width: w, height: h } });
     if (dist) await serveDist(context, dist);
+  await serveHousePack(context);
     const page = await context.newPage();
     await page.goto(`${base}/?autostart&time=600&spot=${encodeURIComponent(spot)}${query ? `&${query}` : ''}`);
     await page.waitForFunction(() => window.__dyson?.ready === true, null, { timeout: 120_000 });

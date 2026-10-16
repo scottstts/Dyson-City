@@ -15,6 +15,8 @@ import type { FootEvent } from '../../player/controller';
 
 /** Half the stance width: each foot is this far from the body's line (m). */
 const FOOT_OFFSET = 0.11;
+/** The feet's reference distance (m): a step's level is its level at the foot. */
+const FOOT_REF = 0.3;
 /** A walking step's force at the 2 m/s walk; slower steps are lighter. */
 const WALK_SPEED = 2;
 
@@ -23,13 +25,15 @@ export class Footsteps {
   private readonly bank = new Map<string, AudioBuffer[]>();
   private readonly picker: VariantPicker;
   private readonly random = rng(0xf007);
-  private readonly surfaceAt: (x: number, z: number) => GroundSurface;
+  private readonly surfaceAt: (x: number, z: number, y: number) => GroundSurface;
   private side = 0;
 
-  constructor(engine: AudioEngine, surfaceAt: (x: number, z: number) => GroundSurface) {
+  constructor(engine: AudioEngine, surfaceAt: (x: number, z: number, y: number) => GroundSurface) {
     this.surfaceAt = surfaceAt;
     this.picker = new VariantPicker(this.random);
-    const make = (name: string) => new Emitter(engine, { name, zones: 'located', refDistance: 0.3 });
+    // In the house a step feeds the room's reverb at its level at 1 m (sounds/house.ts); the gate's
+    // chamber keeps the send it was tuned by ear with.
+    const make = (name: string) => new Emitter(engine, { name, zones: 'located', refDistance: FOOT_REF, sendScale: (zone) => (zone === 'house' ? FOOT_REF : 1) });
     this.feet = [make('foot.left'), make('foot.right')];
     // A walking step on stone peaks at 1 in the bank; gaits and floors keep their relative force.
     for (const [key, list] of Object.entries(engine.bank.footsteps)) this.bank.set(key, list.map((x) => engine.buffer(x)));
@@ -41,7 +45,7 @@ export class Footsteps {
     this.feet[1].setPosition(x + rightX * FOOT_OFFSET, y + 0.02, z + rightZ * FOOT_OFFSET);
   }
 
-  play(e: FootEvent, x: number, z: number, t: number): void {
+  play(e: FootEvent, x: number, y: number, z: number, t: number): void {
     let gait: FootGait;
     let force: number;
     switch (e.kind) {
@@ -64,7 +68,7 @@ export class Footsteps {
         force = Math.min(Math.max(e.impact / 3.5, 0.4), 1.6);
         break;
     }
-    const list = this.bank.get(`${this.surfaceAt(x, z)}:${gait}` satisfies FootKey)!;
+    const list = this.bank.get(`${this.surfaceAt(x, z, y)}:${gait}` satisfies FootKey)!;
     const buffer = list[this.picker.pick(list.length)];
     const foot = this.feet[this.side];
     // Both feet land together on a landing; otherwise feet alternate.

@@ -9,13 +9,15 @@
  *  2. Visibility (GPU compute, `createStarShade`): from each texel, 24 cosine-weighted directions
  *     over the cap are marched through the map (steps growing with distance: the penumbra is wide)
  *     and the share that clears it is stored.
+ *     Each texel marches from its own floor (`floor`: the platform, or the estate's terrace 1.6 m
+ *     up), so a raised garden is shaded by what stands round it, not by the wall it stands on.
  *  3. Runtime: one texture read. `starShadeAO` turns it into an ambient-occlusion term on the
  *     star's share of the image-based light only (the bounce and the sky stay): up-facing surfaces
  *     take most of their light from the star, vertical ones about half. It applies at the ground
  *     and fades out within a few metres above it (higher surfaces keep their contact AO only).
  */
-import { DataTexture, FloatType, NearestFilter, RGFormat, StorageTexture, LinearFilter, type Mesh, type WebGPURenderer, type Node, type Texture } from 'three/webgpu';
-import { Fn, If, Break, float, int, ivec2, vec2, vec4, instanceIndex, textureLoad, textureStore, max, min, clamp, mix, smoothstep, positionWorld, normalWorldGeometry, texture, uniformArray } from 'three/tsl';
+import { DataTexture, FloatType, NearestFilter, RedFormat, RGFormat, StorageTexture, LinearFilter, type Mesh, type WebGPURenderer, type Node, type Texture } from 'three/webgpu';
+import { Fn, If, Break, float, int, ivec2, vec2, vec4, instanceIndex, textureLoad, textureStore, max, min, clamp, mix, smoothstep, step, positionWorld, normalWorldGeometry, texture, uniformArray } from 'three/tsl';
 import { Vector4 } from 'three/webgpu';
 import { capDirections } from '../city/visibility';
 import { loop } from '../render/tsl/helpers';
@@ -111,9 +113,27 @@ export interface StarShade {
 }
 
 /** Runs the visibility compute over the occluder map and returns the shade. */
-export async function createStarShade(renderer: WebGPURenderer, occluders: Float32Array, groundY: number): Promise<StarShade> {
+/** Per-texel floor heights (the raster's grid); `at` gives the floor at a plan point (else groundY). */
+export function floorMap(groundY: number, at: (x: number, z: number) => number | null): Float32Array {
+  const { N, origin, extent } = SHADE;
+  const cell = extent / N;
+  const out = new Float32Array(N * N).fill(groundY);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const y = at(origin + (i + 0.5) * cell, origin + (j + 0.5) * cell);
+      if (y !== null) out[j * N + i] = y;
+    }
+  }
+  return out;
+}
+
+export async function createStarShade(renderer: WebGPURenderer, occluders: Float32Array, groundY: number, floors?: Float32Array): Promise<StarShade> {
   const { N, origin, extent, dirs, maxHeight } = SHADE;
   const cell = extent / N;
+  const floorTex = new DataTexture(floors ?? new Float32Array(N * N).fill(groundY), N, N, RedFormat, FloatType);
+  floorTex.magFilter = NearestFilter;
+  floorTex.minFilter = NearestFilter;
+  floorTex.needsUpdate = true;
   const heights = new DataTexture(occluders, N, N, RGFormat, FloatType);
   heights.magFilter = NearestFilter;
   heights.minFilter = NearestFilter;
@@ -131,7 +151,7 @@ export async function createStarShade(renderer: WebGPURenderer, occluders: Float
     const ix = int(instanceIndex.mod(N));
     const iz = int(instanceIndex.div(N));
     const p = vec2(float(ix).add(0.5).mul(cell).add(origin), float(iz).add(0.5).mul(cell).add(origin)).toVar();
-    const y0 = float(groundY + 0.1);
+    const y0 = textureLoad(floorTex, ivec2(ix, iz)).x.add(0.1).toVar();
     const seen = float(0).toVar();
     loop('kDir', dirs, (kDir) => {
       const d = (dirArr as unknown as { element(i: Node<'int'>): Node<'vec4'> }).element(kDir);
@@ -139,7 +159,7 @@ export async function createStarShade(renderer: WebGPURenderer, occluders: Float
       const s = float(cell * 0.75).toVar();
       loop('kStep', 64, () => {
         const y = y0.add(s.div(d.z));
-        If(y.greaterThan(maxHeight + groundY), () => {
+        If(y.greaterThan(y0.add(maxHeight)), () => {
           Break();
         });
         const q = p.add(vec2(d.x, d.y).mul(s));
@@ -164,12 +184,23 @@ export async function createStarShade(renderer: WebGPURenderer, occluders: Float
     texture: out,
     ao: () => {
       const uv = positionWorld.xz.sub(origin).div(extent);
-      const v = texture(out, uv).r;
+      // The map is the visibility from the floor. A face sees what stands in front of it, not under
+      // it: a wall's or a hedge's side samples the map a little out along its normal (not its own
+      // footprint, where it would shade itself); a face on top of the occluder it belongs to has
+      // nothing above it and sees the whole cap.
+      const ahead = positionWorld.xz.add(normalWorldGeometry.xz.mul(0.7)).sub(origin).div(extent);
+      const v = texture(out, ahead).r;
+      const own = textureLoad(heights, ivec2(clamp(uv.mul(N), 0, N - 1))).y;
       // The star's share of the light a face receives, and how close the face is to the ground.
       const share = mix(float(0.42), float(0.82), clamp(normalWorldGeometry.y.mul(0.5).add(0.5), 0, 1));
-      const near = float(1).sub(smoothstep(groundY + 0.5, groundY + 8, positionWorld.y));
+      const floor = texture(floorTex, uv).r;
+      const near = float(1).sub(smoothstep(floor.add(0.5), floor.add(8), positionWorld.y));
+      // On top of its own occluder (one of real height stands here, and the face is at its top). Kerbs
+      // and edgings a few centimetres high never shade the cap; counting them, ground inside any
+      // kerb's 1 m texel was freed, and paths showed texel-sized blocks of light and shade.
+      const onTop = step(own.sub(0.25), positionWorld.y).mul(step(floor.add(0.4), own));
       const inside = smoothstep(0, 0.002, min(min(uv.x, uv.y), min(float(1).sub(uv.x), float(1).sub(uv.y))));
-      const vis = mix(float(1), v, near.mul(inside));
+      const vis = mix(float(1), v, near.mul(inside).mul(float(1).sub(onTop)));
       return float(1).sub(share.mul(float(1).sub(vis))) as F;
     },
   };
