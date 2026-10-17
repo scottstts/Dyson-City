@@ -18,13 +18,13 @@ import type { EntryScreen } from '../ui/entryScreen';
 
 let stageStart = performance.now();
 
-function stage(name: BootStage, entry: EntryScreen, progress: number, label: string): void {
+function stage(name: BootStage, entry: EntryScreen, progress: number): void {
   if (fatal.hasFired) throw new Error(`Startup aborted before stage "${name}"`);
   const now = performance.now();
   console.info(`[Dyson] boot: ${fatal.stage} took ${(now - stageStart).toFixed(0)} ms`);
   stageStart = now;
   fatal.stage = name;
-  entry.setProgress(progress, label);
+  entry.setProgress(progress);
 }
 
 /** Yields to the browser for one frame; falls back to a timer in hidden/background tabs where rAF stalls. */
@@ -43,32 +43,32 @@ const nextFrame = () =>
 export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void> {
   const debug = readDebugParams();
 
-  stage('renderer', entry, 0.08, 'Starting WebGPU');
+  stage('renderer', entry, 0.08);
   const handle = await createRenderer(host, { profile: debug.profile });
 
-  stage('atmosphere', entry, 0.2, 'Integrating the atmosphere');
+  stage('atmosphere', entry, 0.2);
   // The sound is synthesised in a worker alongside (docs/audio.md); its context sets the rate.
   const audioContext = GameAudio.context();
   // The house's exterior is fetched and compiled alongside (house/assets.ts).
   const [atmosphere, noise, audioBank, houseAssets] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadHouseAssets()]);
   setNoiseVolumes(noise);
 
-  stage('environment', entry, 0.4, 'Lighting the world');
+  stage('environment', entry, 0.4);
   await nextFrame();
   const world = await buildWorld(handle.renderer, atmosphere, houseAssets, debug.time ?? 0, debug.sky);
 
-  stage('compile', entry, 0.6, 'Compiling shaders');
+  stage('compile', entry, 0.6);
   const audio = new GameAudio(audioContext, audioWorld(world), audioBank);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
   await handle.renderer.compileAsync(world.scene, game.camera);
 
-  stage('warmup', entry, 0.85, 'Warming up');
+  stage('warmup', entry, 0.85);
   for (let i = 0; i < 3; i++) {
     game.renderFrame();
     await nextFrame();
   }
 
-  stage('first-frame', entry, 0.97, 'Almost there');
+  stage('first-frame', entry, 0.97);
   game.renderFrame();
   await nextFrame();
   if (fatal.hasFired) throw new Error('Startup aborted after a GPU error');

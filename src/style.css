@@ -1,11 +1,16 @@
 :root {
   --ink: rgba(250, 244, 232, 0.94);
   --ink-dim: rgba(250, 244, 232, 0.62);
-  --ink-faint: rgba(250, 244, 232, 0.36);
+  --ink-faint: rgba(250, 244, 232, 0.34);
+  --ink-ghost: rgba(250, 236, 210, 0.14);
+  /* The frame's hot coolant lines (docs/design.md §3). */
+  --coolant: rgb(255, 184, 104);
+  --coolant-glow: rgba(255, 150, 60, 0.55);
+  --shell: #0c0a08;
   --panel: rgba(18, 14, 10, 0.42);
   --panel-edge: rgba(255, 236, 200, 0.14);
-  --accent: rgba(255, 214, 150, 0.95);
   --font: 'Inter', 'SF Pro Text', 'Helvetica Neue', system-ui, sans-serif;
+  --mono: 'SF Mono', 'JetBrains Mono', ui-monospace, Menlo, monospace;
 }
 
 * {
@@ -35,20 +40,44 @@ body {
   outline: none;
 }
 
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
+.key-cap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border: 1px solid var(--ink-faint);
+  border-radius: 3px;
+  color: var(--ink);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 /* Entry screen ---------------------------------------------------------- */
 
 .entry {
   position: absolute;
   inset: 0;
-  display: grid;
-  place-items: center;
-  background: radial-gradient(ellipse at 50% 30%, rgba(60, 40, 20, 0.35), rgba(0, 0, 0, 0.88) 70%);
-  transition: opacity 0.9s ease, backdrop-filter 0.9s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 32px 16px;
+  background: radial-gradient(ellipse at 50% 46%, #120c07 0%, #050403 55%, #000 100%);
+  transition: opacity 1.1s ease, background 1.4s ease;
   z-index: 10;
-}
-
-.entry.is-ready {
-  background: radial-gradient(ellipse at 50% 40%, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.55) 85%);
+  user-select: none;
 }
 
 .entry.is-hidden {
@@ -56,91 +85,368 @@ body {
   pointer-events: none;
 }
 
-.entry-card {
-  width: min(460px, calc(100vw - 32px));
-  padding: 44px 40px 36px;
-  text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--panel-edge);
-  border-radius: 2px;
-  backdrop-filter: blur(18px) saturate(1.1);
-  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+.entry.is-ready {
+  cursor: pointer;
+  /* The world shows through; only the edges and the floor darken for the type. */
+  background: radial-gradient(ellipse 80% 70% at 50% 42%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.5) 100%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 32%);
 }
 
-.entry-title {
-  margin: 0;
-  font-weight: 200;
-  font-size: 44px;
-  letter-spacing: 0.62em;
-  text-indent: 0.62em;
-  color: var(--ink);
+.entry-centre {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
-.entry-sub {
-  margin-top: 14px;
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0.24em;
-  text-transform: uppercase;
+/* Ready, a soft shade behind the name holds it against the bright apron. */
+.entry-centre::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 1100px;
+  height: 400px;
+  transform: translate(-50%, -62%);
+  background: radial-gradient(closest-side, rgba(4, 3, 2, 0.55), rgba(4, 3, 2, 0.26) 45%, rgba(4, 3, 2, 0.08) 75%, rgba(4, 3, 2, 0));
+  opacity: 0;
+  transition: opacity 1.4s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.entry.is-ready .entry-centre::before {
+  opacity: 1;
+}
+
+.entry-mark {
+  margin-top: 30px;
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: 0.9em;
+  text-indent: 0.9em;
   color: var(--ink-dim);
-}
-
-.entry-progress {
-  margin: 34px auto 0;
-  width: 70%;
-  height: 1px;
-  background: var(--ink-faint);
-  overflow: hidden;
-}
-
-.entry-progress-bar {
-  height: 100%;
-  background: var(--accent);
-  transform-origin: 0 50%;
-  transform: scaleX(0);
-  transition: transform 0.35s ease;
-}
-
-.entry-status {
-  margin-top: 14px;
-  min-height: 16px;
-  font-size: 11px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-faint);
+  transition: font-size 1.2s ease, color 1.2s ease, margin 1.2s ease, letter-spacing 1.2s ease, text-indent 1.2s ease;
 }
 
 .entry-enter {
   margin-top: 26px;
-  padding: 12px 46px;
-  font: inherit;
-  font-size: 12px;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
+  padding: 10px 26px;
+  font-size: 11px;
+  letter-spacing: 0.6em;
+  text-indent: 0.6em;
   text-transform: uppercase;
   color: var(--ink);
-  background: rgba(255, 236, 200, 0.06);
-  border: 1px solid rgba(255, 236, 200, 0.32);
-  border-radius: 1px;
-  cursor: pointer;
-  transition: background 0.25s ease, border-color 0.25s ease;
+  opacity: 0;
+  visibility: hidden;
+  position: relative;
 }
 
-.entry-enter:hover {
-  background: rgba(255, 236, 200, 0.14);
-  border-color: rgba(255, 236, 200, 0.6);
+.entry-enter::before,
+.entry-enter::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 34px;
+  height: 1px;
+  background: linear-gradient(to right, transparent, var(--coolant));
+  transition: width 0.4s ease;
 }
+
+.entry-enter::before {
+  right: 100%;
+}
+
+.entry-enter::after {
+  left: 100%;
+  transform: scaleX(-1);
+}
+
+.entry.is-ready:hover .entry-enter::before,
+.entry.is-ready:hover .entry-enter::after,
+.entry-enter:focus-visible::before,
+.entry-enter:focus-visible::after {
+  width: 64px;
+}
+
+.entry-enter:focus-visible {
+  outline: none;
+  color: var(--coolant);
+}
+
+.entry.is-ready .entry-mark {
+  margin-top: 0;
+  font-size: 30px;
+  font-weight: 200;
+  letter-spacing: 1.1em;
+  text-indent: 1.1em;
+  color: var(--ink);
+}
+
+.entry.is-ready .entry-enter {
+  visibility: visible;
+  animation: entry-breathe 3.2s ease-in-out 1.2s infinite both;
+}
+
+@keyframes entry-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Key art: a still of the city, drifting slowly under a dark tint. */
+
+.entry-art {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: center / cover no-repeat;
+  opacity: 0;
+  transform: scale(1.06);
+  transition: opacity 2.4s ease;
+  animation: entry-drift 70s ease-in-out infinite alternate;
+}
+
+.entry-art.is-shown {
+  opacity: 1;
+}
+
+@keyframes entry-drift {
+  from {
+    transform: scale(1.06) translate3d(-0.6%, 0.4%, 0);
+  }
+  to {
+    transform: scale(1.14) translate3d(0.8%, -0.5%, 0);
+  }
+}
+
+.entry-tint {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(ellipse 55% 60% at 50% 46%, rgba(10, 7, 4, 0.62), rgba(5, 4, 3, 0.8) 65%, rgba(2, 1, 1, 0.94) 100%),
+    linear-gradient(to top, rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0) 30%);
+  transition: opacity 1.4s ease;
+}
+
+.entry.is-ready .entry-art,
+.entry.is-ready .entry-tint {
+  opacity: 0;
+}
+
+/* The loading glyph: the sphere lights round its star. */
+
+.glyph {
+  /* Its own compositing group, always: the added layers blend within it the same whether or not
+     it is fading, and the group lays over the key art like any image. */
+  isolation: isolate;
+  --size: min(58vmin, 540px);
+  /* Lit fraction of the frame (SphereGlyph.setLit). */
+  --heat: 0;
+  position: relative;
+  width: var(--size);
+  height: var(--size);
+  opacity: 0;
+  transition: transform 1.4s cubic-bezier(0.5, 0, 0.2, 1), opacity 1.2s ease, margin 1.2s ease;
+}
+
+.glyph.is-drawn {
+  opacity: 1;
+}
+
+.glyph > img,
+.glyph > svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+}
+
+.glyph-bloom {
+  position: absolute;
+  inset: -22%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(255, 160, 70, 0.34), rgba(255, 120, 40, 0.14) 45%, rgba(255, 100, 30, 0.04) 70%, rgba(255, 90, 20, 0));
+  opacity: calc(0.15 + 0.85 * var(--heat));
+  transition: opacity 1.2s ease;
+  animation: glyph-breathe 5.5s ease-in-out infinite;
+}
+
+@keyframes glyph-breathe {
+  0%,
+  100% {
+    transform: scale(0.96);
+  }
+  50% {
+    transform: scale(1.04);
+  }
+}
+
+.glyph-cavity {
+  position: absolute;
+  border-radius: 50%;
+  background: #000;
+}
+
+/* The light the star throws on the outside is added to it. */
+.glyph-back,
+.glyph-glow {
+  transition: opacity 1.2s ease;
+}
+
+.glyph-glow {
+  mix-blend-mode: plus-lighter;
+}
+
+.glyph-back {
+  opacity: calc(0.14 + 0.86 * var(--heat));
+}
+
+.glyph-glow {
+  opacity: var(--heat);
+}
+
+.glyph-coolant {
+  overflow: visible;
+}
+
+.glyph-coolant path {
+  fill: none;
+  stroke: rgb(255, 196, 120);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transition: opacity 0.9s ease;
+}
+
+.glyph-coolant path.is-lit {
+  opacity: 1;
+  filter: drop-shadow(0 0 1.2px rgba(255, 170, 70, 0.95)) drop-shadow(0 0 3.5px rgba(255, 120, 30, 0.6));
+}
+
+/* Ready, the star flares and the sphere dissolves into the world; the name settles where it was. */
+.entry.is-ready .glyph {
+  transform: scale(1.3);
+  opacity: 0;
+  margin-bottom: calc(-1 * var(--size));
+}
+
+.entry.is-error .glyph-back,
+.entry.is-error .glyph-glow,
+.entry.is-error .glyph-bloom,
+.entry.is-error .glyph-coolant {
+  opacity: 0;
+  animation: none;
+}
+
+/* Overheard lines, low in the corner while loading. */
+
+.entry-chatter {
+  position: absolute;
+  left: 40px;
+  bottom: 36px;
+  max-width: min(440px, calc(100vw - 80px));
+  transition: opacity 0.6s ease;
+}
+
+.entry-chatter.is-fading,
+.entry.is-ready .entry-chatter,
+.entry.is-error .entry-chatter {
+  opacity: 0;
+}
+
+.entry-chatter-from {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--coolant);
+  opacity: 0.8;
+}
+
+.entry-chatter-from::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--coolant);
+  box-shadow: 0 0 6px var(--coolant-glow);
+  animation: chatter-live 1.6s steps(2, jump-none) infinite;
+}
+
+@keyframes chatter-live {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0.25;
+  }
+}
+
+.entry-chatter-text {
+  margin-top: 8px;
+  font-size: 15px;
+  font-weight: 300;
+  line-height: 1.45;
+  color: var(--ink-dim);
+}
+
+/* Keys, shown once the way in is open. */
+
+.entry-keys {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 30px;
+  opacity: 0;
+  transition: opacity 1s ease 0.6s;
+  white-space: nowrap;
+}
+
+.entry.is-ready .entry-keys {
+  opacity: 1;
+}
+
+.entry-key-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.entry-key-word {
+  margin-left: 6px;
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+/* Failures: the frame goes dark and says why. */
 
 .entry-message {
-  margin-top: 28px;
-  text-align: left;
+  width: min(520px, 100%);
+  max-height: 46vh;
+  overflow: auto;
+  padding: 18px 0 0;
+  border-top: 1px solid var(--panel-edge);
+  user-select: text;
 }
 
 .entry-message-title {
-  font-size: 13px;
-  letter-spacing: 0.2em;
+  font-size: 12px;
+  letter-spacing: 0.24em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--coolant);
 }
 
 .entry-message-body {
@@ -161,9 +467,10 @@ body {
   margin: 16px 0 0;
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 4px 12px;
-  font-size: 11px;
-  line-height: 1.4;
+  gap: 4px 14px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.45;
 }
 
 .entry-diag dt {
@@ -176,16 +483,19 @@ body {
   overflow-wrap: anywhere;
 }
 
-/* Pause menu ------------------------------------------------------------ */
+/* Pause ----------------------------------------------------------------- */
 
 .pause {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  background: rgba(0, 0, 0, 0.32);
+  background: radial-gradient(ellipse 46% 52% at 50% 50%, rgba(5, 4, 3, 0.8), rgba(5, 4, 3, 0.5) 60%, rgba(0, 0, 0, 0.32) 100%);
+  backdrop-filter: blur(6px) saturate(0.75);
+  -webkit-backdrop-filter: blur(6px) saturate(0.75);
   z-index: 9;
-  transition: opacity 0.3s ease;
+  transition: opacity 0.25s ease;
+  cursor: pointer;
 }
 
 .pause.is-hidden {
@@ -193,49 +503,170 @@ body {
   pointer-events: none;
 }
 
-.pause-card {
-  width: min(380px, calc(100vw - 32px));
-  padding: 32px 32px 28px;
-  text-align: center;
-  background: var(--panel);
-  border: 1px solid var(--panel-edge);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+.pause-panel {
+  width: min(300px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  cursor: default;
 }
 
 .pause-title {
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.5em;
-  text-indent: 0.5em;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 40px;
+  font-size: 11px;
+  letter-spacing: 0.7em;
+  text-indent: 0.7em;
   text-transform: uppercase;
-  color: var(--ink-dim);
-  margin-bottom: 22px;
+  color: var(--coolant);
 }
 
-.pause-row {
+.pause-title::before,
+.pause-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 184, 104, 0.5));
+}
+
+.pause-title::after {
+  transform: scaleX(-1);
+}
+
+.pause-volume {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 6px;
-  margin: 14px 0;
-  text-align: left;
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  grid-template-columns: 1fr auto;
+  row-gap: 14px;
+  align-items: baseline;
+}
+
+.pause-label {
+  font-size: 10px;
+  letter-spacing: 0.32em;
   text-transform: uppercase;
   color: var(--ink-faint);
-  position: relative;
 }
 
-.pause-value {
-  position: absolute;
-  right: 0;
-  top: 0;
-  color: var(--ink-dim);
+.pause-readout {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  transition: color 0.2s ease;
 }
 
-.pause-row input[type='range'] {
+.pause-slider {
+  --fill: 50%;
+  grid-column: 1 / -1;
   width: 100%;
-  accent-color: #e9c48a;
+  height: 18px;
+  margin: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.pause-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--coolant) var(--fill), var(--ink-ghost) var(--fill));
+  box-shadow: 0 0 6px rgba(255, 150, 60, 0.25);
+}
+
+.pause-slider::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  margin-top: -5.5px;
+  border-radius: 50%;
+  background: var(--shell);
+  border: 1.5px solid var(--coolant);
+  box-shadow: 0 0 8px var(--coolant-glow);
+  transition: transform 0.15s ease;
+}
+
+.pause-slider:hover::-webkit-slider-thumb,
+.pause-slider:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+
+.pause-slider:focus-visible {
+  outline: none;
+}
+
+.pause.is-muted .pause-slider::-webkit-slider-runnable-track {
+  background: linear-gradient(to right, var(--ink-faint) var(--fill), var(--ink-ghost) var(--fill));
+  box-shadow: none;
+}
+
+.pause.is-muted .pause-slider::-webkit-slider-thumb {
+  border-color: var(--ink-faint);
+  box-shadow: none;
+}
+
+.pause.is-muted .pause-readout {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+}
+
+.pause-mute {
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 18px;
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  transition: color 0.2s ease;
+}
+
+.pause-mute::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 1px solid currentColor;
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.pause-mute:hover,
+.pause-mute:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+
+.pause-mute[aria-pressed='true'] {
+  color: var(--coolant);
+}
+
+.pause-mute[aria-pressed='true']::before {
+  background: var(--coolant);
+  box-shadow: 0 0 6px var(--coolant-glow);
+}
+
+.pause-resume {
+  margin-top: 52px;
+  align-self: center;
+  padding: 8px 4px;
+  font-size: 11px;
+  letter-spacing: 0.6em;
+  text-indent: 0.6em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.25s ease, color 0.25s ease;
+}
+
+.pause-resume:hover,
+.pause-resume:focus-visible {
+  outline: none;
+  color: var(--coolant);
+  border-color: rgba(255, 184, 104, 0.5);
 }
 
 /* Interaction prompt ---------------------------------------------------- */

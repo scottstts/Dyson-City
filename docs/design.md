@@ -194,9 +194,9 @@ Outdoor shadows are very dim and short: a soft darkening at the foot of each obj
 ## 10. UI / HUD
 
 - **In play:** nothing on screen. Looking at an interactable shows a small dot and the prompt.
-- **Entry screen:** title, loading progress, "Enter". It shows platform-gate and boot/GPU errors.
-- **Pause:** resume, mouse sensitivity, FOV.
-- **Typography:** one refined sans-serif, generous letter-spacing, translucent panels.
+- **Entry screen:** loading is an illustration of the logo's sphere whose coolant lines light member by member round its star, over a dark-tinted still of the city, with one short overheard line at a time; ready is the live world, the name, "Enter" and the keys. It shows platform-gate and boot/GPU errors (`docs/ui.md`).
+- **Pause:** the world freezes; volume, mute (remembered) and resume. Field of view and mouse sensitivity are fixed.
+- **Typography:** one refined sans-serif, generous letter-spacing; the coolant gold of the frame's lines is the one accent.
 
 ## 11. Platform
 

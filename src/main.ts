@@ -17,7 +17,7 @@ if (!platform.ok) {
 } else {
   // The whole startup path is one observed promise chain with a terminal catch.
   fatal.stage = 'import';
-  entry.setProgress(0.02, 'Loading engine');
+  entry.setProgress(0.02);
   import('./app/boot')
     .then(({ boot }) => boot(host, entry))
     .catch((error: unknown) => fatal.report('Dyson failed to start', error));

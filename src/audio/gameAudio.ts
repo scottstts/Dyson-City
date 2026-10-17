@@ -53,6 +53,8 @@ export class GameAudio {
   private readonly houseDoors: AudioHouse['doors'] | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
+  /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
+  private userGain = 1;
   private readonly listener: ListenerState = {
     x: 0,
     y: 0,
@@ -147,7 +149,7 @@ export class GameAudio {
     g.cancelScheduledValues(t);
     if (active) {
       g.setValueAtTime(0, t);
-      g.setTargetAtTime(LEVEL.master, t, 0.08);
+      g.setTargetAtTime(LEVEL.master * this.userGain, t, 0.08);
       void ctx.resume().catch((e: unknown) => console.warn('[Dyson] audio could not start', e));
     } else {
       g.setTargetAtTime(0, t, 0.04);
@@ -155,6 +157,16 @@ export class GameAudio {
         if (!this.active && ctx.state === 'running') void ctx.suspend();
       }, 250);
     }
+  }
+
+  /** The player's volume (0 mutes). Takes effect at once while playing, and on the next resume. */
+  setUserGain(gain: number): void {
+    this.userGain = Math.max(0, gain);
+    if (!this.active) return;
+    const g = this.engine.master.gain;
+    const t = this.engine.ctx.currentTime;
+    g.cancelScheduledValues(t);
+    g.setTargetAtTime(LEVEL.master * this.userGain, t, 0.05);
   }
 
   /** Stops all sound for good (fatal errors). */

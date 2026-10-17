@@ -155,7 +155,7 @@ These rules apply to all future sounds, not just the current ones.
 
 ## Runtime
 
-- **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it.
+- **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it. The player's volume and mute (`docs/ui.md`) scale `LEVEL.master` through `GameAudio.setUserGain`.
 - **Per frame** (`Game.frame`, after the camera's matrix): the ears move to the camera, airlock events and queued foot events sound at time `t`, and every emitter's path is re-derived.
   - `glide` skips unchanged targets, so steady parameters add no automation.
 - **Cost.** 18 HRTF and 2 equal-power panners, four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo), three steady loops (the kettle within earshot, two rustles) and short-lived sources.

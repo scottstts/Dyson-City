@@ -9,13 +9,14 @@ import type { World } from './world';
 import type { DebugParams } from '../debug/params';
 import { VIEWPOINTS, DEFAULT_VIEWPOINT } from '../debug/viewpoints';
 import { Input } from '../player/input';
-import { PlayerController, type Spawn } from '../player/controller';
+import { EYE_FOV, PlayerController, type Spawn } from '../player/controller';
 import { createPipeline, setPipelineTime, type Pipeline } from '../render/pipeline';
 import { cameraExposure, whiteBalanceGains } from '../render/exposure';
 import { STAR_DISC_MEAN_RADIANCE } from '../world/radiometry';
 import { addLightingProbes } from '../debug/probes';
 import type { AtmosphereTextures } from '../atmosphere/luts';
-import { loadSettings, PauseMenu, type PlayerSettings } from '../ui/pauseMenu';
+import { PauseMenu } from '../ui/pauseMenu';
+import { loadAudioPrefs, prefsGain } from '../ui/audioPrefs';
 import type { EntryScreen } from '../ui/entryScreen';
 import { EyeAdaptation } from '../render/adaptation';
 import { InteractionPrompt } from '../ui/prompt';
@@ -29,12 +30,13 @@ export class Game {
   readonly pipeline: Pipeline;
   private readonly input: Input;
   private readonly player: PlayerController;
-  private readonly settings: PlayerSettings;
   private readonly pause: PauseMenu;
   private gameTime: number;
   private lastTime = -1;
   private playing = false;
   private running = false;
+  /** The loop is held while the pause menu is up: nothing advances or renders. */
+  private frozen = false;
 
   private readonly handle: RendererHandle;
   private readonly world: World;
@@ -53,18 +55,18 @@ export class Game {
     this.world = world;
     this.debug = debug;
     this.entry = entry;
-    this.settings = loadSettings();
     const { width, height } = handle.viewport();
-    this.camera = new PerspectiveCamera(debug.fov ?? this.settings.fov, width / height, 0.05, 40_000);
+    this.camera = new PerspectiveCamera(debug.fov ?? EYE_FOV, width / height, 0.05, 40_000);
     this.camera.name = 'PlayerCamera';
     handle.onViewport((size) => {
       this.camera.aspect = size.width / size.height;
       this.camera.updateProjectionMatrix();
+      // A resized canvas is cleared: paused, redraw the same instant once.
+      if (this.frozen) this.still();
     });
 
     this.input = new Input(handle.renderer.domElement);
     this.player = new PlayerController(this.camera, this.input, world.city.walk);
-    this.player.sensitivity = this.settings.sensitivity;
     this.player.onFoot = (e) => audio.foot(e);
     const base = VIEWPOINTS[debug.spot ?? DEFAULT_VIEWPOINT] ?? VIEWPOINTS[DEFAULT_VIEWPOINT];
     const spawn = debug.look ? { ...base, yaw: (debug.look[0] * Math.PI) / 180, pitch: (debug.look[1] * Math.PI) / 180 } : base;
@@ -95,18 +97,18 @@ export class Game {
     if (debug.lock) world.city.lock.setOpenness(debug.lock === 'outer' || debug.lock === 'open' ? 1 : 0, debug.lock === 'inner' || debug.lock === 'open' ? 1 : 0);
 
     this.prompt = new InteractionPrompt(host);
-    this.pause = new PauseMenu(host, this.settings, (s) => {
-      this.player.sensitivity = s.sensitivity;
-      this.camera.fov = s.fov;
-      this.camera.updateProjectionMatrix();
-    });
+    const prefs = loadAudioPrefs();
+    audio.setUserGain(prefsGain(prefs));
+    this.pause = new PauseMenu(host, prefs, (gain) => audio.setUserGain(gain));
     this.input.onLockChange = (locked) => {
       this.audio.setActive(locked);
       if (locked) {
         this.playing = true;
         this.entry.hide();
         this.pause.hide();
+        this.thaw();
       } else if (this.playing && !fatal.hasFired) {
+        this.freeze();
         this.pause.show(() => this.input.requestLock());
       }
     };
@@ -121,6 +123,42 @@ export class Game {
   start(): void {
     if (this.running) return;
     this.running = true;
+    this.loop();
+  }
+
+  stop(): void {
+    this.running = false;
+    this.frozen = false;
+    this.handle.renderer.setAnimationLoop(null);
+    this.audio.close();
+  }
+
+  /** Holds the world and the picture on the current instant (pause). */
+  private freeze(): void {
+    if (!this.running || this.frozen) return;
+    this.frozen = true;
+    this.handle.renderer.setAnimationLoop(null);
+  }
+
+  private thaw(): void {
+    if (!this.frozen) return;
+    this.frozen = false;
+    if (!this.running || fatal.hasFired) return;
+    // Time paused with the picture: no catch-up step on resume.
+    this.lastTime = -1;
+    this.loop();
+  }
+
+  /** Re-renders the held instant without advancing anything. */
+  private still(): void {
+    try {
+      this.frame(0);
+    } catch (error) {
+      fatal.report('Rendering stopped', error);
+    }
+  }
+
+  private loop(): void {
     this.handle.renderer.setAnimationLoop((time: number) => {
       const t = time / 1000;
       const dt = this.lastTime < 0 ? 1 / 60 : Math.min(Math.max(t - this.lastTime, 0), 0.1);
@@ -131,12 +169,6 @@ export class Game {
         fatal.report('Rendering stopped', error);
       }
     });
-  }
-
-  stop(): void {
-    this.running = false;
-    this.handle.renderer.setAnimationLoop(null);
-    this.audio.close();
   }
 
   enter(): void {

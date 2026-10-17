@@ -1,73 +1,70 @@
-export interface PlayerSettings {
-  sensitivity: number;
-  fov: number;
-}
+import { prefsGain, saveAudioPrefs, type AudioPrefs } from './audioPrefs';
 
-const STORAGE_KEY = 'dyson.settings.v1';
-export const DEFAULT_SETTINGS: Readonly<PlayerSettings> = { sensitivity: 1, fov: 62 };
-
-export function loadSettings(): PlayerSettings {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Partial<PlayerSettings>;
-      return {
-        sensitivity: clampNum(parsed.sensitivity, 0.2, 3, DEFAULT_SETTINGS.sensitivity),
-        fov: clampNum(parsed.fov, 45, 90, DEFAULT_SETTINGS.fov),
-      };
-    }
-  } catch {
-    // storage unavailable: defaults
-  }
-  return { ...DEFAULT_SETTINGS };
-}
-
-function saveSettings(s: PlayerSettings): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(s));
-  } catch {
-    // ignore
-  }
-}
-
-function clampNum(v: unknown, lo: number, hi: number, fallback: number): number {
-  return typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : fallback;
-}
-
-/** Minimal pause menu: resume, mouse sensitivity, vertical field of view. */
+/**
+ * The pause menu over the frozen frame: one volume line and a mute, both remembered, and the way
+ * back in (the button, or a click anywhere off the controls).
+ */
 export class PauseMenu {
   readonly root: HTMLDivElement;
   private onResume: (() => void) | null = null;
+  private readonly prefs: AudioPrefs;
+  private readonly onGain: (gain: number) => void;
+  private readonly slider: HTMLInputElement;
+  private readonly readout: HTMLSpanElement;
+  private readonly mute: HTMLButtonElement;
 
-  constructor(host: HTMLElement, settings: PlayerSettings, onChange: (s: PlayerSettings) => void) {
+  constructor(host: HTMLElement, prefs: AudioPrefs, onGain: (gain: number) => void) {
+    this.prefs = prefs;
+    this.onGain = onGain;
     this.root = document.createElement('div');
     this.root.className = 'pause is-hidden';
-    const card = document.createElement('div');
-    card.className = 'pause-card';
-    const title = document.createElement('div');
-    title.className = 'pause-title';
+    this.root.addEventListener('click', (e) => {
+      if (e.target === this.root) this.onResume?.();
+    });
+
+    const panel = div('pause-panel');
+    const title = div('pause-title');
     title.textContent = 'Paused';
+
+    const volume = document.createElement('label');
+    volume.className = 'pause-volume';
+    const name = document.createElement('span');
+    name.className = 'pause-label';
+    name.textContent = 'Volume';
+    this.readout = document.createElement('span');
+    this.readout.className = 'pause-readout';
+    this.slider = document.createElement('input');
+    this.slider.type = 'range';
+    this.slider.className = 'pause-slider';
+    this.slider.min = '0';
+    this.slider.max = '100';
+    this.slider.step = '1';
+    this.slider.addEventListener('input', () => {
+      this.prefs.volume = Number(this.slider.value) / 100;
+      // Moving the volume is wanting sound.
+      this.prefs.muted = false;
+      this.commit();
+    });
+    volume.append(name, this.readout, this.slider);
+
+    this.mute = document.createElement('button');
+    this.mute.type = 'button';
+    this.mute.className = 'pause-mute';
+    this.mute.addEventListener('click', () => {
+      this.prefs.muted = !this.prefs.muted;
+      this.commit();
+    });
+
     const resume = document.createElement('button');
     resume.type = 'button';
-    resume.className = 'entry-enter';
+    resume.className = 'pause-resume';
     resume.textContent = 'Resume';
     resume.addEventListener('click', () => this.onResume?.());
-    card.append(
-      title,
-      this.slider('Mouse sensitivity', 0.2, 3, 0.05, settings.sensitivity, (v) => v.toFixed(2), (v) => {
-        settings.sensitivity = v;
-        saveSettings(settings);
-        onChange(settings);
-      }),
-      this.slider('Field of view', 45, 90, 1, settings.fov, (v) => `${v.toFixed(0)}°`, (v) => {
-        settings.fov = v;
-        saveSettings(settings);
-        onChange(settings);
-      }),
-      resume,
-    );
-    this.root.appendChild(card);
+
+    panel.append(title, volume, this.mute, resume);
+    this.root.appendChild(panel);
     host.appendChild(this.root);
+    this.reflect();
   }
 
   show(onResume: () => void): void {
@@ -79,26 +76,25 @@ export class PauseMenu {
     this.root.classList.add('is-hidden');
   }
 
-  private slider(label: string, min: number, max: number, step: number, value: number, fmt: (v: number) => string, set: (v: number) => void): HTMLLabelElement {
-    const row = document.createElement('label');
-    row.className = 'pause-row';
-    const name = document.createElement('span');
-    name.textContent = label;
-    const out = document.createElement('span');
-    out.className = 'pause-value';
-    out.textContent = fmt(value);
-    const input = document.createElement('input');
-    input.type = 'range';
-    input.min = String(min);
-    input.max = String(max);
-    input.step = String(step);
-    input.value = String(value);
-    input.addEventListener('input', () => {
-      const v = Number(input.value);
-      out.textContent = fmt(v);
-      set(v);
-    });
-    row.append(name, input, out);
-    return row;
+  private commit(): void {
+    saveAudioPrefs(this.prefs);
+    this.reflect();
+    this.onGain(prefsGain(this.prefs));
   }
+
+  private reflect(): void {
+    const pct = Math.round(this.prefs.volume * 100);
+    this.slider.value = String(pct);
+    this.slider.style.setProperty('--fill', `${pct}%`);
+    this.readout.textContent = String(pct);
+    this.mute.textContent = this.prefs.muted ? 'Muted' : 'Mute';
+    this.mute.setAttribute('aria-pressed', String(this.prefs.muted));
+    this.root.classList.toggle('is-muted', this.prefs.muted);
+  }
+}
+
+function div(className: string): HTMLDivElement {
+  const node = document.createElement('div');
+  node.className = className;
+  return node;
 }

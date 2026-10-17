@@ -19,6 +19,8 @@ const JUMP_SPEED = 3.9;
 const STEP_UP = 0.45;
 const CROUCH_EYE = 1.05;
 const LOOK_RAD_PER_PX = 0.0021;
+/** The eye's vertical field of view, degrees. */
+export const EYE_FOV = 62;
 
 /**
  * The walkable world: surface height and walls (default: the bare site, no walls). `ground` is
@@ -68,7 +70,6 @@ export class PlayerController {
   private stepOffset = 0;
   private readonly head = new HeadMotion();
   private readonly prevVelocity = new Vector3();
-  sensitivity = 1;
   /** Footstep events, as they happen. */
   onFoot: ((e: FootEvent) => void) | null = null;
   private moving = false;
@@ -105,7 +106,7 @@ export class PlayerController {
 
   update(dt: number): void {
     const [dx, dy] = this.input.consumeLook();
-    const k = LOOK_RAD_PER_PX * this.sensitivity * (this.camera.fov / 60);
+    const k = LOOK_RAD_PER_PX * (this.camera.fov / 60);
     this.yaw -= dx * k;
     this.pitch = MathUtils.clamp(this.pitch - dy * k, -1.52, 1.52);
 
