@@ -17,8 +17,12 @@
  * photographed sun is the sensor's response to saturation — halation and blooming spill the clipped
  * white past it. Applied after the tone curve, as a sensor would: the disc dissolves into a white
  * blaze with no edge you can point to, fading over a few degrees into the structure around it.
+ * It is a spread in the image plane of the clipped disc that falls on the sensor (the visible disc's
+ * pixels, blurred): with the star out of frame there is none. Keyed to the angle from the star
+ * instead, its tail laid a white veil over the whole frame looking level, after the tone curve,
+ * and every dark in the estate read as overcast grey.
  */
-import { Fn, vec2, vec3, vec4, float, max, sqrt, pow, clamp, acos, smoothstep, texture, luminance, screenUV, exp, rtt } from 'three/tsl';
+import { Fn, vec2, vec3, vec4, float, max, sqrt, pow, clamp, acos, smoothstep, texture, luminance, screenUV, rtt } from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 import { gaussianBlur } from 'three/addons/tsl/display/GaussianBlurNode.js';
 import { STAR_ANGULAR_RADIUS } from '../world/constants';
@@ -77,20 +81,23 @@ function weightedSum(stages: Stage[]): V3 {
 }
 
 /**
- * Halation of the clipped disc (display units, screen-blended): a white spill just outside the limb
- * holding near full white for ~5° and a fainter one fading over ~16°, in the star's warm white. Strong
- * enough that the disc has no locatable edge: it dissolves into the blaze.
+ * Halation of the clipped disc (display units, screen-blended): the visible disc blurred in the image
+ * plane by two Gaussians (σ in degrees, gain on the blurred mask). Just outside a long limb a lobe
+ * reads half its gain, so the spill holds full white at the limb, ~0.3 five degrees out and a faint
+ * tail over ~20°, in the star's warm white: the disc has no locatable edge.
  */
-export const HALATION = { near: 0.97, nearDeg: 5.0, far: 0.45, farDeg: 16.0, tint: [1.0, 0.95, 0.86] as const };
+export const HALATION = { near: { sigmaDeg: 4.5, gain: 1.94 }, far: { sigmaDeg: 15, gain: 0.9 }, tint: [1.0, 0.95, 0.86] as const };
 
 export interface GlarePass {
   /** The image with glare, given its HDR value at a pixel and its world view direction. */
   /** `sky` is 1 where the pixel shows the sky (nothing opaque in front), 0 on geometry. */
   apply(scene: V3, viewDir: V3, sky: Node<'float'>): V3;
-  /** Halation of the clipped disc in this direction (display units, 0..1; 1 over the disc). */
-  halation(viewDir: V3): Node<'float'>;
+  /** Halation of the clipped disc at this pixel (display units, 0..1; 1 over the disc). */
+  halation(): Node<'float'>;
   /** The star's analytic share alone (debug view). */
   starShare(viewDir: V3): V3;
+  /** The added light by origin (debug view `veil`): the star's analytic share, the eye's scatter and the camera's bloom of the image. */
+  parts(viewDir: V3): { star: V3; eye: V3; camera: V3 };
   /** Call once per frame before rendering. */
   resize(pxPerDeg: number): void;
 }
@@ -106,7 +113,7 @@ export function createGlarePass(opts: {
   skyAt: (uv: Node<'vec2'>) => Node<'float'>;
   /**
    * Share of the star's disc the eye can see (1 in the open, a little less under the Dome's frame,
-   * 0 under a roof): scales the star's analytic glare and halation.
+   * 0 under a roof): scales the star's analytic glare. (The halation follows the disc's pixels.)
    */
   starVisibility: Node<'float'>;
   /**
@@ -127,10 +134,16 @@ export function createGlarePass(opts: {
   // Only sky pixels on the disc are the analytic star's; geometry in that direction (a vault, a
   // frame member, a lamp) is an ordinary source.
   const source = rtt(Fn(() => vec4(hdr(screenUV).mul(float(1).sub(float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV)))), 1.0))(), null, null, { resolutionScale: SOURCE_SCALE });
+  // The clipped disc on the sensor (sky pixels on the disc), for its halation.
+  const discMask = rtt(Fn(() => vec4(vec3(float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV))), 1.0))(), null, null, { resolutionScale: EXCESS_SCALE });
   const sourceExcess = rtt(Fn(() => vec4(excess(source.sample(screenUV).rgb as unknown as V3), 1.0))(), null, null, { resolutionScale: EXCESS_SCALE });
 
   const eye = blurChain(source as unknown as Node<'vec4'>, screenGlareLobes());
   const camera = blurChain(sourceExcess as unknown as Node<'vec4'>, CAMERA_BLOOM);
+  const halo = blurChain(discMask as unknown as Node<'vec4'>, [
+    { sigmaDeg: HALATION.near.sigmaDeg, weight: HALATION.near.gain },
+    { sigmaDeg: HALATION.far.sigmaDeg, weight: HALATION.far.gain },
+  ]);
 
   const starTex = texture(opts.starGlare);
   const starCentre = vec3(...STAR_CENTER_RADIANCE).mul(illuminant);
@@ -149,13 +162,14 @@ export function createGlarePass(opts: {
       return kept.add(starShare(vd)).add(weightedSum(eye)).add(weightedSum(camera)) as unknown as V3;
     },
     starShare,
-    halation(vd) {
-      const outside = acos(clamp(vd.y, -1.0, 1.0)).sub(STAR_ANGULAR_RADIUS).max(0.0).mul(180 / Math.PI);
-      return exp(outside.div(-HALATION.nearDeg)).mul(HALATION.near).add(exp(outside.div(-HALATION.farDeg)).mul(HALATION.far)).min(1.0).mul(starVisibility) as unknown as Node<'float'>;
+    parts: (vd) => ({ star: starShare(vd), eye: weightedSum(eye), camera: weightedSum(camera) }),
+    halation() {
+      return luminance(weightedSum(halo)).min(1.0) as unknown as Node<'float'>;
     },
     resize(pxPerDeg) {
       sizeChain(eye, pxPerDeg * SOURCE_SCALE);
       sizeChain(camera, pxPerDeg * EXCESS_SCALE);
+      sizeChain(halo, pxPerDeg * EXCESS_SCALE);
     },
   };
 }

@@ -32,7 +32,7 @@ import { createGlarePass, HALATION } from './glarePass';
 
 type TexNode = Node<'vec4'> & { sample(uv: Node<'vec2'>): Node<'vec4'>; value: import('three/webgpu').Texture };
 
-export type DebugView = 'final' | 'hdr' | 'ao' | 'normal' | 'depth' | 'velocity' | 'aerial' | 'nopost' | 'distance' | 'glare';
+export type DebugView = 'final' | 'hdr' | 'ao' | 'normal' | 'depth' | 'velocity' | 'aerial' | 'nopost' | 'distance' | 'glare' | 'veil';
 
 export interface CameraSettings {
   /** Linear exposure multiplier (fixed camera exposure, render/exposure.ts). */
@@ -172,11 +172,14 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const camera = Fn(() => {
     const uv = screenUV;
     const viewDir = viewDirAt(uv);
-    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir, skyAt(uv)).mul(settings.exposure).mul(settings.adaptation).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
-    // The look sits before the display transform, in scene-linear exposure (render/tsl/look.ts).
-    const looked = filmLook(exposed) as unknown as Node<'vec3'>;
+    const gain = settings.exposure.mul(settings.adaptation);
+    const exposed = glare.apply(hdr.sample(uv).rgb, viewDir, skyAt(uv)).mul(gain).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
+    // The look sits before the display transform, in scene-linear exposure (render/tsl/look.ts); its
+    // black point takes off the star's veil this pixel carries.
+    const veil = luminance(glare.starShare(viewDir)).mul(gain);
+    const looked = filmLook(exposed, veil) as unknown as Node<'vec3'>;
     // The clipped disc's halation spills white past its outline (glarePass.ts), screen-blended.
-    const spill = vec3(...HALATION.tint).mul(glare.halation(viewDir));
+    const spill = vec3(...HALATION.tint).mul(glare.halation());
     const mapped = float(1).sub(float(1).sub(toneMap(opts.toneMapper, looked)).mul(float(1).sub(spill)));
     // Grade in display-linear: saturation (contrast is the look's).
     const lum = luminance(mapped);
@@ -220,6 +223,13 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
       break;
     case 'glare':
       outputNode = Fn(() => vec4(oetf(clamp(glare.starShare(viewDirAt(screenUV)).mul(settings.exposure).mul(4), 0, 1)), 1))() as unknown as Node<'vec4'>;
+      break;
+    case 'veil':
+      // Exposed light the glare adds, by origin (×4): R the star's analytic share, G the eye's scatter of the image, B the camera's bloom.
+      outputNode = Fn(() => {
+        const p = glare.parts(viewDirAt(screenUV));
+        return vec4(oetf(clamp(vec3(luminance(p.star), luminance(p.eye), luminance(p.camera)).mul(settings.exposure).mul(4), 0, 1)), 1);
+      })() as unknown as Node<'vec4'>;
       break;
     case 'nopost':
       outputNode = vec4(oetf(toneMap(opts.toneMapper, colorTex.sample(screenUV).rgb.mul(settings.exposure).mul(settings.whiteBalance))), 1) as unknown as Node<'vec4'>;

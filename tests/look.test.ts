@@ -14,6 +14,15 @@ describe('high-contrast look', () => {
     expect(BLACK_POINT.floor).toBeLessThan(0.11);
     expect(LOOK.shadowGain).toBeGreaterThan(LOOK.highlightGain);
   });
+  it('takes off only the veil a pixel carries: sunlit darks far from the star keep their tone', () => {
+    // Looking level under the Dome the star's veil is ~0.01 exposed; sunlit foliage is ~0.035.
+    const foliage = Math.log2(lookCpu(0.035, 0.01) / 0.035);
+    expect(foliage).toBeGreaterThan(-1.5);
+    // The deepest floor (beside the star) would have crushed it by several stops.
+    expect(Math.log2(lookCpu(0.035) / 0.035)).toBeLessThan(-4);
+    // Indoors (no star in view) nothing is taken off: only the contrast curve acts.
+    expect(Math.log2(lookCpu(0.18, 0) / 0.18)).toBeCloseTo(0, 1);
+  });
   it('is monotonic', () => {
     let prev = 0;
     for (let s = -12; s <= 8; s += 0.05) {

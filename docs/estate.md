@@ -27,7 +27,7 @@ Code: `src/estate/`. The plan's intent is `docs/city_plan.md` §4; the house its
 - **Trees grow** from per-species tables (cedar, copper beech, lime, oak, apple): branches from a queue, leaves as crossed sprig cards on a painted atlas.
   - The atlas's mips preserve coverage (alpha rescaled per level) and fill transparent texels with the mean colour, so a distant crown neither thins out nor fringes dark.
   - Leaf cards carry a rounded normal (blended toward the crown's outside) and a crown-depth shade (as AO): the crown shades as a volume.
-  - Translucency (light through the leaves from the sky above) and card wind.
+  - Translucency (light through the leaves from the sky above) and card wind. A leaf transmits about what it reflects (`LEAF_TRANSMISSION`); a face turned up toward the light shows 15 % of it. At 0.3 × albedo (a tenth of that) the canopies' undersides read as dark masses under a star overhead.
 - **No impostors, no "ball far, leaves near".** Distance thins cards by a fixed rank per card, continuously (from 70 m to 320 m, keeping 0.4), and the survivors grow to keep the crown's coverage. A crown is leaves at every distance and nothing swaps.
 - **Beds:** shrubs, perennials and vegetables only in soil regions (kerbed beds); the walker is fenced out of them. Clipped yews as topiary.
 - The delphinium border is a mix of mid blue, mauve and pale spires. A single saturated violet read as a painted block.

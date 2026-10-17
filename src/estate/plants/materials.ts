@@ -6,8 +6,9 @@
  *    occlusion: inner and lower leaves see less of the star.
  *  - Its normal is the rounded crown normal from the geometry, on both faces (a card's own face
  *    normal would light each sprig as a flat plane).
- *  - Translucency: a leaf seen from below is lit through by the sky above it (about a fifth of the
- *    light passes a leaf, yellowed): under a star fixed overhead, the undersides of canopies glow.
+ *  - Translucency: a leaf seen from below is lit through by the sky above it: a leaf transmits about
+ *    as much as it reflects (~0.1–0.2 in the green, yellowed). Under a star fixed overhead the
+ *    undersides of canopies glow; a leaf's upper face shows only a little of it (LEAF_TRANSMISSION).
  *  - Wind: the Dome's air circulates faintly; each card turns a little about its root (rooted, so a
  *    sprig never leaves its twig).
  *  - Distance: no impostors and no swaps. Each card has a stable rank; with distance the lowest
@@ -25,6 +26,12 @@ import { waterTime } from '../materials/water';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
+
+/**
+ * Light through a leaf relative to its albedo (a leaf transmits about what it reflects), and the
+ * share seen on a face turned up toward the light (most of what passes leaves the far face).
+ */
+export const LEAF_TRANSMISSION = { gain: 1.0, upper: 0.15 } as const;
 
 /** Ranks: cards dissolve from 70 m and keep 40 % at 320 m. */
 export const FOLIAGE_LOD = { start: 70, end: 320, keep: 0.4 } as const;
@@ -70,7 +77,8 @@ export function createFoliageMaterial(atlas: Texture, env: Texture | null, name 
     const above = pmremTexture(env, vec3(0, 1, 0), float(1)) as unknown as V3;
     const seenFace = normalWorldGeometry.mul(faceDirection);
     const below = clamp(seenFace.y.negate(), 0, 1);
-    mat.emissiveNode = albedo.mul(vec3(1.05, 1.1, 0.7)).mul(0.3).mul(above).mul(below.mul(0.7).add(0.3)).mul(shade);
+    const facing = below.mul(1 - LEAF_TRANSMISSION.upper).add(LEAF_TRANSMISSION.upper);
+    mat.emissiveNode = albedo.mul(vec3(1.05, 1.1, 0.7)).mul(LEAF_TRANSMISSION.gain).mul(above).mul(facing).mul(shade);
   }
   return mat;
 }

@@ -1,6 +1,6 @@
 /**
  * URL debug parameters (development and headless renders; local hosts only, see isDebugHost):
- *   ?view=final|hdr|ao|normal|depth|velocity|aerial|nopost|glare   pipeline stage
+ *   ?view=final|hdr|ao|normal|depth|velocity|aerial|nopost|glare|veil  pipeline stage
  *   ?spot=<viewpoint>                                        fixed camera (see viewpoints.ts)
  *   ?time=<seconds>                                          freeze game time (star rotation, flares)
  *   ?tm=film|agx|aces|neutral                                tone mapper (film = hue-preserving)
@@ -41,7 +41,7 @@ export interface DebugParams {
   vent: boolean;
 }
 
-const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare'];
+const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare', 'veil'];
 
 /**
  * Debug modes are a development tool: they work only when the page is served from this machine

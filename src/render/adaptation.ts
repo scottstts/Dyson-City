@@ -1,9 +1,9 @@
 /**
  * Eye adaptation (design §12, docs/render-pipeline.md): a metered, global exposure, never local.
  *
- * The exposure stays keyed to the star; adaptation only multiplies it upward when the view is dim
- * (an interior), between a floor of 1 (so outdoors and under the Dome nothing changes) and a
- * ceiling of 64 (+6 stops: the house's day rooms, ~7–8 stops under a sunlit wall, read dim but
+ * The exposure stays keyed to the star; adaptation only multiplies it upward when the view is dimmer
+ * than a sunlit scene (under the Dome's tint, an interior), between a floor of 1 (the open deck and
+ * anything facing the star stay on the star's key) and a ceiling of 64 (+6 stops: the house's day rooms, ~7–8 stops under a sunlit wall, read dim but
  * legible; a curtained bedroom stays dark). Asymmetric like an eye: it opens slowly going in
  * (~4 s) and clamps down fast going out (~1 s, after a moment of overexposure).
  *
@@ -14,8 +14,13 @@ import { HalfFloatType, NodeMaterial, QuadMesh, RenderTarget, RGBAFormat, type W
 import { vec2, vec4, log, max, exp, dot, screenUV, float } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 
-/** Log-average scene luminance below which the eye starts to open up (scene units). */
-export const ADAPT_REF = 0.12;
+/**
+ * Log-average scene luminance below which the eye starts to open up (scene units): a sunlit view's.
+ * The estate under the Dome meters ~0.18 (pale ground, dark sky through the tinted glass) and opens
+ * ~0.7 stop, so its sunlit tops read near white as noon ground does; the open deck meters above it
+ * and stays on the star's key.
+ */
+export const ADAPT_REF = 0.3;
 export const ADAPT_MAX = 64;
 /** Time constants (s): opening up (scene got darker) and clamping down (scene got brighter). */
 export const ADAPT_TAU = { open: 1.4, close: 0.3 } as const;
