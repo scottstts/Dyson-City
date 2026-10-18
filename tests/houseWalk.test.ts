@@ -143,4 +143,19 @@ describe.skipIf(!hasPack)('walking the house', () => {
     // Oak treads beside the runner, then the landing's boards.
     expect(seen.join(' ')).toBe('wood');
   });
+
+  it('walks from the hall under the main stair into the music room', () => {
+    openAll();
+    // House frame (Blender x, y): from the hall beside the stair's foot, east through the passage
+    // under its high end and the open door, into the music room. A ramp built as a solid wedge to
+    // the floor walled the passage off.
+    const at = (bx: number, by: number) => new Vector3(bx, 0, -by).applyMatrix4(root);
+    const a = at(0.3, 2.6);
+    const b = at(4.0, 2.6);
+    const w = new TestWalker([walk, terrace]).place(a.x, a.z, HOUSE_GRADE + 1.5);
+    w.walk(b.x - a.x, b.z - a.z, 3.7);
+    const p = new Vector3(w.x, w.y, w.z).applyMatrix4(root.clone().invert());
+    expect(p.x, `stopped at ${p.x.toFixed(2)}, ${(-p.z).toFixed(2)}`).toBeGreaterThan(3.2);
+    expect(w.y).toBeCloseTo(HOUSE_GRADE + 1.05, 2);
+  });
 });

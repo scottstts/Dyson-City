@@ -11,7 +11,10 @@ import { hasPack, houseWorld } from './helpers/houseWorld';
  *  - everywhere a walker can get to (flood-filled from the garden with the controller's own step,
  *    jump and body: doors open), no visible geometry is inside the body, and no visible surface it
  *    could step or jump onto lacks a floor (the balcony over the west porch had none: the walker
- *    fell through to the porch).
+ *    fell through to the porch);
+ *  - and no move is stopped where nothing visible stands within reach of the body (an invisible
+ *    wall: the main stair's ramp, a solid wedge to the floor, walled off the passage under it to
+ *    the music room).
  */
 const STEP = 0.45;
 const JUMP = 0.78;
@@ -166,6 +169,13 @@ describe.skipIf(!hasPack)('house collision matches what is drawn', () => {
       });
       return best;
     };
+    // Visible geometry within the body's reach of a plan point, at body heights. The margin allows for
+    // box proxies standing proud of what they wrap (a chair's box, a curtain's stack and pole).
+    const REACH = R + 0.3;
+    const visibleNear = (x: number, y: number, z: number): boolean =>
+      near(x, z, REACH, (t) => {
+        for (const h of [0.5, 0.9, 1.3, 1.7]) if (pointTri2(T, t, x, y + h, z) < REACH * REACH) return true;
+      });
     const where = (x: number, y: number, z: number) => `(${x.toFixed(2)}, ${y.toFixed(2)}, ${z.toFixed(2)})`;
     const failures = new Map<string, string>();
     const fail = (kind: string, t: number, x: number, y: number, z: number) => {
@@ -191,7 +201,17 @@ describe.skipIf(!hasPack)('house collision matches what is drawn', () => {
         if (tx < x0 || tx > x1 || tz < z0 || tz > z1) continue;
         for (const lift of [0, JUMP]) {
           const [nx, nz] = walker.walls.move(x, z, tx - x, tz - z, R, [y + lift + STEP - 0.03, y + lift + 1.75]);
-          if (Math.hypot(nx - tx, nz - tz) > 1e-3) continue;
+          if (Math.hypot(nx - tx, nz - tz) > 1e-3) {
+            // Stopped walking (not jumping) by the house's own collision: something visible must stand
+            // there. (The estate's bed fences are invisible on purpose: the walker keeps off the beds.)
+            const [hx, hz] = w.walk.resolve(tx, tz, R, y + STEP - 0.03, y + 1.75);
+            const byHouse = Math.hypot(hx - tx, hz - tz) > 1e-3;
+            if (lift === 0 && byHouse && !visibleNear(tx, y, tz)) {
+              const k = `invisible wall @ ${Math.round(tx)},${Math.round(y)},${Math.round(tz)}`;
+              if (!failures.has(k)) failures.set(k, `invisible wall: walking stopped at ${where(tx, y, tz)} with nothing visible within ${REACH.toFixed(2)} m`);
+            }
+            continue;
+          }
           let g = walker.ground(tx, tz, y + lift + STEP);
           if (lift > 0 && g <= y + STEP) continue;          // nothing a jump adds
           if (g < y - STEP) g = walker.ground(tx, tz, y);      // a fall: lands on what is below

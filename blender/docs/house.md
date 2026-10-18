@@ -42,8 +42,9 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
 - Collision: `House/Engine/Collision`, objects `COL_<source>` with prop `collision`:
   `trimesh` (the source's own triangles: structure, decks, steps, rails, roofs...; a mesh over 6,000
   faces gets a remeshed, decimated copy), `box` (furniture and curtains, window openings, door
-  leaves — parented to the leaf), `ramp` (wedge under each stair's nosing line up to the arriving
-  floor). Hidden in the viewport, kept in the view layer so exports see them.
+  leaves — parented to the leaf), `ramp` (a 25 cm slab under each stair's nosing line, from the floor it leaves to the one it
+  reaches; *rejected:* a solid wedge down to the floor, which walled off the passage under the main
+  stair to the music room). Hidden in the viewport, kept in the view layer so exports see them.
   - **Every house mesh collides unless geometry proves it need not** (`build/collision.py`); the
     reason is its prop `collision_none` (exported as extras): `low` (≤ 5 cm over the floor: rugs),
     `skin` (every vertex within 6 cm of a collider: siding, skirtings, pictures), `opening` (inside

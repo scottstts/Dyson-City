@@ -6,7 +6,9 @@ without collision (the porch steps' cheeks, then the west porch's roof, which is
 floor): the walker fell through. Proxies, as objects COL_<source> with a custom prop `collision`:
   "trimesh" - the source's own triangles (sharing its mesh; a dense one gets a remeshed, decimated copy),
   "box"     - an oriented box (furniture, curtains, window openings, door leaves),
-  "ramp"    - a solid wedge under a stair's nosing line, so walking up a stair is a smooth slope.
+  "ramp"    - a slab under a stair's nosing line (RAMP_DEPTH thick), so walking up a stair is a smooth
+              slope. *Rejected:* a solid wedge down to the floor: it filled the space under the flight,
+              and the passage under the main stair's high end to the music room's door was walled off.
 Door leaf boxes are parented to their leaf, so they follow it when the engine swings the door.
 
 Reasons for no proxy (`collision_none`), each a geometric test against the colliders built so far:
@@ -75,8 +77,13 @@ def _local_bounds(o):
     return bb.min(0), bb.max(0)
 
 
+RAMP_DEPTH = 0.25   # m: the stair's slab under its nosing line
+
+
 def _ramp(stair):
-    """Wedge under the nosing line of a stair (the top of its treads), down to the floor it starts on."""
+    """Slab under the nosing line of a stair (the top of its treads), RAMP_DEPTH deep, from the floor it
+    starts on to the floor it arrives at. Under its high end the space stays free; where it comes
+    down below a head, its underside stops the body as a ceiling does."""
     tr = bpy.data.objects.get(f"{stair}_Treads")
     if tr is None:
         return
@@ -99,7 +106,9 @@ def _ramp(stair):
     z_hi = min((z for z in P.LEVELS.values() if z > z_hi - 0.01), default=z_hi)
     a_floor = (floor - c) / k
     a_top = (z_hi - c) / k
-    prof = [(a_floor, floor), (a_top, z_hi), (a_top, floor)]
+    # the slab's underside: the nosing line RAMP_DEPTH lower, meeting the floor further up the run
+    a_under = (floor + RAMP_DEPTH - c) / k
+    prof = [(a_floor, floor), (a_top, z_hi), (a_top, z_hi - RAMP_DEPTH), (a_under, floor)]
     w0, w1 = lo[cross], hi[cross]
     verts = []
     for w in (w0, w1):
@@ -107,7 +116,7 @@ def _ramp(stair):
             p = [0.0, 0.0, z]
             p[ax], p[cross] = av, w
             verts.append(tuple(p))
-    faces = [[0, 1, 2], [5, 4, 3], [0, 3, 4, 1], [1, 4, 5, 2], [2, 5, 3, 0]]
+    faces = [[0, 1, 2, 3], [7, 6, 5, 4], [0, 4, 5, 1], [1, 5, 6, 2], [2, 6, 7, 3], [3, 7, 4, 0]]
     me = bpy.data.meshes.new(f"COL_{stair}")
     me.from_pydata(verts, [], faces)
     me.validate()
