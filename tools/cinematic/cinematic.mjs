@@ -144,6 +144,17 @@ try {
     );
   const settle = async (shot, u) => {
     await page.evaluate(() => window.__cine.cut());
+    if (shot.craft) {
+      // The craft's visit, run forward so that it reaches `at` s into its phase at u = 0, after the
+      // settle and the pre-roll: through a gap first, so a visit already under way starts afresh.
+      const extra = shot.craft.at + u * seconds - SETTLE_S;
+      if (extra < 0) throw new Error(`${shot.name}: craft.at must be at least ${SETTLE_S + PREROLL_S} s into ${shot.craft.phase}`);
+      await page.evaluate(({ phase, extra }) => {
+        const v = window.__dyson.world.vehicles;
+        v.fastForward('gap', 0);
+        v.fastForward(phase, extra);
+      }, { phase: shot.craft.phase, extra });
+    }
     const pose = poseAt(shot, u);
     await page.evaluate(
       async ({ pose, n, dt }) => {

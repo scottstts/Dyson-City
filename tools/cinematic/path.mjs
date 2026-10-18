@@ -6,6 +6,9 @@
  *   { orbit: { centre: [x, z], radius: [r0, r1], angle: [deg0, deg1], height: [y0, y1] },
  *     look: [[x, y, z], [x, y, z]], fov: [f0, f1] }
  *
+ * A shot may add `craft: { phase, at }`: the craft's visit is run forward so that it is `at` s into
+ * that leg (src/vehicles/craft/flight.ts) at the clip's first frame, then flies in real time.
+ *
  * Orbit angles are degrees about +Y from +X toward +Z (0° = east, 90° = south). Motion is linear in
  * time: each clip is a slice of a continuous move, cut in the middle of it, so it neither starts
  * nor stops on screen.

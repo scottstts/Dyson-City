@@ -1,6 +1,6 @@
 /**
- * The shot list: nine 5 s clips. Two high over the Dome (the ceiling is ~2× the Dome's 250 m
- * crown), one on the Dyson sphere's shell, six close inside the Dome. World frame: the Dome is
+ * The shot list: 5 s clips. Two high over the Dome (the ceiling is ~2× the Dome's 250 m
+ * crown), one on the Dyson sphere's shell, six close inside the Dome, two of the craft at the pad. World frame: the Dome is
  * centred on the origin, x east, z south, the platform top at y 1.2. See path.mjs for the keys.
  */
 export const SHOTS = [
@@ -60,5 +60,24 @@ export const SHOTS = [
     // From the front lawn, pushing slowly in on the house.
     from: { pos: [-352, 4.4, -100], look: [-372, 9, -112], fov: 44 },
     to: { pos: [-356, 4.3, -102.5], look: [-372, 9, -112], fov: 42 },
+  },
+  {
+    name: '10-craft-pad',
+    // One continuous 5 s at the pad, centred on the hover's 180° turn: it opens as the craft
+    // settles out of its descent and ends as the turn completes, just short of lift-off.
+    craft: { phase: 'inbound', at: 11.7 },
+    // Above the craft, just west of the pad and a little off the corridor's axis, looking east
+    // down the corridor to the East Lock, tilted ~7° down: the craft comes in toward the lens,
+    // settles and turns.
+    from: { pos: [-50, 22, 14], look: [40, 10, -3], fov: 40 },
+    to: { pos: [-44, 22, 12], look: [40, 10, -3], fov: 40 },
+  },
+  {
+    name: '11-craft-approach',
+    // The same camera as 10, earlier in the visit: the craft flies in down the corridor toward the
+    // lens and descends over the Halo, and the clip ends before it settles (inbound 5–10 s of 12).
+    craft: { phase: 'inbound', at: 5 },
+    from: { pos: [-50, 22, 14], look: [40, 10, -3], fov: 40 },
+    to: { pos: [-44, 22, 12], look: [40, 10, -3], fov: 40 },
   },
 ];
