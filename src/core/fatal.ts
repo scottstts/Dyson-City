@@ -10,6 +10,7 @@ export type BootStage =
   | 'atmosphere'
   | 'world'
   | 'environment'
+  | 'interiors'
   | 'compile'
   | 'warmup'
   | 'first-frame'

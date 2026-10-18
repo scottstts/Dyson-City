@@ -1,6 +1,7 @@
 """Final trims of wall cladding where later elements meet it: porch roofs, the exterior chimney and
 exterior door surrounds. Run after porch/details so the cutters exist."""
 import bpy
+from mathutils import Matrix
 
 from . import core, geo
 from . import plan as P
@@ -17,6 +18,11 @@ def build():
     doors = [o for o in P.openings(ext=True) if o["kind"] in ("door", "french")]
     for o in objs:
         cut = [core.dup(b) for b in bodies]
+        if o.name.startswith("CornerBoards"):
+            # the boards' feet sit 2 mm into the porch roofs: cut by the same plane as the siding beside
+            # them, their cut faces lay coplanar with the siding's where the two meet
+            for c in cut:
+                c.matrix_world = Matrix.Translation((0.0, 0.0, -0.002)) @ c.matrix_world
         cut.append(core.geo_obj(geo.box(x0 - 0.005, y0 - 0.005, -1.0, x1 + 0.2, y1 + 0.005, 20.0), "_ch"))
         if o.name.startswith(("BeltCourse", "WaterTable")):
             for d in doors:

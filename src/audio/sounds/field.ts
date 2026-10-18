@@ -16,9 +16,10 @@
  * pops, the roar follows the stack's flow (brighter at full lift), and the valve thunks as it
  * reseats.
  *
- * Where the field is `silenced` (the estate's device), every machine's sound is cut at the ears:
- * all of it arrives through one bus after the emitters, so the cut is immediate wherever the
- * machine is, and the voices, levels and wander carry on unchanged behind it.
+ * Where the estate's device takes the field away (`gain`, 0..1 by where the listener stands), every
+ * machine's sound is scaled at the ears: all of it arrives through one bus after the emitters, so the
+ * fade follows the listener's step wherever the machine is, and the voices, levels and wander carry
+ * on unchanged behind it.
  */
 import { Emitter } from '../emitter';
 import type { AudioEngine } from '../engine';
@@ -38,15 +39,15 @@ export interface AudioField {
   /** Game time (the machines' state is a function of it). */
   time(): number;
   /** Whether a listener here hears no machines at all (the estate's silencer, docs/audio.md). */
-  silenced?(x: number, z: number): boolean;
+  gain?(x: number, z: number): number;
 }
 
 /** Voices for the machines, and the quietest a machine may be (at the listener) to get one. */
 export const FIELD_VOICES = 6;
 const AUDIBLE = 0.003;
 const FADE = 0.35;
-/** The silencer's switching time constant (s): quick, never a click. */
-const CUT_TC = 0.05;
+/** The silencer's gain follows the listener's place over this time constant (s): the fade is spatial (estate/silencer.ts); this only smooths it. */
+const CUT_TC = 0.3;
 
 interface Voice {
   emitter: Emitter;
@@ -130,7 +131,7 @@ export class FieldSounds {
     const ctx = this.engine.ctx;
     const gt = this.field.time();
     const r = this.random;
-    glide(this.cut.gain, this.field.silenced?.(listener.x, listener.z) ? 0 : 1, t, CUT_TC);
+    glide(this.cut.gain, this.field.gain?.(listener.x, listener.z) ?? 1, t, CUT_TC);
     // Load wander per machine (slow, its own).
     for (const l of this.loads) {
       if (r() < dt / 4) {

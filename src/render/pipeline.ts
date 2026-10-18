@@ -1,8 +1,8 @@
 /**
  * Final-image pipeline. One owner per signal, in this order:
  *
- *   scene pass (MRT: HDR colour, view normal, velocity; reversed depth)
- *     → GTAO (half resolution) applied to geometry only
+ *   scene pass (MRT: HDR colour, view normal + contact-AO weight in alpha, velocity; reversed depth)
+ *     → GTAO (half resolution) applied to geometry only, by each pixel's AO weight
  *     → aerial perspective on geometry (same atmosphere model as the sky); the star's atmosphere
  *       on the sky (sky/star/atmosphere.ts)
  *     → TRAA (sky pixels carry rotation-only velocity)
@@ -17,7 +17,7 @@
  */
 import { RenderPipeline, type PerspectiveCamera, type Scene, type WebGPURenderer, type DataTexture } from 'three/webgpu';
 import {
-  pass, mrt, output, normalView, velocity, packNormalToRGB, unpackRGBToNormal, sample, screenUV, vec3, vec4, float, Fn, If, uniform, texture,
+  pass, mrt, output, velocity, unpackRGBToNormal, sample, screenUV, vec3, vec4, float, Fn, If, uniform, texture,
   getViewPosition, length, normalize, mix, pow, dot, smoothstep, sRGBTransferOETF, agxToneMapping,
   acesFilmicToneMapping, neutralToneMapping, luminance, clamp, screenCoordinate, fract, sin, fwidth, exp, select,
 } from 'three/tsl';
@@ -29,6 +29,7 @@ import { hash12 } from './tsl/noise';
 import { hueFilmic } from './tsl/toneMap';
 import { filmLook, vignette } from './tsl/look';
 import { createGlarePass, HALATION } from './glarePass';
+import { contactAO } from './sceneMrt';
 
 type TexNode = Node<'vec4'> & { sample(uv: Node<'vec2'>): Node<'vec4'>; value: import('three/webgpu').Texture };
 
@@ -69,7 +70,9 @@ export type TransparencyComposite = (origin: Node<'vec3'>, dir: Node<'vec3'>, di
 
 export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'>; composites?: TransparencyComposite[] }): Pipeline {
   const scenePass = pass(scene, cam);
-  scenePass.setMRT(mrt({ output, normal: packNormalToRGB(normalView), velocity }));
+  // The normal's alpha is the pixel's contact-AO weight (aoWeight): 1 by default; 0 where the light
+  // already holds the occlusion (the house's lightmaps) or the pixel is a thin pane over another surface.
+  scenePass.setMRT(mrt({ output, normal: contactAO(1), velocity }));
   const colorTex = scenePass.getTextureNode('output');
   const normalTex = scenePass.getTextureNode('normal');
   const depthTex = scenePass.getTextureNode('depth');
@@ -133,7 +136,7 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
       dirW.assign(normalize(camWorld.mul(vec4(normalize(vp), 0.0)).xyz));
       // Contact occlusion only: beyond a few tens of metres a pixel spans more than the AO radius.
       const aoFade = float(1).sub(smoothstep(25.0, 60.0, dist));
-      const occlusion = mix(float(1), aoTex.sample(uv).r, aoStrength.mul(aoFade));
+      const occlusion = mix(float(1), aoTex.sample(uv).r, aoStrength.mul(aoFade).mul(normalTex.sample(uv).a));
       const apUV = aerialLutUV(dirW.y, dist);
       inscatter.assign(texture(apS, apUV).rgb.mul(opts.illuminant));
       transmit.assign(texture(apT, apUV).rgb);

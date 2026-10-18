@@ -1,15 +1,15 @@
 /**
  * The house in the game (city_plan §4, §9 step 2; blender/docs/house.md "Integration"): one root at
- * HOUSE_SITE on the terrace, its front (glTF +Z) turned toward the datum. The exterior is built at
- * boot; the three floors stream in afterwards, nearest first, each compiled in the house worker,
- * its materials compiled before it is shown.
+ * HOUSE_SITE on the terrace, its front (glTF +Z) turned toward the datum. The exterior and then the
+ * three floors are built during loading (each floor compiled in the house worker), so the boot's
+ * warm-up compiles every pipeline they draw with: nothing of the house compiles in play.
  *
  * Light: the exterior is lit like everything outdoors; indoors everything is baked (bakedLight.ts).
  * Interiors are only drawn near the house (from further off their windows show the outdoors'
  * reflections over rooms ~7 stops darker). Walking: the house's collision proxies become 3D walls
  * and floors (player/walkMesh.ts); the leaves are moving walls (doors.ts).
  */
-import { BufferGeometry, Float32BufferAttribute, Group, Matrix4, Mesh, Uint32BufferAttribute, Vector3, type Material, type MeshPhysicalNodeMaterial, type Object3D, type WebGPURenderer, type Camera, type Scene, type Texture } from 'three/webgpu';
+import { BufferGeometry, Float32BufferAttribute, Group, Matrix4, Mesh, Uint32BufferAttribute, Vector3, type Material, type MeshPhysicalNodeMaterial, type Object3D, type Camera, type Texture } from 'three/webgpu';
 import { attribute } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { HouseAssets, LoadedPart, PartName } from './assets';
@@ -38,9 +38,6 @@ export interface HouseSound {
 }
 
 export interface HouseOptions {
-  renderer: WebGPURenderer;
-  /** Where interiors compile before they appear. */
-  scene: Scene;
   look: HouseLook;
 }
 
@@ -71,7 +68,6 @@ export class House {
   private readonly parts = new Map<PartName, PartBuild>();
   private readonly lookMaterials: { mat: MeshPhysicalNodeMaterial; mixed: boolean }[] = [];
   private readonly glassEnvs: { value: Texture | null }[] = [];
-  private streaming: Promise<void> | null = null;
 
   private constructor(assets: HouseAssets, opts: HouseOptions) {
     this.assets = assets;
@@ -100,7 +96,7 @@ export class House {
   }
 
   private context(part: LoadedPart): MaterialContext {
-    return { glassEnvs: this.glassEnvs, doc: part.doc, textures: this.assets.textures, baked: this.baked, look: this.opts.look, lightmaps: this.baked.lightmaps };
+    return { glassEnvs: this.glassEnvs, doc: part.doc, textures: this.assets.textures, baked: this.baked, look: this.opts.look, lightmaps: this.baked.lightmaps, lamps: this.assets.pack.index.lamps ?? {} };
   }
 
   private async buildPart(part: LoadedPart): Promise<PartBuild> {
@@ -221,26 +217,21 @@ export class House {
     });
   }
 
-  /** Streams the floors in (ground floor first), then the rooms' reflections. */
-  streamInteriors(camera: Camera, onError: (e: unknown) => void): void {
-    if (this.streaming) return;
-    const run = async () => {
-      const t0 = performance.now();
-      for (const name of ['G', 'L1', 'L2'] as PartName[]) {
-        const part = await this.assets.loadPart(name);
-        const build = await this.buildPart(part);
-        build.group.visible = false;
-        // Compile its pipelines before it can be seen, so it never stalls a frame.
-        await this.opts.renderer.compileAsync(build.group, camera, this.opts.scene);
-        build.group.visible = true;
-        console.info(`[Dyson] house ${name}: ${part.compiled.stats.triangles} tris, ${build.meshes.length} draws`);
-      }
-      const captures = await Promise.all(this.assets.rooms.map((r) => this.assets.pack.bytes(`refl_${r.name}`)));
-      this.baked.setAtlas(await this.assets.worker.reflections(captures));
-      console.info(`[Dyson] house interiors streamed in ${(performance.now() - t0).toFixed(0)} ms`);
-      void this.assets.pack.pruneCache();
-    };
-    this.streaming = run().catch(onError);
+  /**
+   * Builds the floors (ground floor first) and the rooms' reflections. Called during loading, before
+   * the warm-up: their pipelines compile there with everything else (app/game.ts warmAll).
+   */
+  async loadInteriors(): Promise<void> {
+    const t0 = performance.now();
+    for (const name of ['G', 'L1', 'L2'] as PartName[]) {
+      const part = await this.assets.loadPart(name);
+      await this.buildPart(part);
+      console.info(`[Dyson] house ${name}: ${part.compiled.stats.triangles} tris`);
+    }
+    const captures = await Promise.all(this.assets.rooms.map((r) => this.assets.pack.bytes(`refl_${r.name}`)));
+    this.baked.setAtlas(await this.assets.worker.reflections(captures));
+    console.info(`[Dyson] house interiors built in ${(performance.now() - t0).toFixed(0)} ms`);
+    void this.assets.pack.pruneCache();
   }
 
   /** A world point in the house's frame (glTF axes). */

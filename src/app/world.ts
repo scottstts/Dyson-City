@@ -6,7 +6,7 @@
  * view from inside the Dome (the sky through its glass, with its frame): everything under the Dome.
  * The frame itself blends the two by which way each face looks (city/materials/ceramic.ts).
  */
-import { Mesh, Scene, type Node, type WebGPURenderer } from 'three/webgpu';
+import { Mesh, Scene, type Node, type Vector3, type WebGPURenderer } from 'three/webgpu';
 import { pmremTexture } from 'three/tsl';
 import { createAtmosphereNodes, type AtmosphereTextures } from '../atmosphere/luts';
 import { StarState } from '../sky/star/starState';
@@ -30,7 +30,9 @@ import { buildField, type Field } from '../field/field';
 import { fieldPaving } from '../field/paving';
 import { createFieldProbes } from '../field/probes';
 import { addFieldWalls } from '../field/walk';
-import { createStarShade, floorMap, rasterOccluders } from '../lighting/starShade';
+import { createStarShade, floorMap, rasterOccluders, type OccluderGrid } from '../lighting/starShade';
+import type { OccluderMap } from '../city/visibility';
+import { HOUSE_GRADE } from '../estate/levels';
 import { estateFloor } from '../estate/layout';
 import { createEstateProbe } from '../estate/probe';
 import { FIELD_Y } from '../field/layout';
@@ -115,7 +117,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const field = buildField();
   scene.add(field.group);
   // The house: its exterior now, the floors streamed in once the game runs.
-  const house = await House.create(houseAssets, { renderer, scene, look: { envTexture: environment.target.texture } });
+  const house = await House.create(houseAssets, { look: { envTexture: environment.target.texture } });
   scene.add(house.root);
   city.walk.walls.meshes.push(house.walk);
   const estate = buildEstate();
@@ -150,6 +152,9 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   // The star-shade under the field (lighting/starShade.ts), baked once: the platform and the field take it.
   const tShade = performance.now();
   const occluders = rasterOccluders([...field.statics, ...field.moving, ...house.exteriorMeshes, ...estate.occluders]);
+  // The house's roofs over the eye (city/visibility.ts): its exterior on a fine local map, so the
+  // star's glare fades as the eye walks under the porch and in, as under the gate's vault.
+  city.addStarOccluders(houseOccluders(house.exteriorMeshes, house.centre));
   const tRaster = performance.now();
   const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, estateFloor));
   console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
@@ -206,3 +211,29 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   };
   return world;
 }
+
+/**
+ * The house's exterior on a 0.25 m occluder map 64 m square about its middle, clipped to what stands
+ * over a standing head (HOUSE_OVERHEAD above grade). A texel holds one interval, from the porch's
+ * deck to its roof: unclipped, an eye standing on the porch was inside it and the star vanished at
+ * the steps. Upper floors' eyes are within the house's walls and roofs either way.
+ */
+function houseOccluders(meshes: readonly Mesh[], centre: Vector3): OccluderMap {
+  const grid: OccluderGrid = { N: 256, originX: centre.x - 32, originZ: centre.z - 32, cell: 0.25 };
+  const map = rasterOccluders(meshes, grid);
+  const cut = HOUSE_GRADE + HOUSE_OVERHEAD;
+  let top = -Infinity;
+  for (let i = 0; i < map.length; i += 2) {
+    if (map[i + 1] < cut) {
+      map[i] = 1e9;
+      map[i + 1] = -1e9;
+      continue;
+    }
+    map[i] = Math.max(map[i], cut);
+    if (map[i + 1] > top) top = map[i + 1];
+  }
+  return { grid, map, top };
+}
+
+/** Height above grade (m) below which the house does not hide the star: over the eye on the porch and the ground floor. */
+const HOUSE_OVERHEAD = 2.9;

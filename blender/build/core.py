@@ -576,3 +576,23 @@ def redraw():
         for a in w.screen.areas:
             if a.type == "VIEW_3D":
                 a.tag_redraw()
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def in_scene(sc):
+    """Make `sc` the current scene for operators (bakes): the window's scene in the UI, a context
+    override when Blender runs in the background (no window)."""
+    win = bpy.context.window
+    if win is not None:
+        main = win.scene
+        win.scene = sc
+        try:
+            yield
+        finally:
+            win.scene = main
+    else:
+        with bpy.context.temp_override(scene=sc, view_layer=sc.view_layers[0]):
+            yield

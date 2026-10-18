@@ -1,10 +1,10 @@
 /**
- * Footsteps (docs/audio.md, "Footsteps"), resynthesised from three recordings: six steps on polished
- * stone (models/footsteps.ts), three through lawn grass (models/footstepsGrass.ts) and six on fine
- * gravel over sand (models/footstepsGravel.ts). Each recorded step is a variant; every playback has
- * new fine structure.
+ * Footsteps (docs/audio.md, "Footsteps"), resynthesised from four recordings: six steps on polished
+ * stone (models/footsteps.ts), three through lawn grass (models/footstepsGrass.ts), six on fine
+ * gravel over sand (models/footstepsGravel.ts) and six on a timber floor (models/footstepsWood.ts).
+ * Each recorded step is a variant; every playback has new fine structure.
  *
- * Walking on stone, grass and gravel are the recordings themselves. The other gaits reshape them as a
+ * Walking on stone, grass, gravel and the house's timber floors are the recordings themselves. The other gaits reshape them as a
  * body would: running plants the foot harder and quicker (the heel-to-ball roll compressed, more
  * force), landing brings both feet down nearly together with the body's weight behind them (more
  * low end), stopping is a light half-step, and pushing off is mostly the ball and the sole's scuff.
@@ -12,9 +12,8 @@
  * The other floors differ from their recording by what they are:
  *  - basalt is harder than the recorded stone (a little brighter); bronze sills ring;
  *  - the deck's glazed plates over structure are hollow (a low-mid body, a glassy ring, dust);
- *  - the house's timber floors are boards on joists: a low-mid body and the boards' short ring;
- *    the porches' boards span a void, hollower and longer;
- *  - rugs and stair runners keep the heel's thud and swallow the click.
+ *  - the porches' boards span a void: the timber recording, hollower and lower;
+ *  - rugs and stair runners lie on the timber floors: its thud kept, its tap swallowed.
  * Pure: returns sample arrays.
  */
 import { addPrint, BAND_COUNT, printLength, THIRD_OCTAVES, type SpectralPrint } from './spectral';
@@ -22,6 +21,7 @@ import { addBurst, addMode, between, filter, logBetween, rng } from '../dsp';
 import { FOOTSTEP_WALK } from '../models/footsteps';
 import { FOOTSTEP_GRASS } from '../models/footstepsGrass';
 import { FOOTSTEP_GRAVEL } from '../models/footstepsGravel';
+import { FOOTSTEP_WOOD } from '../models/footstepsWood';
 import type { GroundSurface } from '../../city/walk';
 
 export type FootGait = 'walk' | 'run' | 'land' | 'takeoff' | 'stop';
@@ -30,7 +30,10 @@ export const FOOT_SURFACES: readonly GroundSurface[] = ['stone', 'basalt', 'bron
 
 /** The recording a floor's steps are made from. */
 export function footSource(surface: GroundSurface): readonly SpectralPrint[] {
-  return surface === 'grass' ? FOOTSTEP_GRASS : surface === 'gravel' ? FOOTSTEP_GRAVEL : FOOTSTEP_WALK;
+  if (surface === 'grass') return FOOTSTEP_GRASS;
+  if (surface === 'gravel') return FOOTSTEP_GRAVEL;
+  if (surface === 'wood' || surface === 'boards' || surface === 'rug') return FOOTSTEP_WOOD;
+  return FOOTSTEP_WALK;
 }
 
 /** Per-band gain (dB) as a function of band centre. */
@@ -72,10 +75,10 @@ const SURFACES: Record<GroundSurface, number[]> = {
   deck: tilt((f) => bump(f, 200, 0.8, 5) + ramp(f, 2000, 6000)),
   grass: tilt(() => 0),
   gravel: tilt(() => 0),
-  // Boards on joists: a low-mid body; a leather heel on oak clicks less than on marble.
-  wood: tilt((f) => bump(f, 180, 0.9, 5) - 3 * ramp(f, 2500, 8000)),
-  // Boards over the porch's void: hollower, lower.
-  boards: tilt((f) => bump(f, 140, 0.8, 7) - 4 * ramp(f, 2000, 8000)),
+  // The recording, its lowest octaves trimmed to it (with a high-pass: addSurface).
+  wood: tilt((f) => -6 * (1 - ramp(f, 110, 160))),
+  // Boards over the porch's void: the timber floor hollower, lower.
+  boards: tilt((f) => bump(f, 130, 0.7, 4) - 2 * ramp(f, 2000, 8000)),
   // Pile and underlay: the heel's thud stays, the click is swallowed (with a low-pass: addSurface).
   rug: tilt((f) => -4 - 6 * ramp(f, 400, 3000)),
 };
@@ -139,12 +142,14 @@ function addSurface(out: Float32Array, surface: GroundSurface, gait: FootGait, s
       filter(out, sr, ['lowpass', 1300, 0.6], ['lowpass', 2000, 0.7]);
       return;
     case 'wood':
+      // The clone's strikes leak into the lowest bands (6 dB/octave), which band gains cannot take
+      // back: below ~100 Hz it ran 5–19 dB over the recording. A real high-pass sets it right (±4 dB).
+      filter(out, sr, ['highpass', 80, 0.7]);
+      return;
     case 'boards': {
-      // The boards and joists: a few low modes struck at the heel, and the boards' short ring.
+      // The void under the porch's deck: a few low modes struck at the heel, ringing longer than a floor on joists.
       const force = heelForce(out, gait, sr);
-      const hollow = surface === 'boards';
-      for (let i = 0; i < 4; i++) addMode(out, sr, heel, logBetween(r, hollow ? 75 : 95, hollow ? 190 : 240), logBetween(r, hollow ? 0.1 : 0.06, hollow ? 0.2 : 0.11), force * between(r, 0.05, 0.1), r() * 6.28);
-      for (let i = 0; i < 5; i++) addMode(out, sr, heel, logBetween(r, 500, 1600), logBetween(r, 0.03, 0.07), force * between(r, 0.01, 0.025), r() * 6.28);
+      for (let i = 0; i < 4; i++) addMode(out, sr, heel, logBetween(r, 75, 190), logBetween(r, 0.1, 0.2), force * between(r, 0.03, 0.06), r() * 6.28);
       return;
     }
     default:

@@ -82,7 +82,7 @@ Every room walkable and furnished:
 - **The turret room** at the top: a curved window seat ringed by five windows, a telescope. It is the payoff of the climb: the whole field laid out below, the Halo, the gold, a craft on the pad.
 - **Doors work.** Every hinged door opens on its hinge pin as far as the walls and furniture beside it allow; the hall's and parlour's pocket doors slide into the walls.
 
-**Light indoors:** daylight through the windows, baked in Cycles under an HDR of the game's own light at the house site (§9). The lace sheers are drawn back in the day rooms and in the rooms that look out over the field (parlour, dining, library, music room, morning room, study, chart room, landing, gable room, turret room); the bedrooms, the dressing room, the attic service rooms and the kitchen (a valance) keep them drawn. The lamps are lit at their real output, which barely registers against daylight at noon. Indoors is physically dim: the day rooms sit around 6–7 stops below a sunlit white wall outside, the curtained bedrooms and the windowless middle of the house (the hall and the landing) far lower. The eye adapts on entering, but a dim room stays dim and its windows blow out (`docs/render-pipeline.md`). The adaptation range decides how dark the rooms read in play: it reaches 64× (+6 EV) indoors. The windowless hall, landing and top hall get their lamps on at a warm, generous domestic level in the re-bake (`docs/house.md`).
+**Light indoors:** daylight through the windows, baked in Cycles under an HDR of the game's own light at the house site (§9). The lace sheers are drawn back in the day rooms and in the rooms that look out over the field (parlour, dining, library, music room, morning room, study, chart room, landing, gable room, turret room); the bedrooms, the dressing room, the attic service rooms and the kitchen (a valance) keep them drawn. Every room has a lamp, lit at a warm, generous domestic level; the windowless hall, landing and top hall have two pendants each. Indoors is still physically dim against the noon outside: the day rooms sit around 7–8 stops below a sunlit white wall, the lamp-lit middle of the house lower. The eye adapts on entering, partly, as an eye does: a room reads a stop or two dimmer than the garden, legible, and its windows blow out (`docs/render-pipeline.md`, `docs/house.md`).
 
 ### The estate
 
@@ -167,7 +167,7 @@ These are the acceptance views: when built, each must read as described.
 6. **An arrival.** A craft through the East Lock, along the axis, reflected in everything gold, settling on the pad.
 7. **Driving.** Under the Halo, past the Loom's carriage, back up the drive to the house.
 
-**Sound** follows the same split (`docs/audio.md`): inside the estate, birdless garden quiet, a clock, the creak of floorboards, a kettle; in the field, deep cryogenic hum, pumps, the Loom's furnace, the Hold's vents; the craft's arrival heard through the whole Dome. At the garden wall the one fades into the other.
+**Sound** follows the same split (`docs/audio.md`): inside the estate, birdless, still garden quiet, a clock, the creak of floorboards; in the field, deep cryogenic hum, pumps, the Loom's furnace, the Hold's vents; the craft's arrival heard through the whole Dome. At the garden wall the one fades into the other.
 
 ## 9. Build order
 
@@ -189,7 +189,7 @@ These are the acceptance views: when built, each must read as described.
      - collision proxies: shared trimeshes for walls and floors, boxes for furniture, windows and door leaves, ramps for the stairs;
      - door leaves on static rigs, hinged or sliding, with their travel limits and handle positions;
      - lamp empties and sound-emitter empties.
-2. **The estate around the imported house.** Built: `docs/estate.md`, `docs/house.md` (the house from R2, streamed; baked interior light; 3D walking; doors; indoor culling to the windows; the estate's sound in `docs/audio.md`). Still to come after the estate is approved: re-capture the game's light with the estate in place and re-bake the house with the lamps on (§4). Procedural: terrace wall and balustrade, drive, lawn, beds, trees and plants (`threejs-procedural-vegetation`), pond, glasshouse, carriage house. Engine work this step needed:
+2. **The estate around the imported house.** Built: `docs/estate.md`, `docs/house.md` (the house from R2, built while loading; baked interior light under the estate's light, lamps on; 3D walking; doors; indoor culling to the windows; the estate's sound in `docs/audio.md`). Procedural: terrace wall and balustrade, drive, lawn, beds, trees and plants (`threejs-procedural-vegetation`), pond, glasshouse, carriage house. Engine work this step needed:
    - **Loading the bundle** and placing the house at `HOUSE_SITE` on the terrace, facing the datum.
    - **Multi-storey walking.** Today the walkable world is one surface height plus plan walls (`docs/player.md`); stairs and upper floors need per-floor floors and walls (the bundle's collision and stair ramps).
    - **Doors** opened and shut by the player, from the rig data in the bundle.

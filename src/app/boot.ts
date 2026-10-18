@@ -57,10 +57,16 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   await nextFrame();
   const world = await buildWorld(handle.renderer, atmosphere, houseAssets, debug.time ?? 0, debug.sky);
 
+  stage('interiors', entry, 0.5);
+  // The house's floors are built while loading, never in play (house/house.ts).
+  await world.house.loadInteriors();
+
   stage('compile', entry, 0.6);
   const audio = new GameAudio(audioContext, audioWorld(world), audioBank);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
-  await handle.renderer.compileAsync(world.scene, game.camera);
+  // Every pipeline the game will draw with, compiled through the real passes (game.ts warmAll).
+  game.warmAll();
+  await nextFrame();
 
   stage('warmup', entry, 0.85);
   for (let i = 0; i < 3; i++) {
@@ -76,8 +82,6 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   console.info(`[Dyson] boot: ${fatal.stage} took ${(performance.now() - stageStart).toFixed(0)} ms`);
   fatal.stage = 'running';
   if (!debug.manual) game.start();
-  // The house's floors stream in while the game runs (a failure is fatal: never a half-built house).
-  world.house.streamInteriors(game.camera, (e) => fatal.report('The house failed to load', e));
   if (debug.autostart) entry.hide();
   else entry.showReady(() => game.enter());
   // Review tooling hooks (tools/*.mjs), on local hosts only.

@@ -9,12 +9,8 @@
  *    beat; what differs from beat to beat is the blow, and the entry and exit pallets differ, so
  *    the beats go tick, tock. The longcase's tall oak trunk gives its beat a deep body; the mantel
  *    clock's small case is higher and lighter, and it beats faster.
- *  - The kettle simmering on the range: just under the boil, vapour bubbles form on the hot base
- *    and collapse in the cooler water above (a dense fizz of tiny clicks, 1.5–7 kHz), the odd larger
- *    bubble rises and rings at its Minnaert frequency (a few hundred hertz to ~1.4 kHz), and the
- *    kettle's body and water column hum underneath. The heat wanders, and the fizz with it.
  */
-import { addBurst, addMode, between, filter, logBetween, noise, rng } from '../dsp';
+import { addBurst, addMode, between, logBetween, rng } from '../dsp';
 
 export type ClockKind = 'longcase' | 'mantel';
 
@@ -66,60 +62,4 @@ export function synthTick(kind: ClockKind, side: 0 | 1, sr: number, seed: number
     addMode(out, sr, drop + 0.0006, f, t60, a * blow * (side ? 1.15 : 1) * Math.pow(10, between(r, -2, 2) / 20), r() * 6.28);
   }
   return out;
-}
-
-/** Adds events over a loop of `n` samples, folding what runs past the end back onto the start (seamless). */
-function folded(n: number, sr: number, tail: number, add: (out: Float32Array) => void): Float32Array {
-  const long = new Float32Array(n + Math.ceil(tail * sr));
-  add(long);
-  const out = long.slice(0, n);
-  for (let i = n; i < long.length; i++) out[i - n] += long[i];
-  return out;
-}
-
-/** A periodic slow wander over a loop (0..1): a few sines with whole cycles per loop. */
-export function loopWander(t: number, length: number, phases: readonly number[]): number {
-  let v = 0;
-  phases.forEach((p, i) => (v += Math.sin((2 * Math.PI * (i + 2) * t) / length + p) / (i + 1)));
-  return 0.5 + 0.5 * Math.tanh(v);
-}
-
-/** Overlaps the end of a filtered loop into its start (equal power) over `fade` seconds; returns the shortened loop. */
-export function crossfadeLoop(x: Float32Array, sr: number, fade: number): Float32Array {
-  const m = Math.round(fade * sr);
-  const n = x.length - m;
-  const out = x.slice(0, n);
-  for (let i = 0; i < m; i++) {
-    const g = i / m;
-    out[i] = x[i] * Math.sin((Math.PI / 2) * g) + x[n + i] * Math.cos((Math.PI / 2) * g);
-  }
-  return out;
-}
-
-/** The kettle simmering: a seamless loop of `seconds`. */
-export function synthKettle(seconds: number, sr: number, seed: number): Float32Array {
-  const r = rng(seed);
-  const n = Math.round(seconds * sr);
-  const phases = [r() * 6.28, r() * 6.28, r() * 6.28];
-  const heat = (t: number) => 0.55 + 0.45 * loopWander(t, seconds, phases);
-  const fizz = folded(n, sr, 0.05, (out) => {
-    // Tiny collapses: Poisson, their rate following the heat.
-    for (let t = 0; t < seconds; t += -Math.log(1 - r()) / 420) {
-      if (r() > heat(t)) continue;
-      const size = Math.pow(r(), 2.2);
-      addBurst(out, sr, r, t, 0.0001, logBetween(r, 0.0008, 0.003), 0.04 + 0.4 * size, [['bandpass', logBetween(r, 1500, 7000), 1.8]]);
-    }
-    // Larger bubbles ringing as they detach and collapse.
-    for (let t = 0; t < seconds; t += -Math.log(1 - r()) / 22) {
-      if (r() > heat(t)) continue;
-      addMode(out, sr, t, logBetween(r, 350, 1400), logBetween(r, 0.008, 0.022), between(r, 0.15, 0.6), r() * 6.28);
-    }
-  });
-  // The body and water column: a low hum, following the heat.
-  const hum = noise(n + Math.round(0.1 * sr), r);
-  filter(hum, sr, ['bandpass', 260, 0.9], ['lowpass', 700, 0.7]);
-  for (let i = 0; i < hum.length; i++) hum[i] *= 0.35 * heat((i % n) / sr);
-  const bed = crossfadeLoop(hum, sr, 0.1);
-  for (let i = 0; i < n; i++) fizz[i] += bed[i];
-  return fizz;
 }

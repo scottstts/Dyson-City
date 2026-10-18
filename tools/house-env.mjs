@@ -14,8 +14,9 @@
  * +Z up, the front (porch) facing −Y along `--face` (the game-plane direction the house faces), so
  * Blender uses it with no rotation. A JSON sidecar records the capture and the irradiance it implies.
  *
- * The house is not in the game yet: the capture sees the open site (the terrace and garden come in
- * step 2; re-run this then).
+ * The house itself is hidden for the capture (it is in the bake's own scene, which occludes and
+ * bounces for itself), and the eye is held outdoors (no indoor culling, the star seen): the capture is
+ * the estate and everything round it, from 6 m over the terrace at the house's origin.
  */
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
@@ -146,8 +147,12 @@ try {
   meta = await page.evaluate(
     ({ x, z, h }) => {
       const g = window.__dyson.game;
+      const house = window.__dyson.world.house;
+      house.root.visible = false;
+      house.inside = () => false;
       g.setSpot({ position: [x, z], yaw: 0, pitch: 0 });
-      const ground = g.player.feet.y;
+      // the terrace at the house's origin (grade), not the house's floor the walker stands on
+      const ground = house.root.position.y;
       g.camera.position.set(x, ground + h, z);
       g.camera.rotation.order = 'YXZ';
       return { ground, eye: ground + h };

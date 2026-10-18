@@ -1,6 +1,5 @@
 /**
- * The house (docs/audio.md "The house"): its doors, its clocks and the kettle on the range, each
- * from where it is. The house's logic knows nothing of sound: this watches the leaves' motion and
+ * The house (docs/audio.md "The house"): its doors and its clocks, each from where it is. The house's logic knows nothing of sound: this watches the leaves' motion and
  * plays what a door does, and it voices the Sound_ markers the export placed.
  *
  *  - A door opening from shut: the latch drawn and the leaf freed (the recording's opening), from
@@ -11,14 +10,14 @@
  *  - Door voices are a small pool, not one per leaf: two inside the house, one for the outer doors
  *    (which radiate both into the hall and onto the porch).
  *  - The clocks beat their escapements (a longcase's seconds, a mantel clock's quicker beat; the
- *    tock a touch late, as no clock is perfectly in beat) and the kettle simmers, only within
- *    earshot of the house: beyond it nothing is scheduled and the kettle's loop is stopped.
+ *    tock a touch late, as no clock is perfectly in beat), only within earshot of the house:
+ *    beyond it nothing is scheduled.
  *  - Reverberation is the room's, not the house's: a sound feeds the house's reverb at its level
  *    at 1 m (its input is its level at `refDistance`) and in full only while the listener is in
  *    the room it sounds in. From any other room, or outdoors, its room's reverb reaches the
  *    listener ROOM_LEAK down (and outdoors through the shell's path besides). The house shares
- *    one reverb sized like one furnished room; fed at the 0.3 m level and heard in every room, the
- *    kitchen's kettle filled the whole house ~30 dB over its own direct sound.
+ *    one reverb sized like one furnished room; a steady sound fed at its 0.3 m level and heard in
+ *    every room filled the whole house ~30 dB over its own direct sound.
  */
 import { Vector3 } from 'three';
 import { Emitter } from '../emitter';
@@ -57,7 +56,7 @@ export interface AudioHouse {
   readonly centre: { readonly x: number; readonly y: number; readonly z: number };
 }
 
-/** Beyond this from the house's middle (m) its clocks and kettle are inaudible: nothing is scheduled. */
+/** Beyond this from the house's middle (m) its clocks are inaudible: nothing is scheduled. */
 const EARSHOT = 45;
 /** Beats are scheduled this far ahead (s), comfortably over a frame. */
 const AHEAD = 0.15;
@@ -65,7 +64,7 @@ const AHEAD = 0.15;
 const SHUT = 0.03;
 /** A room's reverberation heard from another room (or outdoors): through partitions and doorways. First pass, by ear. */
 const ROOM_LEAK = 0.1;
-/** Reference distances (m): doors from the handle, clocks and the kettle from the movement or the pan. */
+/** Reference distances (m): doors from the handle, clocks from the movement. */
 const DOOR_REF = 0.5;
 const MARKER_REF = 0.3;
 
@@ -83,13 +82,6 @@ interface Clock {
   side: 0 | 1;
 }
 
-interface Simmer {
-  emitter: Emitter;
-  gain: number;
-  src: AudioBufferSourceNode | null;
-  level: GainNode;
-}
-
 export class HouseSounds {
   private readonly engine: AudioEngine;
   private readonly house: AudioHouse;
@@ -104,9 +96,7 @@ export class HouseSounds {
   private readonly strike: number;
   private readonly states = new Map<string, DoorState>();
   private readonly ticks: Record<ClockKind, [AudioBuffer[], AudioBuffer[]]>;
-  private readonly kettle: AudioBuffer;
   private readonly clocks: Clock[] = [];
-  private readonly simmers: Simmer[] = [];
   private voiced = 0;
   private readonly tmp = new Vector3();
   /** The room the listener is in this frame (null outdoors). */
@@ -131,7 +121,6 @@ export class HouseSounds {
       longcase: [b.ticks.longcase[0].map((x) => engine.buffer(x)), b.ticks.longcase[1].map((x) => engine.buffer(x))],
       mantel: [b.ticks.mantel[0].map((x) => engine.buffer(x)), b.ticks.mantel[1].map((x) => engine.buffer(x))],
     };
-    this.kettle = engine.buffer(b.kettle);
   }
 
   private voiceFor(exterior: boolean): Emitter {
@@ -199,10 +188,6 @@ export class HouseSounds {
       if (s.clip === 'clock_tick_longcase' || s.clip === 'clock_tick_mantel') {
         const kind: ClockKind = s.clip === 'clock_tick_longcase' ? 'longcase' : 'mantel';
         this.clocks.push({ emitter, kind, gain: s.gain, next: t + this.random() * CLOCKS[kind].beat, side: 0 });
-      } else if (s.clip === 'kettle_simmer') {
-        const level = new GainNode(this.engine.ctx, { gain: 0 });
-        level.connect(emitter.input);
-        this.simmers.push({ emitter, gain: s.gain, src: null, level });
       } else console.warn(`[Dyson] house sound '${s.clip}' has no voice`);
     }
   }
@@ -232,18 +217,6 @@ export class HouseSounds {
         // Not quite in beat: the tock comes a little late.
         k.next += beat * (k.side === 0 ? 1.015 : 0.985);
         k.side = k.side === 0 ? 1 : 0;
-      }
-    }
-    for (const s of this.simmers) {
-      if (near && !s.src) {
-        s.src = new AudioBufferSourceNode(this.engine.ctx, { buffer: this.kettle, loop: true });
-        s.src.connect(s.level);
-        s.src.start(t, this.random() * this.kettle.duration);
-        s.level.gain.setTargetAtTime(LEVEL.kettle * s.gain, t, 0.3);
-      } else if (!near && s.src) {
-        s.level.gain.setTargetAtTime(0, t, 0.1);
-        s.src.stop(t + 0.6);
-        s.src = null;
       }
     }
   }

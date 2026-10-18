@@ -607,6 +607,12 @@ def run(write=True, full=True):
     lines += ["", f"PART INTERPENETRATION inside one object (part of material A > 8 mm inside closed part of B): {len(pp)}"]
     for n, mb, ma, w, where in pp:
         lines.append(f"  {n}: {mb} inside {ma}, deepest {w * 100:.1f} cm @ local {where}")
+    from . import collision
+    cs = collision.summary()
+    lines += ["", f"COLLISION (every mesh has a proxy or a geometric reason for none): {cs.get('UNCLASSIFIED', 0)} unclassified",
+              "  " + ", ".join(f"{k} {v}" for k, v in sorted(cs.items()))]
+    lines += [f"  UNCLASSIFIED {o.name}" for o in collision._house_meshes()
+              if not bpy.data.objects.get(f"COL_{o.name}") and "collision_none" not in o]
     txt = "\n".join(lines)
     if write:
         os.makedirs(OUT, exist_ok=True)

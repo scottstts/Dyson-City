@@ -42,7 +42,7 @@ These rules apply to all future sounds, not just the current ones.
   - **City.** The physical level is about −48 dB re 1 m: the volume is so large that its reverberation is faint. It is lifted 10 dB so the space is felt, with a slow build-up (mean free path ~260 m) and a T60 of ~7 s.
   - **Band.** Only faint scatter from the Dome's frame.
   - **House.** One response for every room (a zone's reverberation is diffuse): a furnished 6 × 5 × 3.8 m room, T60 ~0.5 s in the mids, image-source early reflections over the first 40 ms.
-  - **But each room's reverb is its own.** A house sound (doors, clocks, the kettle, footsteps on the house's floors) feeds the house's reverb at its level at 1 m, and in full only while the listener is in the room it sounds in (`house/rooms.ts`, the rooms' boxes). From another room, or outdoors, it is −20 dB (`ROOM_LEAK`, first pass, by ear), and outdoors the shell's path applies on top. Before this the kettle's simmer, fed at its 0.3 m level into one reverb heard in every room, filled the whole house ~30 dB over its own direct sound and leaked out of the front door.
+  - **But each room's reverb is its own.** A house sound (doors, clocks, footsteps on the house's floors) feeds the house's reverb at its level at 1 m, and in full only while the listener is in the room it sounds in (`house/rooms.ts`, the rooms' boxes). From another room, or outdoors, it is −20 dB (`ROOM_LEAK`, first pass, by ear), and outdoors the shell's path applies on top. Before this a steady sound in the kitchen, fed at its 0.3 m level into one reverb heard in every room, filled the whole house ~30 dB over its own direct sound and leaked out of the front door.
   - **The send is the level at 1 m.** An IR's level is relative to the direct sound at 1 m, but an emitter's input is its level at `refDistance`, so its send should be scaled by `refDistance`. Only the house's sounds do so (`EmitterOptions.sendScale`). Everywhere else the send is still the input as it is: the gate chamber's balance (footsteps ~10 dB wetter than physical, the leaf ~17 dB drier) was tuned by ear on it and is kept, by the user's decision.
 - **Slap.** The nearest big face returns a moving echo, a delay of 2d/c with gain 0.8/(2d). Outside that face is the drum or the piers' west ends; in the city, the drum's glass, the piers' east ends or the house's walls (its foundation outline, so footsteps on the terrace slap off the facade). The chamber and the house have no slap: their rooms are in their responses.
   - It is a continuous distance to the real faces. The passage between the piers is open, not a wall.
@@ -65,13 +65,20 @@ These rules apply to all future sounds, not just the current ones.
   node tools/sound-model.mjs print --in rec.wav --at t0,… --length d --transients
   ```
 
+  Check a fit against its recording by ear and by measure before shipping it: render the game's own synth path (the bank's variant, with its gait and floor shaping) and compare third-octave spectra of the steps, normalised to the 250 Hz–2 kHz mean. The grass fit failed that by 35 dB below 160 Hz.
+
   Use `texture` with `--from`/`--to` for steady sounds. Recordings are 16-bit WAV (convert with ffmpeg). Paths are arguments only; nothing in the code refers to a recording.
 - **Bank** (`bank.ts`): everything is synthesised once in a worker during the atmosphere stage, ~1 s. Sounds from one recording share one scale, so they keep the balance they were recorded with.
 
 ## Footsteps (`synth/footstep.ts`, `sounds/footsteps.ts`)
 
 - **Timed by the gait.** The controller emits a `step` when `HeadMotion` strikes a foot, so sound and head jolt coincide. It also emits `takeoff`, `land` (with impact speed) and `stop` (after moving faster than 0.9 m/s). Within 0.15 s of one foot event, no other fires.
-- **Sources:** three recordings, each step a print: six steps on polished marble, three through lawn grass (the recording's steady low rumble, unrelated to the steps, is left out: bands below 160 Hz and the floor of the gaps between steps), six on fine gravel over sand. Walking on stone, grass and gravel are the recordings themselves; every other floor is built on the marble's.
+- **Sources:** four recordings, each step a print:
+  - six steps on polished marble;
+  - three through lawn grass, cut at each step's onset (0.45 s). The steady rumble between steps is taken off as the gaps' floor, but the low thud each footfall makes in the turf is kept. *Rejected:* the first grass fit. Its windows straddled two steps (0.7 s of swish each), and it dropped every band below 160 Hz as rumble, which took the foot's thud with it: a long, hissy step 8–15 dB too bright above 4 kHz;
+  - six on fine gravel over sand;
+  - six on a timber floor (heel then toe tapping the boards, and the boards' low body), cut at each step (0.5 s), the room's tone taken off as the floor. Its clone leaks 5–19 dB into the bands below 100 Hz (each strike's band-pass at 6 dB/octave), which band gains cannot take back: a real high-pass at 80 Hz sets it within ±4 dB of the recording.
+  - Stone, grass, gravel and the house's timber floors are the recordings themselves; the porches' boards and the rugs and runners are built on the timber, the outdoor hard floors on the marble.
 - **Gaits reshape it:**
   - run: the roll compressed to 0.68, +5 dB;
   - land: 0.55, +7 dB, +5 dB more below 250 Hz, with a second foot ~25 ms later;
@@ -79,9 +86,9 @@ These rules apply to all future sounds, not just the current ones.
   - takeoff: little heel.
 - **Floors:**
   - basalt is a little brighter; the deck has a hollow 200 Hz body, glassy ring and grit; bronze rings;
-  - timber (`wood`) is boards on joists: a low-mid body and the boards' short ring; the porches' `boards` span a void, hollower and longer;
-  - `rug` (rugs, runners, mats) keeps the thud and loses the click through a real low-pass. Band gains alone cannot darken a print by more than ~10 dB: each strike's band-pass leaks 6 dB/octave, so the strong low bands fill the highs.
-- **Levels.** The bank is scaled so a walking step on stone peaks at `LEVEL.footstep`. The grass and gravel recordings have their own scales: a step there is set against one on stone by loudness above ~250 Hz, not by peak (a low thud carries energy the ear barely weighs; a crunch is many peaks). Turf is 8 dB under stone, gravel 2 dB under. Each foot is its own emitter, 0.11 m either side of the body's line, with a `'located'` zone.
+  - the porches' `boards` span a void: the timber recording hollower and lower, with a few low modes ringing longer;
+  - `rug` (rugs, runners, mats, on the timber floors) keeps the thud and loses the tap through a real low-pass. Band gains alone cannot darken a print by more than ~10 dB: each strike's band-pass leaks 6 dB/octave, so the strong low bands fill the highs.
+- **Levels.** The bank is scaled so a walking step on stone peaks at `LEVEL.footstep`. The grass and gravel recordings have their own scales: a step there is set against one on stone by loudness above ~250 Hz, not by peak (a low thud carries energy the ear barely weighs; a crunch is many peaks). Turf is 8 dB under stone, gravel and timber 2 dB under. Each foot is its own emitter, 0.11 m either side of the body's line, with a `'located'` zone.
 - **What is underfoot** is asked at the feet with their height (the house has storeys): the house's floors first (`house/floors.ts`: the up-facing faces of the floor materials rasterised per 0.1 m cell in the house worker, every height a cell holds kept, so a rug over boards and three storeys share a cell), then the estate's class grid (`estate/surface.ts`: lawn and meadow grass, drive, walks and ramp gravel, flags, brick and the walls' tops stone), then the field's roads and the site (`app/audioWorld.ts`). Walking in from the gateway the feet meet steps, porch boards, the coir mat, the oak threshold, the vestibule's mat and tiles, the hall's boards and runner (`tests/houseWalk.test.ts`).
 
 ## The West Gate (`sounds/gate.ts`)
@@ -162,14 +169,11 @@ These rules apply to all future sounds, not just the current ones.
 - The three vent voices are HRTF-panned too, also with no send.
 - **Relief stacks** (`field/vents.ts`, a seeded schedule): a voice from the pool takes a lifting stack. It pops, its roar follows the stack's flow (brighter at full lift), and it thunks on reseat.
 - **Levels** are `LEVEL.field` and `LEVEL.ventValve` in `mix.ts`: first-pass values, to be tuned by ear.
-- **The estate's silencer** (`estate/silencer.ts`): a device in the estate cuts every machine and relief stack off for a listener within its walls (the terrace's outer wall face in plan, the gateway's ramp and the house included). The field's emitters all feed one bus after their paths, so the cut acts at the ears at once, not after each machine's propagation delay. Behind it the voices, levels, spreading and wander run unchanged, so stepping out finds them as they were. It switches with a 50 ms time constant.
+- **The estate's silencer** (`estate/silencer.ts`): a device in the estate takes every machine and relief stack away for a listener within its walls (the terrace's outer wall face in plan, the gateway's ramp and the house included). It fades with the listener's place, not in a step: full 4 m outside the wall face, gone 10 m inside, eased (smoothstep), and smoothed over 0.3 s. *Rejected:* a hard cut at the wall face, which switched the field off between two footsteps. The field's emitters all feed one bus after their paths, so the fade acts at the ears, not after each machine's propagation delay. Behind it the voices, levels, spreading and wander run unchanged.
 
-## The estate (`sounds/estate.ts`, `synth/rustle.ts`)
+## The estate
 
-- **Leaves in the breeze.** Two voices go to the crowns nearest the listener (within 60 m of a crown's edge), each spreading 1/d beyond its crown's radius, equal-power panned (a crown is broad). A voice whose tree drops out of the nearest fades before it moves. No estate-wide bed.
-- The rustle is cloned from a recording of a broadleaf crown in a breeze: a fitted texture (`models/estateRustle.ts`: the bright hush and the leaves' ticking as clicks). A random-phase texture is stationary at every time scale, but the recorded leaf band swells and drops by ~5 dB over tens of milliseconds as clusters of leaves catch the air together. That flutter is a log-normal envelope (4.4 dB, ~9 Hz wide) on the band above 1.2 kHz, fitted so the clone's spread of level in 5–100 ms windows matches the recording's in each band. The breeze rises and settles ±3 dB over the ~11 s loop. Narrow tonal lines the fit found in the 1.3 s sample were rejected: in a loop they whistle.
-- Each voice loops from its own point, a few percent off speed, so two trees never move in step.
-- The first pass was synthesised from its mechanism for a near-still Dome (sparse clicks, a faint hush); the user replaced it with the recording's breeze.
+- **No tree sound.** The estate's quiet is the Dome's still air, the clock through the open door and the footsteps. *Rejected* (by ear): leaves rustling from the nearest crowns, cloned from a recording of a broadleaf crown in a breeze.
 
 ## The house (`sounds/house.ts`, `synth/house.ts`)
 
@@ -178,18 +182,18 @@ These rules apply to all future sounds, not just the current ones.
   - the close is cut at 0.43 s, before the latch first touches the keep. The swing part (handle, quiet) plays as the leaf starts closing. The shut part is scheduled so its strike (the close's strongest onset, 0.29 s into it) lands when the leaf reaches rest;
   - the leaf's time to rest is its own motion run ahead (`HouseDoor.timeToTarget`, the same step the doors use, at 1/240 s). A closed form ignoring the rate's lag was 0.2 s late. If the leaf is stopped short (the walker in the way, or reopened) before the strike, the pending shut is cancelled;
   - voices are a pool: two inside the house, one for the outer doors (radiating into both the hall and the estate); pocket doors play the same at −4.4 dB.
-- **Clocks and the kettle** are voiced at the export's `Sound_` markers (their `clip` and `gain`), as each floor streams in:
+- **Clocks** are voiced at the export's `Sound_` markers (their `clip` and `gain`), as each floor is built:
   - clocks beat an anchor escapement built from its mechanism: the unlocking click, the drop a few ms later (the strong blow), the movement's plates ringing bright and short and the case low and longer. The modes are fixed per clock; the blow varies per beat, and the exit pallet strikes softer at the top (tick, tock). The longcase beats seconds with a deep trunk; the mantel clock 11,520 an hour in a small case. No clock is perfectly in beat: the tock comes 1.5 % late;
-  - the kettle simmers: a dense fizz of collapsing vapour bubbles (1.5–7 kHz), the odd larger bubble ringing at its Minnaert frequency, and the body's hum, all following a slow wander of the heat;
-  - within 45 m of the house's middle only: beyond it no beat is scheduled and the kettle's loop is stopped.
-- **Levels** (`LEVEL.door`, `tick`, `kettle`, `rustle`): first-pass values, to be tuned by ear.
+  - within 45 m of the house's middle only: beyond it no beat is scheduled.
+- **No kettle.** *Rejected* (by ear): a kettle simmering on the range.
+- **Levels** (`LEVEL.door`, `tick`): first-pass values, to be tuned by ear.
 
 ## Runtime
 
 - **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it. The player's volume and mute (`docs/ui.md`) scale `LEVEL.master` through `GameAudio.setUserGain`.
 - **Per frame** (`Game.frame`, after the camera's matrix): the ears move to the camera, airlock events and queued foot events sound at time `t`, and every emitter's path is re-derived.
   - `glide` skips unchanged targets, so steady parameters add no automation.
-- **Cost.** 18 HRTF and 2 equal-power panners, four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo), three steady loops (the kettle within earshot, two rustles) and short-lived sources.
+- **Cost.** 18 HRTF panners, four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
 
 ## Review
 

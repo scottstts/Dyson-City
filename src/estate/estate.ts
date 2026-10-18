@@ -23,7 +23,6 @@ import { createDarkGlassMaterial, createLilyMaterial, createPadMaterial, createP
 import type { GroundClass } from './layout';
 import type { Part } from '../field/kit/parts';
 import type { GroundSurface } from '../city/walk';
-import type { Crown } from './plants/plants';
 import { estateSurface } from './surface';
 
 export interface Estate {
@@ -43,8 +42,6 @@ export interface Estate {
   view(camera: Camera, indoors: boolean): void;
   /** What is underfoot on the terrace (null off it). */
   surfaceAt(x: number, z: number, y: number): GroundSurface | null;
-  /** The trees' crowns (leaf rustle). */
-  readonly crowns: readonly Crown[];
 }
 
 function groundMaterial(cls: GroundClass, look: EstateLook = {}): Material {
@@ -257,7 +254,6 @@ export function buildEstate(): Estate {
     outdoorMeshes: group.children.filter((c): c is Mesh => (c as Mesh).isMesh),
     parts: geo.parts,
     surfaceAt: estateSurface(grid),
-    crowns: geo.planting.crowns,
     setLook(look) {
       for (const f of looks) f(look);
     },

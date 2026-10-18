@@ -6,7 +6,7 @@ Code: `src/render/`.
 
 ```text
 scene MRT (output, packed normal, velocity)
-  → GTAO (half res, contact only: faded 25–60 m)
+  → GTAO (half res, contact only: faded 25–60 m; weighted per pixel by the normal target's alpha)
   → sky: the star's atmosphere (sky/star/atmosphere.ts): rgb emission over exp(−τ) of what is behind
   → composites, farthest first: the Dome's glass (city/dome/glass.ts), the gate chamber's mist (city/gate/mist.ts)
   → geometry: aerial perspective over the result (explicit camera uniforms; inscatter × star illuminant)
@@ -15,6 +15,7 @@ scene MRT (output, packed normal, velocity)
   → lens vignette → film look (black point, high contrast) → hue-preserving filmic → halation of the clipped disc (screen blend) → grade → grain → OETF → dither
 ```
 
+- **Contact AO weight.** The scene pass's normal target carries in alpha how much GTAO darkens a pixel (`sceneMrt.ts`): 1 by default, 0 on the house's lightmaps (their bake holds the occlusion) and on glass. Glass is drawn with custom blending, under which three replaces the other attachments instead of blending them: a constant written there zeroed the normals behind every pane, and GTAO blacked out whatever the glass showed. Panes write their own normal (weight 0) and velocity.
 - **Post camera uniforms.** Post passes need their own `projInv`/`camWorld` uniforms. TSL camera nodes inside a post pass refer to the quad camera.
 - **Sky velocity.** The sky is at infinity, so camera rotation alone moves it. What a pixel shows can also move on its own: the frame turns about the spin axis (through the sphere's centre, not the observer), carrying its structure and the stars. The sky shader reports what it hit (`radianceMotion`: band-fixed, frame structure at distance t, or the sky at infinity), and the velocity undoes the frame's last step for it, so TRAA does not soften the occlusion edges and fine detail that carry the motion. The motion is tiny per frame (~0.015 px at a 60° field) but TRAA's history accumulates it.
 - **The star's atmosphere is its own pass.** Folded into the sky shader, it pushed the structure trace's register pressure up and slowed the whole sky by several milliseconds (costs were non-additive: removing either half restored the frame). It needs nothing from that trace: every sight line ends at the photosphere or the shell, and the atmosphere lies inside the shell.
@@ -28,7 +29,7 @@ The star must engulf the frame: a white blaze whose glare floods the structure b
   - Beside the star the veil is ~12 % of the disc mean 1° out, ~6 % at 5°, ~3 % at 10°, ~0.5 % at the horizon.
   - **Rejected:** a 35° lobe, and blooming every source linearly. Both spread an even veil over the frame that lifts every shadow: it reads as fog or a dirty lens, not blinding light.
 - **The star's share is exact:** a 1D table against the angle from the star's centre (eye + thresholded bloom over the limb-darkened disc). Over the disc, the bloom's loss is taken from the smooth disc, not per pixel.
-- **Only where the star is seen.** The smooth disc replaces sky pixels only (depth 0): geometry in the star's direction (a vault, a frame member, a lamp) keeps its own radiance and feeds the screen-space blur like any source. The star's table is scaled by `starVisibility`, the share of the disc the eye sees from where it stands (city/visibility.ts: 1 in the open, ~0.85 under the Dome, 0 under a roof). The table (and the smooth disc the bloom's loss is taken from) is also scaled by `starTransmission`, the glass in between (the Dome's tint, 0.5); halation is not.
+- **Only where the star is seen.** The smooth disc replaces sky pixels only (depth 0): geometry in the star's direction (a vault, a frame member, a lamp) keeps its own radiance and feeds the screen-space blur like any source. The star's table is scaled by `starVisibility`, the share of the disc the eye sees from where it stands (city/visibility.ts: 1 in the open, ~0.85 under the Dome, 0 under a roof, fading over the last few metres as the eye walks under it: the gate's vault and the house's roofs are marched like the frame). The table (and the smooth disc the bloom's loss is taken from) is also scaled by `starTransmission`, the glass in between (the Dome's tint, 0.5); halation is not.
 - **Other sources:** chained screen-space blurs (each stage adds the σ still missing, in quadrature, so every stage downsamples an already-smooth input; blurring the sharp image straight to a few texels aliased into flicker), from a half-resolution source (bloom input at quarter resolution).
 
 ## Halation (`glarePass.ts`)
@@ -40,7 +41,8 @@ Energy-conserving glare cannot hide the limb: just outside it, at most half the 
 
 ## Exposure and colour (`exposure.ts`, `adaptation.ts`, `tsl/toneMap.ts`)
 
-- **Eye adaptation** (`adaptation.ts`): a multiplier on the star-keyed exposure, floor 1 (views facing the star stay on its key), ceiling 64 (+6 stops: set for the house, whose day rooms sit ~7–8 stops under a sunlit wall; they read dim but legible, the curtained bedrooms and the hall stay dark, the windows blow out). A 64 × 36 centre-weighted log-luminance meter of the post-TAA scene is read back asynchronously every 4 frames; target = clamp(0.3 / log-average).
+- **Eye adaptation** (`adaptation.ts`): a multiplier on the star-keyed exposure, floor 1 (views facing the star stay on its key), ceiling 2048 (+11 stops). It adapts fully over the first two stops of darkness and 0.8 of each stop beyond, as an eye's adaptation is incomplete: a day room ~8 stops under the sunlit garden reads ~1.2 stops under it, a lamp-lit hall ~11 stops under it ~1.8; the windows blow out.
+  - **Rejected:** full adaptation capped at 64 (+6 stops). Lamp-lit halls and the rooms away from windows read black. A 64 × 36 centre-weighted log-luminance meter of the post-TAA scene is read back asynchronously every 4 frames; target = clamp(0.3 / log-average).
   - **The reference is a sunlit view's average (0.3).** Under the Dome's tint the estate meters ~0.18 (pale ground, a dark sky) and opens ~0.7 stop, so up-facing pale stone and gravel read near white, as noon ground does. At 0.12 the eye never opened under the Dome and the estate sat ~0.5 stop under a photographer's key: midtones dull, nothing bright. Opens with τ = 1.4 s, clamps down with τ = 0.3 s. Disabled when `?ev` fixes the exposure.
   - The meter stores ln L offset and scaled into [0, 1]: the material's output is clamped on the way into the target, and raw negative logs read back as 0 (adaptation then never moved).
 

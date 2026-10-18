@@ -98,6 +98,11 @@ export interface CompiledPart {
   markers: Marker[];
   /** What is underfoot (floors.ts). */
   floors: FloorCells;
+  /**
+   * Drawn meshes with neither a collision proxy (COL_ twin, or a box on a door leaf) nor a reason for
+   * none (`collision_none`, decided by geometry in blender/build/collision.py). Must be empty.
+   */
+  unaccounted: string[];
   stats: { meshes: number; triangles: number; vertices: number; ms: number };
 }
 
@@ -134,16 +139,8 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
   const apertures = new Map<string, Aperture>();
   // Every node inside a door leaf's subtree is handled with its leaf.
   const doorOwned = new Set<number>();
-  /**
-   * Parts that bound where the walker can go but carry no COL_ twin in the export collide as their
-   * own visible mesh: flights of steps (the west porch's), the stair cheeks either side of every
-   * flight, the skirt frames that close the void under the porch decks and the stoop's and west
-   * porch's stair rails. Without the cheeks and skirts the walker slipped past a flight's edge at
-   * grade into the void under the deck and could not get out (tests/houseWalk.test.ts).
-   */
   const names = new Set(doc.nodes.map((n) => n.name ?? ''));
-  const OWN_COLLISION = /_Steps$|^(Porch|WestPorch|RearStoop)_(Cheeks|SkirtFrame|Railings|Rails)$/;
-  const ownCollision = (name: string) => OWN_COLLISION.test(name) && !name.startsWith('COL_') && !names.has(`COL_${name}`);
+  const unaccounted: string[] = [];
   const parentOf = new Map<number, number>();
   doc.nodes.forEach((n, i) => n.children?.forEach((c) => parentOf.set(c, i)));
   let meshes = 0;
@@ -333,7 +330,7 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
     }
     if (node.mesh !== undefined) {
       appendMesh(groups, node.mesh, name, world, x, world);
-      if (ownCollision(name)) collision.push(collisionOf(node.mesh, `COL_${name}`, 'trimesh', world));
+      if (!names.has(`COL_${name}`) && typeof x?.collision_none !== 'string') unaccounted.push(name);
     }
   });
 
@@ -364,6 +361,7 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
         appendMesh(local, cn.mesh, cn.name ?? name, compose(cn.translation, cn.rotation, cn.scale), cn.extras, parentWorld, exteriorPart ? 'exterior' : 'probe');
       }
     }
+    if (!box && typeof x.collision_none !== 'string') unaccounted.push(name);
     // Light at the leaf's middle (either side's room may contribute: room −1).
     const cx = parentWorld[12], cy = parentWorld[13], cz = parentWorld[14];
     const sh = grid.shAt(cx, -cz, cy + 1.0, -1, new Float32Array(27));
@@ -406,7 +404,7 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
     vertices += g.position.length / 3;
   }
   const floors = rasteriseFloors(out, (i) => doc.materials[i]?.name ?? '');
-  return { part, groups: out, apertures: [...apertures.values()], doors, collision, markers, floors, stats: { meshes, triangles, vertices, ms: performance.now() - t0 } };
+  return { part, groups: out, apertures: [...apertures.values()], doors, collision, markers, floors, unaccounted, stats: { meshes, triangles, vertices, ms: performance.now() - t0 } };
 }
 
 function mul(a: Mat4, b: Mat4): Mat4 {

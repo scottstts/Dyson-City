@@ -12,16 +12,18 @@
  *
  * Glass is a thin pane (a window, a jar, a lantern): no refraction offset. It is drawn in two
  * passes over the same geometry: a multiply by its transmittance (per channel, so tinted and
- * stained glass colour what is behind) and an add of its Fresnel reflection. Neither pass touches
- * the normal or velocity targets.
+ * stained glass colour what is behind) and an add of its Fresnel reflection. Both write the pane's
+ * normal with no contact AO, and its velocity.
  */
 import { AddEquation, CustomBlending, DoubleSide, FrontSide, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, NormalBlending, OneFactor, SrcColorFactor, ZeroFactor, type Material, type Node, type Texture } from 'three/webgpu';
-import { attribute, float, vec2, vec3, vec4, uv, texture, normalMap, normalWorld, mrt, uniformArray, positionWorld, cameraPosition, normalize, dot, pow, clamp, mix, max, reflect, pmremTexture } from 'three/tsl';
+import { attribute, float, vec2, vec3, vec4, uv, texture, normalMap, normalWorld, mrt, velocity, uniformArray, positionWorld, cameraPosition, normalize, dot, pow, clamp, mix, max, reflect, pmremTexture } from 'three/tsl';
 import { Vector3 } from 'three/webgpu';
 import type { GltfDocument, GltfMaterial, GltfTextureInfo } from './gltf';
+import type { PackLampGlow } from './pack';
 import type { HouseTextures } from './textures';
 import type { BakedLight } from './bakedLight';
 import type { LightKind } from './compile';
+import { noContactAO } from '../render/sceneMrt';
 
 type F = Node<'float'>;
 type V3 = Node<'vec3'>;
@@ -42,22 +44,15 @@ export interface MaterialContext {
   baked: BakedLight;
   look: HouseLook;
   lightmaps: Map<string, Texture>;
+  /** The lit lamps' glowing materials (pack index `lamps`). */
+  lamps: Record<string, PackLampGlow>;
 }
 
 export type GlassPass = 'multiply' | 'reflect';
 
-/**
- * Lit lamps (the lamps are on: the re-bake lights the rooms with them, docs/house.md): a fabric
- * shade glows at ~3,000 cd/m², a lantern's glass round its flame at ~12,000 cd/m², on the game's
- * scale (a sunlit white wall, ~31,800 cd/m², is 2.0). Warm, as incandescent light through cloth.
- */
-export const LAMP_GLOW: Record<string, { radiance: number; colour: [number, number, number] }> = {
-  lampshade: { radiance: 0.19, colour: [1.0, 0.72, 0.42] },
-  lamp_glass: { radiance: 0.75, colour: [1.0, 0.78, 0.5] },
-};
-
-function glowOf(name: string | undefined): V3 | null {
-  for (const [k, g] of Object.entries(LAMP_GLOW)) if (name?.startsWith(k)) return vec3(...g.colour).mul(g.radiance) as V3;
+/** A lit lamp's shade or glass: its glow from the bake's lamp table (pack index `lamps`), or null. */
+function glowOf(ctx: MaterialContext, name: string | undefined): V3 | null {
+  for (const [k, g] of Object.entries(ctx.lamps)) if (name?.startsWith(k)) return vec3(...g.radiance) as V3;
   return null;
 }
 
@@ -194,11 +189,11 @@ export async function buildMaterial(ctx: MaterialContext, index: number, kind: L
   const name = `House.${gm.name ?? index}.${kind}`;
   const side = s.doubleSided ? DoubleSide : FrontSide;
 
-  if (s.transmission > 0) return glass(ctx, s, kind, name, side, sh, glowOf(gm.name));
+  if (s.transmission > 0) return glass(ctx, s, kind, name, side, sh, glowOf(ctx, gm.name));
 
   if (kind === 'exterior' || kind === 'mixed') {
     const mat = new MeshPhysicalNodeMaterial();
-    const glowX = glowOf(gm.name);
+    const glowX = glowOf(ctx, gm.name);
     mat.name = name;
     mat.colorNode = s.albedo;
     mat.roughnessNode = s.roughness;
@@ -220,8 +215,10 @@ export async function buildMaterial(ctx: MaterialContext, index: number, kind: L
   mat.lights = false;
   mat.side = side;
   if (s.normal) mat.normalNode = s.normal;
+  // The lightmaps already hold the architecture's occlusion: no screen-space AO over them.
+  if (kind === 'lightmap') mat.mrtNode = mrt({ normal: noContactAO() });
   const lit = ctx.baked.radiance(s.albedo, s.roughness, s.metalness, diffuseLight(ctx, kind, lightmap, sh), normalWorld as unknown as V3);
-  const glow = glowOf(gm.name);
+  const glow = glowOf(ctx, gm.name);
   const radiance = glow ? lit.add(glow) : lit;
   if (s.blend) {
     // The lace sheers: alpha-blended over the room behind.
@@ -273,7 +270,10 @@ function glass(ctx: MaterialContext, s: Surface, kind: LightKind, name: string, 
   multiply.blendSrcAlpha = ZeroFactor;
   multiply.blendDstAlpha = OneFactor;
   multiply.outputNode = vec4(T, 1);
-  multiply.mrtNode = mrt({ normal: vec4(1), velocity: vec4(1) });
+  // Under custom blending three replaces the other attachments rather than blending them, so both
+  // passes write the pane's own normal (with no contact AO for what is behind) and velocity: a
+  // constant there zeroed the normals behind every pane and GTAO blacked out what the glass showed.
+  multiply.mrtNode = mrt({ normal: noContactAO(), velocity });
 
   // Reflection: outdoors the estate's environment, indoors the room's capture.
   const rough = s.roughness;
@@ -305,6 +305,6 @@ function glass(ctx: MaterialContext, s: Surface, kind: LightKind, name: string, 
   add.blendSrcAlpha = ZeroFactor;
   add.blendDstAlpha = OneFactor;
   add.outputNode = vec4(reflected, 1);
-  add.mrtNode = mrt({ normal: vec4(0), velocity: vec4(0) });
+  add.mrtNode = mrt({ normal: noContactAO(), velocity });
   return { material: multiply, reflect: add };
 }

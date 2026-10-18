@@ -2,7 +2,7 @@
  * Runtime entry point: owns the frame loop and wires player, world, pipeline and exposure.
  * System logic lives in its own modules; this file only sequences them.
  */
-import { PerspectiveCamera, Vector3, type Node } from 'three/webgpu';
+import { PerspectiveCamera, Vector3, type Node, type Object3D } from 'three/webgpu';
 import type { RendererHandle } from '../core/renderer';
 import { fatal } from '../core/fatal';
 import type { World } from './world';
@@ -30,6 +30,9 @@ const NOBODY = new Vector3(0, 0, 0);
 /** Frames per period of the debug yaw wobble (?wobble). */
 export const WOBBLE_PERIOD = 37;
 
+/** Time constant (s) of the star's visible share as the eye moves under a roof. */
+const STAR_EASE = 0.4;
+
 export class Game {
   readonly camera: PerspectiveCamera;
   readonly pipeline: Pipeline;
@@ -51,6 +54,8 @@ export class Game {
   /** Null when the exposure is overridden for review (?ev). */
   private readonly adaptation: EyeAdaptation | null;
   private frameIndex = 0;
+  /** The star's visible share as the eye takes it (eased; −1: take the next value as it is, after a teleport). */
+  private starSeen = -1;
   private readonly audio: GameAudio;
   private readonly prompt: InteractionPrompt;
   private readonly driving: Driving;
@@ -127,6 +132,31 @@ export class Game {
     fatal.onStop(() => this.stop());
   }
 
+  /**
+   * Compiles every pipeline the game draws with, during loading. One frame through the real
+   * pipeline (the scene pass's MRT targets, the post passes) with every object shown and none
+   * culled, so whatever is out of the spawn view, beyond a range, or indoors (the house's floors,
+   * the far side of the field) has its pipelines and textures ready before play: nothing compiles
+   * when it first comes into view. (renderer.compileAsync builds for the canvas, not the scene
+   * pass's targets, and skips what the camera's frustum culls.)
+   */
+  warmAll(): void {
+    const saved: [Object3D, boolean, boolean][] = [];
+    this.world.scene.traverse((o) => {
+      saved.push([o, o.visible, o.frustumCulled]);
+      o.visible = true;
+      o.frustumCulled = false;
+    });
+    try {
+      this.pipeline.render();
+    } finally {
+      for (const [o, visible, culled] of saved) {
+        o.visible = visible;
+        o.frustumCulled = culled;
+      }
+    }
+  }
+
   /** Renders one frame synchronously (boot warmup and first frame). */
   renderFrame(dt = 1 / 60): void {
     this.frame(dt);
@@ -191,6 +221,7 @@ export class Game {
   setSpot(spot: string | Spawn): void {
     const s = typeof spot === 'string' ? VIEWPOINTS[spot] : spot;
     if (s) this.player.spawn(s);
+    this.starSeen = -1;
   }
 
   private profileCounter = 0;
@@ -238,8 +269,10 @@ export class Game {
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
     const star = this.world.city.starVisibility(this.camera.position);
-    // Under the house's roofs the star is not seen at all.
-    (this.pipeline.camera.starVisibility as unknown as { value: number }).value = indoors ? 0 : star.visible;
+    // Under the house's roofs and the gate's vault the star is hidden by them (city/visibility.ts):
+    // it fades as the eye walks in, eased over STAR_EASE so a quick step or turn never pops it.
+    this.starSeen = this.starSeen < 0 ? star.visible : this.starSeen + (star.visible - this.starSeen) * (1 - Math.exp(-dt / STAR_EASE));
+    (this.pipeline.camera.starVisibility as unknown as { value: number }).value = this.starSeen;
     (this.pipeline.camera.starTransmission as unknown as { value: number }).value = star.transmission;
     this.pipeline.render();
     if (this.adaptation) (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);

@@ -27,6 +27,16 @@ type F = Node<'float'>;
 /** The map: N × N texels over [ORIGIN, ORIGIN + EXTENT] in x and z (1 m texels). */
 export const SHADE = { N: 1024, origin: -512, extent: 1024, dirs: 24, maxHeight: 240 } as const;
 
+/** A square plan grid of occluder texels: N × N, from (originX, originZ), `cell` metres each. */
+export interface OccluderGrid {
+  N: number;
+  originX: number;
+  originZ: number;
+  cell: number;
+}
+
+const SHADE_GRID: OccluderGrid = { N: SHADE.N, originX: SHADE.origin, originZ: SHADE.origin, cell: SHADE.extent / SHADE.N };
+
 const EMPTY_LO = 1e9;
 const EMPTY_HI = -1e9;
 
@@ -35,9 +45,8 @@ const EMPTY_HI = -1e9;
  * texel, [lowest, highest] surface height (RG, float). Texels with nothing over them hold an
  * empty interval.
  */
-export function rasterOccluders(meshes: readonly Mesh[]): Float32Array {
-  const { N, origin, extent } = SHADE;
-  const cell = extent / N;
+export function rasterOccluders(meshes: readonly Mesh[], grid: OccluderGrid = SHADE_GRID): Float32Array {
+  const { N, originX, originZ, cell } = grid;
   const out = new Float32Array(N * N * 2);
   for (let i = 0; i < N * N; i++) {
     out[2 * i] = EMPTY_LO;
@@ -70,9 +79,9 @@ export function rasterOccluders(meshes: readonly Mesh[]): Float32Array {
       load(idx ? idx.getX(t) : t, a);
       load(idx ? idx.getX(t + 1) : t + 1, b);
       load(idx ? idx.getX(t + 2) : t + 2, c);
-      const ua = (a[0] - origin) / cell, va = (a[2] - origin) / cell;
-      const ub = (b[0] - origin) / cell, vb = (b[2] - origin) / cell;
-      const uc = (c[0] - origin) / cell, vc = (c[2] - origin) / cell;
+      const ua = (a[0] - originX) / cell, va = (a[2] - originZ) / cell;
+      const ub = (b[0] - originX) / cell, vb = (b[2] - originZ) / cell;
+      const uc = (c[0] - originX) / cell, vc = (c[2] - originZ) / cell;
       const i0 = Math.floor(Math.min(ua, ub, uc));
       const i1 = Math.floor(Math.max(ua, ub, uc));
       const j0 = Math.floor(Math.min(va, vb, vc));

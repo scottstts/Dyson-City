@@ -24,9 +24,20 @@ export interface PackPlacement {
   face: [number, number];
 }
 
+/**
+ * A lit lamp's glowing material (its shade or its glass) as the bake lit it: radiance in the game's
+ * scale (linear RGB), from the lamps' flux through it (blender/build/bake.py `lamp_glow`). What
+ * glows is what lit the rooms.
+ */
+export interface PackLampGlow {
+  radiance: [number, number, number];
+}
+
 export interface PackIndex {
   version: number;
   placement: PackPlacement;
+  /** Glowing lamp materials by material-name prefix (absent from packs exported before the lamp table: nothing glows). */
+  lamps?: Record<string, PackLampGlow>;
   entries: PackEntry[];
 }
 

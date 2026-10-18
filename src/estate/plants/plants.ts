@@ -32,14 +32,6 @@ export interface Planting {
   /** Trunks for the walker. */
   trunks: PolyMesh[];
   trees: TreePlace[];
-  /** Each tree's crown (world): where its leaves rustle from (docs/audio.md "The estate"). */
-  crowns: Crown[];
-}
-
-export interface Crown {
-  centre: [number, number, number];
-  /** Mean half-spread of the leaves (m). */
-  radius: number;
 }
 
 /** A clipped Irish yew: a slender column swelling a little above its foot, rounded to a blunt point. */
@@ -102,14 +94,11 @@ export function buildPlanting(beds: Region[]): Planting {
   const wood: Record<string, WoodGeometry> = {};
   const trunks: PolyMesh[] = [];
   const trees = treePlan();
-  const crowns: Crown[] = [];
   for (const t of trees) {
     const g = growTree(SPECIES[t.species], t.seed);
     const r = random(t.seed * 31);
     const yaw = r() * Math.PI * 2;
     const y = TERRACE_Y - 0.08;
-    const cr = g.crown.radius;
-    crowns.push({ centre: [t.x, y + g.crown.centre[1] * t.scale, t.z], radius: ((cr[0] + cr[1] + cr[2]) / 3) * t.scale });
     const w = (wood[t.species] ??= { position: [], normal: [], uv: [], index: [] });
     place(w, g.wood, t.x, y, t.z, yaw, t.scale, (src, dst) => append(dst.uv, src.uv));
     for (const dst of [foliage, canopy]) {
@@ -140,5 +129,5 @@ export function buildPlanting(beds: Region[]): Planting {
   for (const s of shrubPlan(beds)) plant(foliage, s.kind, s.x, s.y, s.z, s.seed, s.scale);
   const topiary = new Parts('estate:hedge');
   topiaryPlan().forEach((p, i) => topiary.add(`topiary:${i}`, topiaryMesh(p.x, TERRACE_Y + 0.02, p.z, p.height, 17 + i * 5)));
-  return { foliage, canopy, wood, topiary, trunks, trees, crowns };
+  return { foliage, canopy, wood, topiary, trunks, trees };
 }

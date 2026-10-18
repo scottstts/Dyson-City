@@ -49,8 +49,13 @@ def put(room, item, key, maker, x, y, rz=0.0, z=None, level=None):
     return o
 
 
-def lamp_empty(name, loc, kind="lamp", watts=60):
-    core.empty(f"Lamp_{name}", "House/Engine/Lamps", loc, props={"kind": kind, "watts": watts})
+# Lamp output (lumens, warm incandescent). Lit at a generous domestic level (city_plan §4): about
+# twice a real lamp of the kind, strongest where no window reaches (the hall, landing and top hall).
+LUMENS = {"pendant": 1600, "pendant_big": 2400, "pendant_hall": 2400, "table_lamp": 800, "small_room": 1200}
+
+
+def lamp_empty(name, loc, kind="lamp", lumens=800):
+    core.empty(f"Lamp_{name}", "House/Engine/Lamps", loc, props={"kind": kind, "lumens": float(lumens)})
 
 
 def sound_empty(name, loc, clip, loop=True, gain=1.0):
@@ -149,17 +154,20 @@ def _sheer_only(W, Hc, sill, opn=False):
 
 # ---------------------------------------------------------------- rooms
 
-def pendant(room, x, y, level, big=True):
+def pendant(room, x, y, level, big=True, drop=None, lumens=None, item="Pendant"):
+    """A bowl pendant hung from the ceiling; `drop` (m) shortens it under the top floor's lower
+    ceilings and over door swings."""
     ceil = P.CEIL[level] - 0.085          # hung from the boss of the ceiling rose
-    drop = 1.0 if big else 0.7
-    put(room, "Pendant", f"pendant_{big}", lambda big=big: F.pendant_bowl(drop=1.0 if big else 0.7, r=0.32 if big else 0.22),
+    drop = drop if drop is not None else (1.0 if big else 0.7)
+    put(room, item, f"pendant_{big}_{drop}", lambda big=big, drop=drop: F.pendant_bowl(drop=drop, r=0.32 if big else 0.22),
         x, y, z=ceil)
-    lamp_empty(f"{room}_Pendant", (x, y, ceil - drop - 0.05), kind="pendant", watts=100 if big else 60)
+    lm = lumens if lumens is not None else LUMENS["pendant_big" if big else "pendant"]
+    lamp_empty(f"{room}_{item}", (x, y, ceil - drop - 0.05), kind="pendant", lumens=lm)
 
 
 def table_lamp_on(room, item, x, y, z, rz=0.0):
     put(room, item, "table_lamp", F.table_lamp, x, y, rz, z=z)
-    lamp_empty(f"{room}_{item}", (x, y, z + 0.5), kind="table_lamp", watts=40)
+    lamp_empty(f"{room}_{item}", (x, y, z + 0.5), kind="table_lamp", lumens=LUMENS["table_lamp"])
 
 
 def picture_on_wall(room, item, x, y, z, rz, w=0.7, h=0.55, kind="landscape"):
@@ -180,7 +188,9 @@ def ground():
     table_lamp_on("Hall", "ConsoleLamp", -1.525 + 0.215, 5.0, G + 0.8)
     put("Hall", "Runner", "rug_runner", lambda: F.rug(1.0, 6.0, "stair_runner"), -0.35, 5.95, 0)     # clear of the vestibule doors' swing
     picture_on_wall("Hall", "Picture1", -1.525, 5.25, G + 1.55, 90, 0.8, 0.6, "landscape")
-    pendant("Hall", 0.25, 5.4, 0, big=False)
+    pendant("Hall", 0.25, 5.4, 0, big=False, lumens=LUMENS["pendant_hall"])
+    pendant("Hall", 0.25, 8.6, 0, big=False, lumens=LUMENS["pendant_hall"], item="Pendant2")
+    pendant("Vestibule", 0.0, 1.1, 0, big=False, drop=0.5, lumens=LUMENS["small_room"])      # over the doors' swing
     # Parlour ---------------------------------------------------------------------------------
     pr = "Parlour"
     put(pr, "Rug", "rug_parlour", lambda: F.rug(3.3, 2.5, "rug_parlour"), -4.75, 3.2, 90)
@@ -269,6 +279,7 @@ def ground():
     put(mo, "Palm", "palm", F.potted_palm, 8.85, 3.35, 0)
     put(mo, "Flowers", "vase_flowers", lambda: _vase_flowers(), 8.0, 6.6, 0, z=G + 0.76)
     table_lamp_on(mo, "DeskLamp", 9.285, 6.0, G + 0.76)
+    pendant(mo, 7.85, 5.7, 0, big=False)
     # Rear hall, WC, kitchen, pantry ----------------------------------------------------------
     put("RearHall", "Bench", "bench", lambda: F.console_table(1.0, 0.36, 0.46), -1.525 + 0.2, 10.5, 90)
     put("RearHall", "Umbrellas", "umbrella_stand", F.umbrella_stand, 1.8, 12.4, 0)
@@ -283,8 +294,10 @@ def ground():
     put(kt, "Kettle", "kettle", F.kettle, 3.55, 7.0, 0, z=G + 0.98)
     put(kt, "Pot", "pot", F.pot, 4.75, 7.0, 30, z=G + 0.98)
     put(kt, "Shelf", "shelf_jars", lambda: F.shelf_with_jars(1.2), 2.175 + 0.13, 8.3, 90, z=G + 1.55)
-    sound_empty("Kitchen_Kettle", (3.55, 7.0, G + 1.1), "kettle_simmer", gain=0.5)
     pendant(kt, 3.8, 9.3, 0, big=False)
+    pendant("RearHall", 0.25, 10.5, 0, big=False)
+    pendant("WC", -0.85, 12.2, 0, big=False, drop=0.5, lumens=LUMENS["small_room"])
+    pendant("Pantry", 5.34, 11.9, 0, big=False, drop=0.5, lumens=LUMENS["small_room"])
     for i, z in enumerate((0.9, 1.35, 1.8)):
         put("Pantry", f"ShelfE{i}", "shelf_jars_1.4", lambda: F.shelf_with_jars(1.4), 5.9 - 0.13, 11.9, -90, z=G + z)
         put("Pantry", f"ShelfN{i}", "shelf_jars_0.6", lambda: F.shelf_with_jars(0.6), 5.3, 11.075 + 0.13, 180, z=G + z)   # back wall is window
@@ -304,7 +317,8 @@ def first():
     # Landing ---------------------------------------------------------------------------------
     put("Landing", "Runner", "rug_runner_g", lambda: F.rug(0.8, 6.6, "stair_runner"), 0.22, 5.9, 0)
     put("Landing", "Chair", "dining_chair", F.dining_chair, 1.05, 0.72, 180)
-    pendant("Landing", 0.25, 5.8, 1, big=False)
+    pendant("Landing", 0.25, 5.8, 1, big=False, lumens=LUMENS["pendant_hall"])
+    pendant("Landing", 0.25, 9.2, 1, big=False, lumens=LUMENS["pendant_hall"], item="Pendant2")
     # Master ----------------------------------------------------------------------------------
     ms = "Master"
     put(ms, "Bed", "bed_double", F.bed_v2, -5.0, 6.525 - 1.05 - 0.08, 0)
@@ -326,12 +340,14 @@ def first():
     put(dr, "Table", "chest_0.9", lambda: F.chest_of_drawers(0.9, 0.5, 0.78), -9.25, 1.3 + 0.3, 180)
     put(dr, "Mirror", "dressing_mirror", F.dressing_mirror, -9.25, 1.3 + 0.3, 180, z=L1 + 0.78)
     put(dr, "Armchair", "armchair_rust", F.armchair, -9.65, 3.2, 90)
+    pendant(dr, -10.65, 3.4, 1, big=False)
     # Master bath -----------------------------------------------------------------------------
     mb = "MasterBath"
     put(mb, "Tub", "tub", F.clawfoot_tub, -8.4 - 0.46, 7.05, 90)
     put(mb, "Basin", "basin", F.pedestal_basin, -12.3, 9.3 - 0.3, 0)
     put(mb, "WC", "wc", F.wc_high_cistern, -12.9 + 0.32, 8.65, 90)
     put(mb, "Towels", "towel_rail", F.towel_rail, -9.7, 9.3 - 0.15, 0)
+    pendant(mb, -10.65, 7.5, 1, big=False)
     # Bedroom ---------------------------------------------------------------------------------
     bd = "Bedroom"
     put(bd, "Bed", "bed_double", F.bed_v2, -5.0, 6.675 + 1.05 + 0.08, 180)
@@ -386,12 +402,16 @@ def first():
     put("Bath", "Tub", "tub", F.clawfoot_tub, -0.65, 12.7 - 0.46, 0)
     put("Bath", "Basin", "basin", F.pedestal_basin, 2.025 - 0.3, 11.6, -90)
     put("Bath", "WC", "wc", F.wc_high_cistern, 2.025 - 0.3, 12.3, -90)
+    pendant("Bath", 0.25, 11.6, 1, big=False)
 
 
 def top():
     L2 = P.L2
     put("TopHall", "Runner", "rug_runner_t", lambda: F.rug(0.8, 6.0, "stair_runner"), 0.8, 6.2, 0)
     put("TopHall", "Trunk", "trunk", F.trunk, 1.4, 11.9, 0)
+    # the top floor's 3 m ceilings: short drops keep the bowls well over head height
+    pendant("TopHall", 0.25, 4.5, 2, big=False, drop=0.45, lumens=LUMENS["pendant_hall"])
+    pendant("TopHall", 0.25, 9.5, 2, big=False, drop=0.45, lumens=LUMENS["pendant_hall"], item="Pendant2")
     gr = "GableRoom"
     put(gr, "Bed", "bed_single", F.single_bed, -8.1 + 0.62, 2.8, 0)
     put(gr, "Desk", "desk_small", lambda: F.desk(1.2, 0.6, 0.76), -5.0, -1.5 + 0.37, 180)
@@ -420,12 +440,14 @@ def top():
     put(mr, "Washstand", "washstand", F.washstand, -2.4, 6.0, 180)
     put(mr, "Chair", "windsor", F.windsor_chair, -3.6, 8.0, 200)
     put(mr, "Chest", "trunk", F.trunk, -6.6, 11.6, 0)
+    pendant(mr, -4.9, 9.2, 2, big=False, drop=0.45)
     bx = "BoxRoom"
     for i, (x, y, rz) in enumerate(((2.8, 3.5, 10), (3.6, 4.4, -20), (5.2, 9.0, 80), (2.8, 11.6, 0))):
         put(bx, f"Trunk{i}", "trunk", F.trunk, x, y, rz)
     for i, (x, y, rz) in enumerate(((5.3, 3.4, 0), (5.3, 4.0, 15), (4.6, 11.8, 30), (5.3, 11.4, 0))):
         put(bx, f"Crate{i}", "crate", F.crate, x, y, rz)
     put(bx, "OldChair", "windsor", F.windsor_chair, 3.2, 9.6, 120)
+    pendant(bx, 4.0, 7.5, 2, big=False, drop=0.45, lumens=LUMENS["small_room"])
 
 
 def porch():

@@ -27,6 +27,7 @@ import bpy
 import numpy as np
 from mathutils import Vector
 
+from . import core
 from . import plan as P
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))          # blender/
@@ -202,78 +203,12 @@ def used_materials():
 
 def bake_materials(names=None):
     os.makedirs(TEX, exist_ok=True)
-    main = bpy.context.window.scene
     sc = _bake_scene()
-    bpy.context.window.scene = sc
     table = {}
     try:
-        for name in names or used_materials():
-            m = bpy.data.materials[name]
-            p = _principled(m)
-            if p is None:
-                continue
-            (rx, ry), size, metric = _tile_for(m)
-            plane = _plane(sc, rx, ry)
-            plane.data.materials.clear()
-            plane.data.materials.append(m)
-            for o in sc.objects:
-                o.select_set(o == plane)
-            bpy.context.view_layer.objects.active = plane
-            rec = {"tile": [rx, ry], "metric": metric}
-            ch = {}
-            for key, sock in (("base", "Base Color"), ("rough", "Roughness"), ("metal", "Metallic"),
-                              ("trans", "Transmission Weight"), ("alpha", "Alpha")):
-                s = p.inputs[sock]
-                if not s.is_linked:
-                    v = s.default_value
-                    rec[key] = list(v)[:3] if hasattr(v, "__len__") else float(v)
-                    continue
-                a = _bake_channel(sc, plane, m, sock, size)
-                if metric:
-                    a = _seamless(a)
-                if key == "base":
-                    s_rgb = _to_srgb(a)
-                    if s_rgb.reshape(-1, 3).std(0).max() < 0.004:
-                        rec[key] = [float(v) for v in a.reshape(-1, 3).mean(0)]
-                    else:
-                        ch[key] = s_rgb
-                else:
-                    g = a[..., 0]
-                    if g.std() < 0.01:
-                        rec[key] = float(g.mean())
-                    else:
-                        ch[key] = g
-            nrm = _bake_channel(sc, plane, m, "normal", size)
-            if metric:
-                nrm = _seamless(nrm, normal=True)
-            if np.abs(nrm - np.array([0.5, 0.5, 1.0])).mean() > 0.004:
-                ch["normal"] = nrm
-            # files: base colour (sRGB JPEG), packed ORM (glTF: G roughness, B metal), normal (PNG)
-            if "base" in ch:
-                f = f"{name}_base.jpg"
-                _save(ch["base"], os.path.join(TEX, f), "JPEG", True)
-                rec["base_tex"] = f
-            if "rough" in ch or "metal" in ch:
-                shp = (ch.get("rough", ch.get("metal"))).shape
-                orm = np.stack([np.ones(shp, np.float32),
-                                ch.get("rough", np.full(shp, rec.get("rough", 0.5), np.float32)),
-                                ch.get("metal", np.full(shp, rec.get("metal", 0.0), np.float32))], -1)
-                f = f"{name}_orm.png"
-                _save(orm, os.path.join(TEX, f), "PNG", False)
-                rec["orm_tex"] = f
-            for key in ("trans", "alpha"):
-                if key in ch:
-                    f = f"{name}_{key}.png"
-                    _save(np.repeat(ch[key][..., None], 3, -1), os.path.join(TEX, f), "PNG", False)
-                    rec[f"{key}_tex"] = f
-            if "normal" in ch:
-                f = f"{name}_normal.png"
-                _save(ch["normal"], os.path.join(TEX, f), "PNG", False)
-                rec["normal_tex"] = f
-            rec["ior"] = float(p.inputs["IOR"].default_value)
-            table[name] = rec
+        with core.in_scene(sc):
+            _bake_materials(sc, names, table)
     finally:
-        bpy.context.window.scene = main
         o = bpy.data.objects.get("_TexPlane")
         if o is not None:
             bpy.data.objects.remove(o, do_unlink=True)
@@ -287,6 +222,75 @@ def bake_materials(names=None):
     with open(path, "w") as f:
         json.dump(old, f, indent=1)
     return table
+
+
+def _bake_materials(sc, names, table):
+    """Each material's channels baked to tiles on a plane in the bake scene (made current)."""
+    for name in names or used_materials():
+        m = bpy.data.materials[name]
+        p = _principled(m)
+        if p is None:
+            continue
+        (rx, ry), size, metric = _tile_for(m)
+        plane = _plane(sc, rx, ry)
+        plane.data.materials.clear()
+        plane.data.materials.append(m)
+        for o in sc.objects:
+            o.select_set(o == plane)
+        bpy.context.view_layer.objects.active = plane
+        rec = {"tile": [rx, ry], "metric": metric}
+        ch = {}
+        for key, sock in (("base", "Base Color"), ("rough", "Roughness"), ("metal", "Metallic"),
+                          ("trans", "Transmission Weight"), ("alpha", "Alpha")):
+            s = p.inputs[sock]
+            if not s.is_linked:
+                v = s.default_value
+                rec[key] = list(v)[:3] if hasattr(v, "__len__") else float(v)
+                continue
+            a = _bake_channel(sc, plane, m, sock, size)
+            if metric:
+                a = _seamless(a)
+            if key == "base":
+                s_rgb = _to_srgb(a)
+                if s_rgb.reshape(-1, 3).std(0).max() < 0.004:
+                    rec[key] = [float(v) for v in a.reshape(-1, 3).mean(0)]
+                else:
+                    ch[key] = s_rgb
+            else:
+                g = a[..., 0]
+                if g.std() < 0.01:
+                    rec[key] = float(g.mean())
+                else:
+                    ch[key] = g
+        nrm = _bake_channel(sc, plane, m, "normal", size)
+        if metric:
+            nrm = _seamless(nrm, normal=True)
+        if np.abs(nrm - np.array([0.5, 0.5, 1.0])).mean() > 0.004:
+            ch["normal"] = nrm
+        # files: base colour (sRGB JPEG), packed ORM (glTF: G roughness, B metal), normal (PNG)
+        if "base" in ch:
+            f = f"{name}_base.jpg"
+            _save(ch["base"], os.path.join(TEX, f), "JPEG", True)
+            rec["base_tex"] = f
+        if "rough" in ch or "metal" in ch:
+            shp = (ch.get("rough", ch.get("metal"))).shape
+            orm = np.stack([np.ones(shp, np.float32),
+                            ch.get("rough", np.full(shp, rec.get("rough", 0.5), np.float32)),
+                            ch.get("metal", np.full(shp, rec.get("metal", 0.0), np.float32))], -1)
+            f = f"{name}_orm.png"
+            _save(orm, os.path.join(TEX, f), "PNG", False)
+            rec["orm_tex"] = f
+        for key in ("trans", "alpha"):
+            if key in ch:
+                f = f"{name}_{key}.png"
+                _save(np.repeat(ch[key][..., None], 3, -1), os.path.join(TEX, f), "PNG", False)
+                rec[f"{key}_tex"] = f
+        if "normal" in ch:
+            f = f"{name}_normal.png"
+            _save(ch["normal"], os.path.join(TEX, f), "PNG", False)
+            rec["normal_tex"] = f
+        rec["ior"] = float(p.inputs["IOR"].default_value)
+        table[name] = rec
 
 
 # ---------------------------------------------------------------- export materials
@@ -588,6 +592,7 @@ def pack(lm_max=2048):
                       "note": "place the house origin at HOUSE_SITE on the terrace; rotate about +Y so glTF +Z "
                               "points along `face` (game x, z)"},
         "environment": man["environment"],
+        "lamps": man["lamps"],
         "entries": entries,
     }
     head = json.dumps(index, separators=(",", ":")).encode()

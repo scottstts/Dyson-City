@@ -15,7 +15,7 @@ import { createBlackGlazeMaterial, createBronzeMaterial, createCeramicMaterial, 
 import { buildWestGate, type WestGate } from './gate/gate';
 import { buildEastLock, type EastLock } from './eastLock/lock';
 import { buildWalk, type CityWalk } from './walk';
-import { StarVisibility, type StarView } from './visibility';
+import { StarVisibility, type OccluderMap, type StarView } from './visibility';
 
 export interface City {
   readonly group: Group;
@@ -28,6 +28,8 @@ export interface City {
   bindEnvironments(outdoor: Texture, interior: Texture): GlassComposite[];
   /** What the eye sees of the star from a position (glare scaling). */
   starVisibility(eye: Vector3): StarView;
+  /** Adds a local occluder map to the star's visibility (the house). */
+  addStarOccluders(m: OccluderMap): void;
   readonly gate: WestGate;
   /** The craft airlock in the East Collar (driven by the craft: vehicles/craft). */
   readonly lock: EastLock;
@@ -101,6 +103,7 @@ export function buildCity(): City {
       return [createDomeGlass({ outdoor, interior, bays }), gate.mist.composite];
     },
     starVisibility: (eye) => star.at(eye),
+    addStarOccluders: (m) => star.addOccluders(m),
     gate,
     lock,
     walk,

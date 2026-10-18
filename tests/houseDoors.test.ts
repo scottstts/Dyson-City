@@ -39,4 +39,36 @@ describe('house doors', () => {
       }
     });
   }
+
+  it('offers the door the whole time the player stands near it facing it, at any pitch', () => {
+    const doors = new HouseDoors(new WalkMesh());
+    // A shut leaf in the plane z = 0, its handle at (0.8, 1, 0).
+    const d = door('hinge', 1.6);
+    d.amount = 0;
+    d.target = 0;
+    d.pose(0);
+    doors.add(d);
+    const camera = new PerspectiveCamera();
+    const feet = new Vector3();
+    const look = (x: number, z: number, pitch: number) => {
+      feet.set(x, 0, z);
+      camera.position.set(x, 1.7, z);
+      camera.rotation.set(pitch, Math.PI, 0, 'YXZ');      // facing +z, toward the leaf from z < 0
+      camera.updateMatrixWorld();
+      doors.update(1 / 60, camera, feet, false);
+      return doors.aimed === d;
+    };
+    // Walking up to it from 1.7 m to 0.3 m, looking ahead, down at the handle or up: always offered.
+    for (let z = -1.7; z <= -0.3; z += 0.05) for (const pitch of [-0.6, 0, 0.3]) expect(look(0.8, z, pitch), `at ${z.toFixed(2)} m, pitch ${pitch}`).toBe(true);
+    // A step to the side keeps it.
+    expect(look(1.6, -0.8, 0)).toBe(true);
+    // Walking away (3 m off), or turned round, it is not.
+    expect(look(0.8, -3, 0)).toBe(false);
+    camera.rotation.set(0, 0, 0);
+    feet.set(0.8, 0, -1);
+    camera.position.set(0.8, 1.7, -1);
+    camera.updateMatrixWorld();
+    doors.update(1 / 60, camera, feet, false);
+    expect(doors.aimed).toBe(null);
+  });
 });

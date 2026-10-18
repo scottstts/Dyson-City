@@ -37,13 +37,20 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
   - `handle`: leaf-local position of the knob or cup pull (for the interaction prompt).
   Interior leaves hang flush with the face they open towards; exterior leaves clear the sill by 30 mm and
   open inwards. Every leaf is checked shut and through its travel by the audit (DOORS section).
-- Lights: `Lamp_*` empties in `House/Engine/Lamps` (`kind`, `watts`). Sounds: `Sound_*` empties in
+- Lights: `Lamp_*` empties in `House/Engine/Lamps` (`kind`, `lumens`). Sounds: `Sound_*` empties in
   `House/Engine/Sounds` (`clip`, `loop`, `gain`) — positions only; the game's audio rules apply.
 - Collision: `House/Engine/Collision`, objects `COL_<source>` with prop `collision`:
-  `trimesh` (shares the source mesh: walls, floors, decks, steps, porch columns/rails, chimney breasts),
-  `box` (furniture standing on a floor, window openings, door leaves — parented to the leaf),
-  `ramp` (wedge under each stair's nosing line up to the arriving floor). Hidden in the viewport,
-  kept in the view layer so exports see them.
+  `trimesh` (the source's own triangles: structure, decks, steps, rails, roofs...; a mesh over 6,000
+  faces gets a remeshed, decimated copy), `box` (furniture and curtains, window openings, door
+  leaves — parented to the leaf), `ramp` (wedge under each stair's nosing line up to the arriving
+  floor). Hidden in the viewport, kept in the view layer so exports see them.
+  - **Every house mesh collides unless geometry proves it need not** (`build/collision.py`); the
+    reason is its prop `collision_none` (exported as extras): `low` (≤ 5 cm over the floor: rugs),
+    `skin` (every vertex within 6 cm of a collider: siding, skirtings, pictures), `opening` (inside
+    a window's box), `hung` (≥ 2.6 m over the first surface under it, nothing wide enough to stand
+    on: brackets, cornices), `pocket` (a pocket door's leaf). Classified lowest first, against the
+    colliders built so far; whatever stands on furniture collides too (the walker can jump onto a
+    table). The audit's COLLISION section lists anything unclassified.
 - Furniture is instanced from prototypes in `House/Furniture/_Prototypes` (hidden): one mesh per kit,
   shared by every instance. Export should keep instancing (glTF mesh reuse).
 - `_Review` (sun, sky, lamp point lights) exists only after review renders and is not part of the house;
@@ -54,20 +61,45 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
 - `node tools/house-env.mjs --dist <vite build>` boots the game headless on its HDR view, stands a 90°
   camera 6 m above the ground at `HOUSE_SITE`, brackets five exposures per cube face and writes
   `bake/house_env.hdr` (+ `.json`): linear game radiance, resampled into the house frame (front toward
-  the datum). The first capture saw the open site; the estate now exists, and the re-capture and re-bake
-  wait for its approval. The re-bake lights the lamps at a warm, generous domestic level, strongest in
-  the windowless hall, landing and top hall (decided with the user; the engine shows the bulbs and
-  shades glowing).
+  the datum). The house is hidden for the capture and the eye held outdoors: the capture is the
+  approved estate and everything round it.
+- Lamps are lit at a warm, generous domestic level (`rooms.py LUMENS`: about twice a real lamp, 2,400 lm
+  pendants in the windowless hall, landing and top hall). The shades' and bowls' glow is computed from
+  the same flux (`bake.lamp_glow`: area-mean τ·I·cosθ/(πd²) over each glowing material, into
+  `bake.json` and the pack index's `lamps`).
 - That map is the .blend's world (`GameLight`): Cycles in the viewport shows the house in the game's light.
 - Everything baked is in the game's one radiance scale. Lightmaps are a white Lambertian surface's
   outgoing radiance (the engine shades `albedo × lightmap`); the capture's white sunlit radiance (~2.0)
   stands for 31,800 cd/m², and lamps are lit at their real flux on that scale (so they barely register
   against daylight, as indoors at noon). Fires are out.
-- Lightmapped (UV map `Lightmap`, one atlas per floor `bake/LM_G|L1|L2.exr`, half float): walls, floors,
-  ceilings, trims, stairs, chimney breasts and mantels, interior door frames. Hidden faces (exterior backs
+- Lightmapped (UV map `Lightmap`, one atlas per floor `bake/LM_G|L1|L2.exr`, half float): the large
+  planar architecture only, walls, floors, ceilings and chimney breasts. Hidden faces (exterior backs
   of the walls, wall cores) are left out of the atlas. Objects carry `lightmap` / `lightmap_uv` props.
+  - **Trims, stairs, mantels and interior door frames are probe-lit**, like the furniture. *Rejected:*
+    lightmapping them. Smart-projected, each moulding face was a sub-texel sliver (dark combs);
+    charted as strips, they were still a few texels across, scattered among unrelated charts, and the
+    denoiser and the margin fill mixed their noise with their neighbours (camouflage blotches along
+    every cornice, skirting and wainscot panel). Their light varies over metres: the probes carry it.
+  - **Portals** in every exterior opening (the rooms' daylight comes through them).
+  - **Daylight and lamps baked apart** and summed (3,072 and 2,048 samples): together, the sky took
+    nearly every light sample and the lamps' light came out black or speckled.
+  - **Every sample counts:** adaptive sampling off (it stopped bakes at its threshold whatever the
+    sample count) and the light sampling threshold 0 (at 0.01 it culled the lamps, whose light on
+    this scale is ~0.001–0.01).
+  - Baked at 2048², the export's size, so the QA measures what ships.
+  - Indirect samples clamped at 1 (rooms are ~0.01 on this scale; sunlit floors and the sky through a
+    window 0.5–2): no firefly from a bounce that found the star.
+  - The bake lights (`House/Engine/BakeLights`) must not be excluded from the view layer: a bake leaves
+    the collection excluded, and lamps and portals in it do not render. A pass that comes back black
+    fails the bake.
+  - **Validity:** faces pressed flat on another solid are left out of the atlas; a 5 cm AO bake marks
+    texels enclosed by something (AO under 0.02: a wall behind a skirting, a floor under a rug); they and
+    the margins are filled from valid texels (push-pull) before OIDN, which is guided by baked normals.
+    *Rejected:* 768 samples, no portals, OIDN unguided over Cycles' extended margins: crackled blotches.
+  - **QA:** `bake/qa.json`: the bake is two half-sample bakes with independent seeds; the final is the
+    denoised mean of both, and each half denoised alone bounds its residual noise (8 × 8 texel blocks).
 - Everything else (furniture, doors, windows, small parts) is lit from the probe grid: `bake/probes.bin`,
-  SH L2 radiance at 1 m spacing and three heights per floor inside rooms; positions in `bake/bake.json`.
+  SH L2 radiance at 1 m spacing and three heights per floor inside rooms (256 samples); positions in `bake/bake.json`.
 - Reflection captures: `bake/refl_<room>.exr` from each room's middle at 1.6 m, with the room box for
   parallax correction (`bake.json`).
 - Window glass is a thin pane for light: shadow and diffuse rays pass through it as a transparent filter
@@ -108,7 +140,7 @@ host serves Range requests), so there is no decode step beyond the browser's own
   KHR_materials_transmission (+ IOR); the lace sheer is alpha 0.45; leaves, petals and lace are
   double-sided, everything else single-sided.
 - **Light:** `LM_G|L1|L2` and `refl_<room>` are `rgb9e5ufloat` textures (WebGPU, filterable), rows top
-  first, lightmaps on UV1 (TEXCOORD_1) and downsampled to 2048² (~5 cm texels; the light indoors is
+  first, lightmaps on UV1 (TEXCOORD_1) at 2048² (~5 cm texels; the light indoors is
   soft); `probes` is float32 SH L2 radiance with point positions, levels, rooms and validity in the index.
   Probe positions, reflection positions and room boxes are in Blender's house frame (glTF = (x, z, −y)).
 - **Placement:** the index records the site and facing: the house origin goes at `HOUSE_SITE` on the
@@ -205,10 +237,9 @@ conversion factors are needed.
     box-projected (parallax-corrected) lookup.
 - **Exterior:** the exterior part has no bake. The star and the game's real-time lighting light it
   like everything else outdoors.
-- **Exposure:** the day rooms sit ~6–7 stops below a sunlit white wall. With today's eye-adaptation
-  ceiling (16×, +4 EV) they read dark, the curtained bedrooms and the hall very dark. How far
-  adaptation may open indoors is decided at integration (`docs/render-pipeline.md`); the bake must
-  not be scaled to compensate.
+- **Exposure:** the day rooms sit ~7–8 stops below a sunlit white wall. The eye's partial
+  adaptation decides how they read (`docs/render-pipeline.md`); the bake must not be scaled to
+  compensate.
 
 **7. Materials.**
 - Use the glTF materials as exported. Texture tiles repeat in metres via `KHR_texture_transform`
@@ -220,9 +251,9 @@ conversion factors are needed.
 - `doubleSided` is set only on leaves, petals and lace.
 
 **8. Lamps and sounds.**
-- `Lamp_*` empties carry `kind` (pendant, table_lamp, lantern, fire) and `watts`. The bake includes
-  the lamps' light but not the fires' (out at noon). Use the empties for emissive bulbs, glare, or
-  switching (a switched lamp would need a lamp-off bake).
+- `Lamp_*` empties carry `kind` (pendant, table_lamp, lantern, fire) and `lumens`. The bake includes
+  the lamps' light but not the fires' (out at noon). The index's `lamps` gives each glowing material's
+  radiance (by material-name prefix), from the same flux.
 - `Sound_*` empties carry `clip`, `loop` and `gain`; they are positioned emitters under the game's
   audio rules (`docs/audio.md`).
 
@@ -270,6 +301,15 @@ blender/tools/bl.py -c "import sys; sys.path.insert(0,'<repo>/blender'); import 
 blender/tools/bl.py -b rooms.build            # one builder (module.fn:args)
 ```
 
-`bl.py` talks to the blender-mcp add-on socket (127.0.0.1:9876). `run.build_all()` wipes the scene,
+`bl.py` talks to the blender-mcp add-on socket (127.0.0.1:9876). The bake (hours) runs headless instead,
+where a long call cannot stall or take down the UI session:
+
+```
+/Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup blender/house.blend --python <script calling run.bake_all()>
+```
+
+The build code works in both (`core.in_scene` switches scenes with or without a window).
+`--factory-startup` keeps user add-ons out of it: one (a texture library's background thread)
+crashed a headless start. `run.build_all()` wipes the scene,
 runs every builder in order, rebuilds all material graphs, audits and saves. `run.bake_all()` then bakes
-the light (about 20 minutes; run `bl.py` with `BL_TIMEOUT=7200`), and `run.export_all()` writes the bundle.
+the light (about 3–4 hours, headless: see below), and `run.export_all()` writes the bundle.

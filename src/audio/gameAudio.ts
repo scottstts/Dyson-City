@@ -11,7 +11,6 @@ import { CarSounds, CraftSounds, type AudioCar, type AudioCraft } from './sounds
 import { VentSounds } from './sounds/vents';
 import { FieldSounds, type AudioField } from './sounds/field';
 import { HouseSounds, type AudioHouse } from './sounds/house';
-import { EstateSounds, type AudioCrown } from './sounds/estate';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
 import type { Airlock } from '../city/gate/airlock';
@@ -25,9 +24,8 @@ export interface AudioWorld {
   surface(x: number, z: number, y: number): GroundSurface;
   /** The field's machines (absent in tools that only drive the airlock). */
   field?: AudioField;
-  /** The house and the estate's trees (absent in tools without them). */
+  /** The house (absent in tools without it). */
   house?: AudioHouse;
-  crowns?: readonly AudioCrown[];
   /** The East Lock's airlock, the car and the craft (absent in tools without them). */
   lock?: AirlockState;
   car?: AudioCar;
@@ -54,7 +52,6 @@ export class GameAudio {
   private readonly vents: VentSounds;
   private readonly field: FieldSounds | null;
   private readonly house: HouseSounds | null;
-  private readonly estate: EstateSounds | null;
   private readonly houseDoors: AudioHouse['doors'] | null;
   private readonly lock: { state: AirlockState; watcher: AirlockWatcher; sounds: GateSounds } | null;
   private readonly car: CarSounds | null;
@@ -89,7 +86,6 @@ export class GameAudio {
     if (house) this.engine.interior = (x, y, z) => house.inside(x, y, z);
     this.house = house ? new HouseSounds(this.engine, house) : null;
     this.houseDoors = house?.doors ?? null;
-    this.estate = world.crowns ? new EstateSounds(this.engine, world.crowns) : null;
     const lock = world.lock;
     this.lock = lock ? { state: lock, watcher: new AirlockWatcher(lock), sounds: new GateSounds(this.engine, lock.outer, lock.inner, LOCK_GATE_SOUND) } : null;
     this.car = world.car ? new CarSounds(this.engine, world.car) : null;
@@ -150,7 +146,6 @@ export class GameAudio {
     this.vents.update(dt, t, this.airlock);
     this.field?.update(dt, t, l);
     this.house?.update(t, l);
-    this.estate?.update(t, l);
     this.engine.update(l, t);
   }
 

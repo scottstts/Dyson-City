@@ -2,10 +2,13 @@
  * Eye adaptation (design §12, docs/render-pipeline.md): a metered, global exposure, never local.
  *
  * The exposure stays keyed to the star; adaptation only multiplies it upward when the view is dimmer
- * than a sunlit scene (under the Dome's tint, an interior), between a floor of 1 (the open deck and
- * anything facing the star stay on the star's key) and a ceiling of 64 (+6 stops: the house's day rooms, ~7–8 stops under a sunlit wall, read dim but
- * legible; a curtained bedroom stays dark). Asymmetric like an eye: it opens slowly going in
- * (~4 s) and clamps down fast going out (~1 s, after a moment of overexposure).
+ * than a sunlit scene (under the Dome's tint, an interior), never below 1 (the open deck and
+ * anything facing the star stay on the star's key). The eye adapts fully over the first
+ * ADAPT_FULL_STOPS of darkness and then only partly (ADAPT_SLOPE per stop), as an eye's adaptation
+ * is incomplete: a room 8 stops under the sunlit garden reads ~1.2 stops dimmer than it, a lamp-lit
+ * hall 11 stops under it ~1.8 stops dimmer, legible but dim; the windows blow out. Asymmetric like
+ * an eye: it opens slowly going in (~4 s) and clamps down fast going out (~1 s, after a moment of
+ * overexposure).
  *
  * Meter: a 64 × 36 log-luminance image of the scene after TAA (centre-weighted), read back
  * asynchronously every few frames; the log-average sets the target.
@@ -21,7 +24,10 @@ import type { Node } from 'three/webgpu';
  * and stays on the star's key.
  */
 export const ADAPT_REF = 0.3;
-export const ADAPT_MAX = 64;
+/** Stops of darkness the eye adapts to fully, the share of each further stop, and the ceiling (+11 EV). */
+export const ADAPT_FULL_STOPS = 2;
+export const ADAPT_SLOPE = 0.8;
+export const ADAPT_MAX = 2048;
 /** Time constants (s): opening up (scene got darker) and clamping down (scene got brighter). */
 export const ADAPT_TAU = { open: 1.4, close: 0.3 } as const;
 
@@ -36,9 +42,12 @@ const W = 64;
 const H = 36;
 const EVERY = 4;
 
-/** Adaptation target for a metered log-average luminance. */
+/** Adaptation target for a metered log-average luminance (natural log). */
 export function adaptationTarget(logAverage: number): number {
-  return Math.min(Math.max(ADAPT_REF / Math.exp(logAverage), 1), ADAPT_MAX);
+  const dark = Math.log2(ADAPT_REF) - logAverage / Math.LN2;
+  if (dark <= 0) return 1;
+  const open = dark <= ADAPT_FULL_STOPS ? dark : ADAPT_FULL_STOPS + (dark - ADAPT_FULL_STOPS) * ADAPT_SLOPE;
+  return Math.min(2 ** open, ADAPT_MAX);
 }
 
 /** One smoothing step toward the target (in log space). */

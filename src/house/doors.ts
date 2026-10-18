@@ -4,16 +4,28 @@
  * +Y) between 0 and `limit`; pocket doors slide along local +X between 0 and `limit` into the wall.
  * Leaves start in the pose they were exported in (some ajar).
  *
- * The player opens and shuts the leaf whose handle they look at (within reach) with E; a pair of
- * leaves moves together. A leaf is a moving wall (its collision box, as triangles in the walk
+ * The player opens and shuts the door they stand at with E: the nearest leaf whose handle is within
+ * reach of the feet in plan, at a storey's height, and roughly ahead (bearing in plan, the view's
+ * pitch ignored). Once offered, a door stays offered until the player steps or turns clearly away
+ * (wider limits to keep than to take), so the prompt holds steady while they stand near it.
+ * *Rejected:* the handle within 12.6° of the line of sight from the eye. Up close the handle sits
+ * ~0.7 m below the eye, so looking ahead it was outside the cone except in a narrow band of distances,
+ * and the prompt flickered on and off. A pair of leaves moves together. A leaf is a moving wall (its collision box, as triangles in the walk
  * mesh), and it stops against the player rather than pass through them.
  */
 import { Group, Vector3, type Camera } from 'three/webgpu';
 import type { WalkMesh } from '../player/walkMesh';
 
-/** Reach to a handle (m), and the view cone it must be in (rad). */
-const REACH = 2.1;
-const AIM = 0.22;
+/**
+ * Plan distance from the feet to a handle (m) and bearing off the view's heading (rad) for a door to
+ * be offered, and the wider limits that keep it offered.
+ */
+const REACH = 1.8;
+const AIM = (60 * Math.PI) / 180;
+const KEEP_REACH = 2.3;
+const KEEP_AIM = (80 * Math.PI) / 180;
+/** A handle counts when it is this far above and below the feet (m): the door on the walker's storey. */
+const HANDLE_ABOVE: [number, number] = [0.3, 1.6];
 /** Swing speed of a hinged leaf (rad/s) and of a pocket door (m/s) at full pace. */
 const SWING = 1.5;
 const SLIDE = 0.75;
@@ -157,21 +169,40 @@ export class HouseDoors {
     this.walk.setDynamic(door.name, door.collision());
   }
 
-  /** Finds the aimed handle, toggles on `use`, moves leaves toward their targets. */
+  /** Finds the door the player stands at, toggles on `use`, moves leaves toward their targets. */
   update(dt: number, camera: Camera, feet: Vector3, use: boolean): void {
     camera.getWorldDirection(dir);
-    let best: HouseDoor | null = null;
-    let bestAngle = AIM;
-    for (const d of this.list) {
+    const hx = dir.x;
+    const hz = dir.z;
+    const hl = Math.hypot(hx, hz);
+    // Plan distance and bearing of a leaf's handle, or null if it is not on the walker's storey.
+    const place = (d: HouseDoor): [number, number] | null => {
       d.handleWorld(tmp);
-      tmp.sub(camera.position);
-      const dist = tmp.length();
-      if (dist > REACH || dist < 1e-3) continue;
-      const a = Math.acos(Math.min(1, tmp.dot(dir) / dist));
-      if (a < bestAngle) {
-        bestAngle = a;
+      const up = tmp.y - feet.y;
+      if (up < HANDLE_ABOVE[0] || up > HANDLE_ABOVE[1]) return null;
+      const dx = tmp.x - feet.x;
+      const dz = tmp.z - feet.z;
+      const dist = Math.hypot(dx, dz);
+      // Looking straight up or down the heading is undefined: any bearing will do.
+      const bearing = dist < 0.25 || hl < 1e-3 ? 0 : Math.acos(Math.max(-1, Math.min(1, (dx * hx + dz * hz) / (dist * hl))));
+      return [dist, bearing];
+    };
+    let best: HouseDoor | null = null;
+    let bestScore = Infinity;
+    for (const d of this.list) {
+      const p = place(d);
+      if (!p || p[0] > REACH || p[1] > AIM) continue;
+      // Nearest first, ahead preferred: a radian off the heading weighs like a metre.
+      const score = p[0] + p[1];
+      if (score < bestScore) {
+        bestScore = score;
         best = d;
       }
+    }
+    // The door already offered stays while within the wider limits, unless another is clearly better.
+    const held = this.aimed ? place(this.aimed) : null;
+    if (this.aimed && held && held[0] <= KEEP_REACH && held[1] <= KEEP_AIM) {
+      if (!best || best.pair === this.aimed.pair || held[0] + held[1] < bestScore + 0.5) best = this.aimed;
     }
     this.aimed = best;
     if (use && best) {

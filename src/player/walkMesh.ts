@@ -11,7 +11,8 @@
  *    Each wall triangle is clipped to the band [feet + STEP, feet + head] at query time and the
  *    circle pushed off the clipped polygon's plan outline, so a lintel over a door, a window's sill
  *    wall, a stair's flank or the next storey's walls each block exactly where they stand;
- *  - ceilings (facing down) are ignored.
+ *  - ceilings (facing down) block like walls within the band: a sloped ceiling that comes down below
+ *    the head (the gable room's slopes) stops the body; one overhead is clipped away.
  *
  * Triangles live in plan cells; a few dynamic triangle sets (door leaves) are tested directly.
  */
@@ -68,9 +69,7 @@ export class WalkMesh {
       const k = ny / l;
       if (k >= FLOOR_NY) {
         if (wantFloors) this.store(this.floors, this.floorCells, this.ownerOfFloor, tagId, SOLE, ax, ay, az, bx, by, bz, cx, cy, cz);
-      } else if (k > -FLOOR_NY) {
-        if (wantWalls) this.store(this.walls, this.wallCells, this.ownerOfWall, tagId, 0, ax, ay, az, bx, by, bz, cx, cy, cz);
-      }
+      } else if (wantWalls) this.store(this.walls, this.wallCells, this.ownerOfWall, tagId, 0, ax, ay, az, bx, by, bz, cx, cy, cz);
     }
   }
 
@@ -180,7 +179,7 @@ export class WalkMesh {
       for (const tris of this.dynamic.values()) {
         for (let o = 0; o < tris.length; o += 9) {
           const ny = triNy(tris, o);
-          if (ny >= FLOOR_NY || ny <= -FLOOR_NY) continue;
+          if (ny >= FLOOR_NY) continue;
           const out = pushOff(tris, o, px, pz, r, y0, y1);
           if (out) {
             px = out[0];

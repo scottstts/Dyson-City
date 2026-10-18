@@ -7,7 +7,7 @@
 import type { AudioWorld } from '../audio/gameAudio';
 import { fieldSurface } from '../field/walk';
 import { fieldSoundSources } from '../field/sources';
-import { estateSilenced } from '../estate/silencer';
+import { fieldGain } from '../estate/silencer';
 import type { World } from './world';
 
 export function audioWorld(world: World): AudioWorld {
@@ -16,9 +16,8 @@ export function audioWorld(world: World): AudioWorld {
   return {
     airlock: world.city.gate.airlock,
     surface: (x, z, y) => house.surfaceAt(x, y, z) ?? estate.surfaceAt(x, z, y) ?? fieldSurface(walk.surface, x, z),
-    field: { sources: fieldSoundSources(), vents: world.field.vents, time: () => world.field.time, silenced: estateSilenced },
+    field: { sources: fieldSoundSources(), vents: world.field.vents, time: () => world.field.time, gain: fieldGain },
     house,
-    crowns: estate.crowns,
     lock: world.city.lock.airlock,
     car: world.vehicles.car,
     craft: world.vehicles.craft.audio,

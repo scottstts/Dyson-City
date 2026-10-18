@@ -1,73 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import fs from 'node:fs';
-import { Matrix4, Vector3, Quaternion } from 'three';
-import { compilePart } from '../src/house/compile';
-import { ProbeGrid } from '../src/house/probeGrid';
-import { WalkMesh } from '../src/player/walkMesh';
+import { Vector3 } from 'three';
 import { H, HOUSE_F, HOUSE_FOOTPRINT } from '../src/estate/layout';
 import { inside } from '../src/estate/sdf2';
 import { HOUSE_GRADE } from '../src/estate/levels';
-import { HOUSE_SITE } from '../src/field/layout';
 import { TestWalker } from './helpers/walker';
-import { estateGeometry, estateWalk } from '../src/estate/build';
-import { HouseFloors } from '../src/house/floors';
 import { roomOf } from '../src/house/rooms';
+import { hasPack, houseWorld } from './helpers/houseWorld';
 
 /**
  * Walking into and through the house on its collision proxies (blender/docs/house.md "Collision"),
  * placed as the game places it. Skipped when the pack has not been exported.
  */
-const PACK = new URL('../assets/house.pack', import.meta.url);
-const has = fs.existsSync(PACK);
-
-describe.skipIf(!has)('walking the house', () => {
-  const buf = has ? fs.readFileSync(PACK) : null;
-  const len = buf ? buf.readUInt32LE(8) : 0;
-  const index = buf ? JSON.parse(buf.toString('utf8', 12, 12 + len)) : { entries: [] };
-  const by = new Map<string, { offset: number; length: number; [k: string]: unknown }>(index.entries.map((e: { name: string }) => [e.name, e]));
-  const slice = (n: string) => {
-    const e = by.get(n)!;
-    return buf!.buffer.slice(buf!.byteOffset + e.offset, buf!.byteOffset + e.offset + e.length) as ArrayBuffer;
-  };
-  const pe = by.get('probes') as unknown as { points: [number, number, number, number, number][]; rooms: string[] };
-  const boxes = index.entries.filter((e: { name: string }) => e.name.startsWith('refl_')).map((e: { room: string; level: number; box: never; position: never }) => ({ name: e.room, level: e.level, box: e.box, position: e.position }));
-  const grid = has ? new ProbeGrid({ coefficients: new Float32Array(slice('probes')), points: pe.points, rooms: pe.rooms, boxes }) : null;
-  const root = new Matrix4().compose(new Vector3(HOUSE_SITE[0], HOUSE_GRADE, HOUSE_SITE[1]), new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(HOUSE_F[0], HOUSE_F[1])), new Vector3(1, 1, 1));
-  const walk = new WalkMesh();
-  const terrace = estateWalk(estateGeometry());
-  const doors: { name: string; tris: Float32Array }[] = [];
-  const floors = new HouseFloors();
-  const markers: { name: string; position: [number, number, number] }[] = [];
-  const v = new Vector3();
-  for (const part of has ? ['exterior', 'G', 'L1'] : []) {
-    const doc = JSON.parse(new TextDecoder().decode(slice(`house_${part}.gltf`)));
-    const c = compilePart(part, doc, slice(`house_${part}.bin`), grid!);
-    floors.add(c.floors);
-    markers.push(...c.markers);
-    for (const m of c.collision) {
-      const w = new Float32Array(m.position.length);
-      for (let i = 0; i < w.length; i += 3) {
-        v.set(m.position[i], m.position[i + 1], m.position[i + 2]).applyMatrix4(root);
-        w[i] = v.x;
-        w[i + 1] = v.y;
-        w[i + 2] = v.z;
-      }
-      walk.add(w, m.index);
-    }
-    // Door leaves shut, as moving walls (their boxes in the rig frame at angle 0).
-    for (const d of c.doors) {
-      if (!d.box) continue;
-      const rig = new Matrix4().fromArray(d.rig);
-      const shut = new Vector3(d.translation[0] - (d.kind === 'slide' ? d.rest : 0), d.translation[1], d.translation[2]);
-      const m = root.clone().multiply(rig).multiply(new Matrix4().makeTranslation(shut.x, shut.y, shut.z));
-      const b = d.box;
-      const corner = (i: number) => new Vector3(i & 1 ? b[3] : b[0], i & 2 ? b[4] : b[1], i & 4 ? b[5] : b[2]).applyMatrix4(m);
-      const faces = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
-      const tris: number[] = [];
-      for (const f of faces) for (const t of [[f[0], f[1], f[2]], [f[0], f[2], f[3]]]) for (const k of t) tris.push(...corner(k).toArray());
-      doors.push({ name: d.name, tris: Float32Array.from(tris) });
-    }
-  }
+describe.skipIf(!hasPack)('walking the house', () => {
+  const { root, walk, terrace, doors, floors, markers, boxes } = hasPack ? houseWorld() : ({} as ReturnType<typeof houseWorld>);
   const shutAll = () => doors.forEach((d) => walk.setDynamic(d.name, d.tris));
   const openAll = () => doors.forEach((d) => walk.setDynamic(d.name, null));
   const toHouse = new Vector3(-HOUSE_F[0], 0, -HOUSE_F[1]);
@@ -112,7 +57,7 @@ describe.skipIf(!has)('walking the house', () => {
     expect(seen.join(' ')).toBe('off stone boards rug wood rug stone wood rug');
   });
 
-  it('climbs the west porch steps (they walk as their own mesh) onto its deck', () => {
+  it('climbs the west porch steps onto its deck', () => {
     const [x, z] = H(-16.6, 0.3);
     const [ex, ez] = H(1, 0.3);
     const [ox, oz] = H(0, 0.3);
@@ -131,7 +76,8 @@ describe.skipIf(!has)('walking the house', () => {
     const decks = HOUSE_FOOTPRINT.slice(1);
     const under = (w: TestWalker) => {
       const q = local(w);
-      return decks.some((p) => inside(p, q.x, q.z)) && walk.height(w.x, w.z, w.y + 3) - w.y > 0.3;
+      // a floor over the feet up to the decks' height: the deck itself, not a beam or roof higher up
+      return decks.some((p) => inside(p, q.x, q.z)) && walk.height(w.x, w.z, HOUSE_GRADE + 1.0) - w.y > 0.3;
     };
     // Foot of each flight (house frame) and the direction up it.
     const flights: [string, number, number, number, number][] = [
@@ -179,7 +125,6 @@ describe.skipIf(!has)('walking the house', () => {
       const m = markers.find((k) => k.name === name)!;
       return roomOf(boxes, m.position[0], -m.position[2], m.position[1]);
     };
-    expect(room('Sound_Kitchen_Kettle')).toBe('Kitchen');
     expect(room('Sound_Hall_Clock')).toBe('Hall');
     expect(room('Sound_Parlour_Clock')).toBe('Parlour');
     // On the porch, outdoors: no room.

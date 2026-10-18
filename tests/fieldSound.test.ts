@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fieldSoundSources } from '../src/field/sources';
 import { FIELD_AUDIBLE, machineLevel } from '../src/audio/sounds/field';
 import { ESTATE, ESTATE_GATEWAY, FIELD_Y, HOUSE_SITE } from '../src/field/layout';
-import { estateSilenced } from '../src/estate/silencer';
+import { fieldGain } from '../src/estate/silencer';
 
 const db = (x: number) => 20 * Math.log10(Math.max(x, 1e-9));
 
@@ -35,16 +35,26 @@ describe('field sound is local', () => {
 });
 
 describe('the estate silencer', () => {
-  it('cuts the machines within the walls and nowhere else', () => {
+  it('takes the machines away within the walls, fading across the wall', () => {
     const gate = (ESTATE_GATEWAY.x0 + ESTATE_GATEWAY.x1) / 2;
-    // In the house, on the lawn, at the gateway just past the piers (the ramp's foot).
-    expect(estateSilenced(HOUSE_SITE[0], HOUSE_SITE[1])).toBe(true);
-    expect(estateSilenced(-330, -100)).toBe(true);
-    expect(estateSilenced(gate, ESTATE.south - 0.2)).toBe(true);
-    // A step out through the gateway, and the field around the walls.
-    expect(estateSilenced(gate, ESTATE.south + 0.2)).toBe(false);
-    expect(estateSilenced(ESTATE.east + 0.5, -100)).toBe(false);
-    expect(estateSilenced(-200, -100)).toBe(false);
-    expect(estateSilenced(0, 0)).toBe(false);
+    // In the house and deep in the garden: gone. Out in the field: full.
+    expect(fieldGain(HOUSE_SITE[0], HOUSE_SITE[1])).toBe(0);
+    expect(fieldGain(-330, -100)).toBe(0);
+    expect(fieldGain(-200, -100)).toBe(1);
+    expect(fieldGain(0, 0)).toBe(1);
+    // Walking out through the gateway (south), it rises smoothly: no step between samples.
+    let prev = fieldGain(gate, ESTATE.south - 20);
+    expect(prev).toBe(0);
+    for (let z = ESTATE.south - 20; z <= ESTATE.south + 10; z += 0.25) {
+      const g = fieldGain(gate, z);
+      expect(g).toBeGreaterThanOrEqual(prev - 1e-9);
+      expect(g - prev).toBeLessThan(0.06);
+      prev = g;
+    }
+    expect(prev).toBe(1);
+    // At the wall face it is partly there: neither cut nor full.
+    const at = fieldGain(gate, ESTATE.south);
+    expect(at).toBeGreaterThan(0.2);
+    expect(at).toBeLessThan(0.9);
   });
 });

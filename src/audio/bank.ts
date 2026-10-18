@@ -13,11 +13,11 @@ import { addPrint, printLength, synthTexture, type SpectralPrint } from './synth
 import { FOOT_GAITS, FOOT_SURFACES, footSource, synthFootstep, type FootGait } from './synth/footstep';
 import { FOOTSTEP_GRASS } from './models/footstepsGrass';
 import { FOOTSTEP_GRAVEL } from './models/footstepsGravel';
+import { FOOTSTEP_WOOD } from './models/footstepsWood';
 import { DOOR_OPEN } from './models/doorOpen';
 import { DOOR_CLOSE } from './models/doorClose';
 import { synthValve } from './synth/valve';
-import { synthKettle, synthTick, type ClockKind } from './synth/house';
-import { synthRustle } from './synth/rustle';
+import { synthTick, type ClockKind } from './synth/house';
 import { HYDRAULIC_RUN } from './models/hydraulicRun';
 import { HYDRAULIC_START } from './models/hydraulicStart';
 import { HYDRAULIC_STOP } from './models/hydraulicStop';
@@ -64,9 +64,6 @@ export interface AudioBank {
   door: DoorSounds;
   /** The clocks' beats (each kind's mean peak 1), [ticks, tocks]. */
   ticks: Record<ClockKind, [Float32Array[], Float32Array[]]>;
-  /** Seamless loops at RMS 1: the kettle simmering, leaves in the breeze. */
-  kettle: Float32Array;
-  rustle: Float32Array;
   /** The vehicles (docs/audio.md, "The car", "The craft"): drive and engine loops at RMS 1; the car's knocks, peak 1. */
   car: Float32Array;
   craft: Float32Array;
@@ -157,6 +154,8 @@ export const FOOT_BANK_VARIANTS = 3;
  */
 const GRASS_DB = -8;
 const GRAVEL_DB = -2;
+/** A step on the house's timber floors against one on stone, by loudness above ~250 Hz (dB). */
+const WOOD_DB = -2;
 
 function rms(x: Float32Array): number {
   let e = 0;
@@ -199,9 +198,10 @@ export function buildAudioBank(sr: number): AudioBank {
   const against = (db: number, k: FootKey) => Math.pow(10, db / 20) * Math.sqrt(meanLoud('stone:walk') / meanLoud(k));
   const lawn = against(GRASS_DB, 'grass:walk');
   const gravel = against(GRAVEL_DB, 'gravel:walk');
+  const timber = against(WOOD_DB, 'wood:walk');
   for (const [key, list] of Object.entries(footsteps)) {
     const src = footSource(key.split(':')[0] as GroundSurface);
-    const s = (src === FOOTSTEP_GRASS ? lawn : src === FOOTSTEP_GRAVEL ? gravel : 1) / ref;
+    const s = (src === FOOTSTEP_GRASS ? lawn : src === FOOTSTEP_GRAVEL ? gravel : src === FOOTSTEP_WOOD ? timber : 1) / ref;
     for (const x of list) scaled(x, s);
   }
 
@@ -231,8 +231,6 @@ export function buildAudioBank(sr: number): AudioBank {
     })) as Record<FieldLoop, Float32Array>,
     door: doorSounds(sr),
     ticks: { longcase: clockBeats('longcase', sr, 901), mantel: clockBeats('mantel', sr, 951) },
-    kettle: atRms(synthKettle(9, sr, 991)),
-    rustle: atRms(synthRustle(19, sr, 997)),
     // Long loops: the drive's tonal lines are a few hertz wide.
     car: atRms(synthTexture(VEHICLE_CAR, 19, sr, rng(1101))),
     craft: atRms(synthTexture(VEHICLE_CRAFT, 18, sr, rng(1201))),
@@ -242,6 +240,6 @@ export function buildAudioBank(sr: number): AudioBank {
 
 /** The bank's sample buffers, for a transfer list. */
 export function bankBuffers(b: AudioBank): ArrayBuffer[] {
-  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.kettle, b.rustle, b.car, b.craft, ...b.impact];
+  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.car, b.craft, ...b.impact];
   return arrays.map((a) => a.buffer as ArrayBuffer);
 }

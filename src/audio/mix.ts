@@ -38,10 +38,6 @@ export const LEVEL = {
   door: 0.8,
   /** A clock's beat, peak, at the movement (0.3 m); scaled by its marker's gain. */
   tick: 0.12,
-  /** The kettle simmering, RMS, at 0.3 m; scaled by its marker's gain. */
-  kettle: 0.09,
-  /** A tree's rustle, RMS, at its crown's radius. */
-  rustle: 0.012,
   /**
    * The car at 1.5 m (its size): the drive's hum at full load, the tyres rolling at top speed, their
    * scrub at the limit, a hard knock on a wall (peak), the wheels' actuators running (RMS) and their

@@ -304,7 +304,7 @@ def build_lanterns(col):
         g.add(geo.tube(arm, 0.012, seg=8))
         g.add(box(sx - 0.05, sx + 0.05, -0.05, -0.022, P.G + 2.45, P.G + 2.85))
         core.empty(f"Lamp_Porch_{'L' if sx < 0 else 'R'}", "House/Engine/Lamps", (sx, -0.32, P.G + 2.15),
-                   props={"kind": "lantern", "watts": 40})
+                   props={"kind": "lantern", "lumens": 450.0})
     # hanging lantern in the portico
     yc = (porch.PORTICO[2]) / 2
     g.add(fr.xf(Matrix.Translation((0.0, yc, porch.CEIL - 1.05))))
@@ -318,7 +318,7 @@ def build_lanterns(col):
         g.add(c)
     g.add(geo.lathe([(0.0, 0.0), (0.07, 0.0), (0.07, 0.02), (0.02, 0.05), (0.0, 0.05)], seg=16).xf(
         Matrix.Translation((0.0, yc, porch.CEIL)) @ Matrix.Diagonal((1, 1, -1, 1))))
-    core.empty("Lamp_Portico", "House/Engine/Lamps", (0.0, yc, porch.CEIL - 0.8), props={"kind": "lantern", "watts": 60})
+    core.empty("Lamp_Portico", "House/Engine/Lamps", (0.0, yc, porch.CEIL - 0.8), props={"kind": "lantern", "lumens": 650.0})
     core.obj("Lanterns", g, col, "brass", smooth=35)
     core.obj("Lanterns_Glass", gl, col, "lamp_glass", smooth=None)
 

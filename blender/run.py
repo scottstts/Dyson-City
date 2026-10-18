@@ -70,7 +70,7 @@ def build_all(save=True):
 def bake_all(save=True):
     """The interior light under the game's light (bake/house_env.hdr from tools/house-env.mjs):
     lightmaps, probe grid, reflection captures. Run after build_all (which drops the lightmap UVs);
-    takes about 20 minutes. Long call: run bl.py with BL_TIMEOUT=7200."""
+    takes 3–4 hours: run it headless (blender/docs/house.md "Workflow")."""
     import bpy
     reload()
     from build import bake

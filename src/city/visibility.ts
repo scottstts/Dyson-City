@@ -5,8 +5,15 @@
  *
  * The star fills the 45° cone about the zenith; the share is estimated over fixed cosine-weighted
  * directions in that cone (the disc's irradiance weighting), against the frame's footprints on the
- * glass and the gatehouse's solids.
+ * glass, the gatehouse's solids and any local occluder maps (the house: lighting/starShade.ts
+ * `rasterOccluders`, lowest and highest surface per plan texel).
+ *
+ * Everything is geometric, so the share changes as the eye moves under a roof: walking onto the
+ * porch and in through the door the star's glare fades out over the last few metres, as it does
+ * walking into the gate's chamber. *Rejected:* switching it off when the eye is inside the house's
+ * rooms: the glare and the black point it drives dropped in one frame at the threshold.
  */
+import type { OccluderGrid } from '../lighting/starShade';
 import { DOME, MEMBER } from './dome/spec';
 import { GATE } from './gate/spec';
 import { STAR_ANGULAR_RADIUS } from '../world/constants';
@@ -106,14 +113,51 @@ export interface StarView {
   transmission: number;
 }
 
+/** A local occluder map: per texel [lowest, highest] surface (rasterOccluders), on its grid. */
+export interface OccluderMap {
+  grid: OccluderGrid;
+  map: Float32Array;
+  /** Highest surface in it: rays above it are clear. */
+  top: number;
+}
+
+/** Is the ray from o along d blocked by the map (marched in steps of a third of a texel)? */
+function blockedByMap(o: V, d: V, m: OccluderMap): boolean {
+  const { N, originX, originZ, cell } = m.grid;
+  const step = cell / 3;
+  const tMax = (m.top - o[1]) / d[1];
+  for (let t = 0; t <= tMax; t += step) {
+    const i = Math.floor((o[0] + d[0] * t - originX) / cell);
+    const j = Math.floor((o[2] + d[2] * t - originZ) / cell);
+    if (i < 0 || j < 0 || i >= N || j >= N) return false;
+    const k = 2 * (j * N + i);
+    const y = o[1] + d[1] * t;
+    if (y >= m.map[k] && y <= m.map[k + 1]) return true;
+  }
+  return false;
+}
+
+function insideMap(e: V, m: OccluderMap): boolean {
+  const { N, originX, originZ, cell } = m.grid;
+  const ext = N * cell;
+  return e[0] > originX && e[0] < originX + ext && e[2] > originZ && e[2] < originZ + ext && e[1] < m.top;
+}
+
 export class StarVisibility {
   private readonly dome = domeStarVisibility();
   private readonly glass: number;
+  private readonly maps: OccluderMap[] = [];
   private last: V = [Infinity, 0, 0];
   private value: StarView = { visible: 1, transmission: 1 };
 
   constructor(glassTransmission: number) {
     this.glass = glassTransmission;
+  }
+
+  /** Adds a local occluder map (the house). */
+  addOccluders(m: OccluderMap): void {
+    this.maps.push(m);
+    this.last = [Infinity, 0, 0];
   }
 
   /** The star as seen from an eye position (cached until the eye moves 0.25 m). */
@@ -124,9 +168,10 @@ export class StarVisibility {
     const inside = insideDome(e);
     let v = inside ? this.dome : 1;
     const nearGate = e[0] > GATE.westX - 45 && e[0] < GATE.eastX + 45 && Math.abs(e[2]) < GATE.outerHalf + 45;
-    if (nearGate) {
+    const maps = this.maps.filter((m) => insideMap(e, m));
+    if (nearGate || maps.length) {
       let seen = 0;
-      for (const d of DIRS) if (!blockedByGatehouse(e, d)) seen++;
+      for (const d of DIRS) if (!(nearGate && blockedByGatehouse(e, d)) && !maps.some((m) => blockedByMap(e, d, m))) seen++;
       v *= seen / DIRS.length;
     }
     this.value = { visible: v, transmission: inside ? this.glass : 1 };

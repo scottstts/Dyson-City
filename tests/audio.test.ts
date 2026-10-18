@@ -239,8 +239,8 @@ describe('cloned sounds', () => {
     for (let i = 0; i < shut.length; i++) if (Math.abs(shut[i]) > Math.abs(shut[at])) at = i;
     expect(Math.abs(at / SR - bank.door.strike)).toBeLessThan(0.06);
     expect(peak(bank.door.open[0])).toBeLessThan(0.5);
-    // The kettle and the rustle loop seamlessly at RMS 1.
-    for (const loop of [bank.kettle, bank.rustle, bank.car, bank.craft]) {
+    // The vehicles' loops are seamless at RMS 1.
+    for (const loop of [bank.car, bank.craft]) {
       expect(finite(loop)).toBe(true);
       let ms = 0;
       let step = 0;
@@ -292,8 +292,8 @@ describe('footsteps', () => {
   });
 
   it('crunch on gravel, swish on grass, thud on rugs, boom on boards', () => {
-    // Gravel crunches (grains giving way: sharp peaks over the step's highs); grass is a brush of
-    // blades (smooth, mostly above 2 kHz, little thud), as recorded.
+    // Gravel crunches (grains giving way: sharp peaks over the step's highs); grass is a soft brush of
+    // blades over the foot's low thud into the turf, as recorded.
     const crest = (s: GroundSurface) => [0, 1, 2].reduce((m, v) => m + crestOf(s, v), 0) / 3;
     const crestOf = (s: GroundSurface, v: number) => {
       const x = filter(synthFootstep(s, 'walk', v, SR, 13 + v), SR, ['highpass', 2000, 0.7], ['lowpass', 12000, 0.7]);
@@ -308,7 +308,7 @@ describe('footsteps', () => {
     };
     expect(crest('gravel')).toBeGreaterThan(1.8 * crest('grass'));
     const grass = synthFootstep('grass', 'walk', 0, SR, 15);
-    expect(band(grass, 2000, 16000)).toBeGreaterThan(band(grass, 20, 2000));
+    expect(band(grass, 30, 160)).toBeGreaterThan(band(grass, 2000, 16000));
     const bright = (s: GroundSurface) => {
       const x = synthFootstep(s, 'walk', 2, SR, 17);
       return band(x, 2000, 12000) / energy(x);

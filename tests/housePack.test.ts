@@ -23,7 +23,7 @@ function read() {
   const magic = buf.toString('ascii', 0, 4);
   const version = buf.readUInt32LE(4);
   const len = buf.readUInt32LE(8);
-  const index = JSON.parse(buf.toString('utf8', 12, 12 + len)) as { entries: Entry[]; placement: unknown };
+  const index = JSON.parse(buf.toString('utf8', 12, 12 + len)) as { entries: Entry[]; placement: unknown; lamps?: Record<string, { radiance: number[] }> };
   const slice = (e: Entry) => buf.subarray(e.offset, e.offset + e.length);
   return { buf, magic, version, len, index, slice };
 }
@@ -79,6 +79,18 @@ describe.skipIf(!has)('house pack', () => {
         if (r > 1e-3) lit++;
       }
       expect(lit).toBeGreaterThan(10);
+    }
+  });
+
+  it('gives the lit lamps\' shades and glass a glow from their flux, dim beside daylight (white sunlit ≈ 2)', () => {
+    const { index } = read();
+    expect(Object.keys(index.lamps ?? {}).sort()).toEqual(['lamp_glass', 'lampshade']);
+    for (const [name, g] of Object.entries(index.lamps!)) {
+      expect(g.radiance, name).toHaveLength(3);
+      // a lit shade or bowl is a few hundred cd/m², ~0.01–0.1 on the game's scale; warm (red over blue)
+      expect(Math.max(...g.radiance), name).toBeGreaterThan(0.005);
+      expect(Math.max(...g.radiance), name).toBeLessThan(0.3);
+      expect(g.radiance[0], name).toBeGreaterThan(g.radiance[2]);
     }
   });
 

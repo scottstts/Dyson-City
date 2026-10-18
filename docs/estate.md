@@ -54,7 +54,7 @@ Code: `src/estate/`. The plan's intent is `docs/city_plan.md` §4; the house its
 
 ## Sound
 
-Footsteps by surface (grass, gravel, stone), the trees' rustle and the house's sounds: `docs/audio.md`, "The estate" and "The house".
+Footsteps by surface (grass, gravel, stone) and the house's sounds (the trees are silent): `docs/audio.md`, "The estate" and "The house".
 
 ## Review
 
