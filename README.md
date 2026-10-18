@@ -3,6 +3,12 @@
 ![Dyson City](public/og_image.jpeg)
 ***Live at https://dyson.scottsun.io***
 
+**In year 2127, humanity created its first Dyson sphere around Alpha Centauri A, a 2 million kilometer diameter structure, and started the "Astro-Industrial Era". On the inner side of this lonely structure is a small city called Dyson City for research purposes. You have been elected to be the lone guardian of this city**
+
+**You have your own estate on Dyson City, and you've chosen to make it a Victorian style manor. The rest of the city is a 200 acre golden scientific-industrial compound**
+
+**You have your own vehicle called Aurelia to take you anywhere in this city. A fleet of research spacecrafts come in every 30s for data backup and refueling**
+
 ---
 
 You arrive on a stone apron in front of a gate, and the first thing you do is look up. Everyone does.
