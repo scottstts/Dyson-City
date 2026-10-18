@@ -2,7 +2,7 @@
  * Runtime entry point: owns the frame loop and wires player, world, pipeline and exposure.
  * System logic lives in its own modules; this file only sequences them.
  */
-import { PerspectiveCamera, type Node, type Vector3 } from 'three/webgpu';
+import { PerspectiveCamera, Vector3, type Node } from 'three/webgpu';
 import type { RendererHandle } from '../core/renderer';
 import { fatal } from '../core/fatal';
 import type { World } from './world';
@@ -21,6 +21,11 @@ import type { EntryScreen } from '../ui/entryScreen';
 import { EyeAdaptation } from '../render/adaptation';
 import { InteractionPrompt } from '../ui/prompt';
 import type { GameAudio } from '../audio/gameAudio';
+import { Driving } from './driving';
+import type { FlightPhase } from '../vehicles/craft/flight';
+
+/** Where the West Gate's airlock is told the walker is while they drive: far from both its gates. */
+const NOBODY = new Vector3(0, 0, 0);
 
 /** Frames per period of the debug yaw wobble (?wobble). */
 export const WOBBLE_PERIOD = 37;
@@ -48,6 +53,7 @@ export class Game {
   private frameIndex = 0;
   private readonly audio: GameAudio;
   private readonly prompt: InteractionPrompt;
+  private readonly driving: Driving;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
     this.handle = handle;
@@ -72,6 +78,7 @@ export class Game {
     const spawn = debug.look ? { ...base, yaw: (debug.look[0] * Math.PI) / 180, pitch: (debug.look[1] * Math.PI) / 180 } : base;
     this.player.spawn(spawn);
     this.spawnLook = spawn;
+    this.driving = new Driving(world.vehicles.car, this.input, this.player, this.camera, world.city.walk, world.vehicles.carWalls);
     if (debug.probe) addLightingProbes(world.scene, spawn.position, spawn.yaw);
     this.camera.updateMatrixWorld();
 
@@ -94,7 +101,12 @@ export class Game {
     this.adaptation = debug.ev === null ? new EyeAdaptation(handle.renderer, this.pipeline.sceneLuminance) : null;
     if (debug.gate) world.city.gate.airlock.hold(debug.gate);
     if (debug.vent) world.field.vents.lift(0);
-    if (debug.lock) world.city.lock.setOpenness(debug.lock === 'outer' || debug.lock === 'open' ? 1 : 0, debug.lock === 'inner' || debug.lock === 'open' ? 1 : 0);
+    if (debug.craft) {
+      const [phase, extra] = debug.craft.split(':');
+      world.vehicles.fastForward(phase as FlightPhase, extra ? Number(extra) : undefined);
+    }
+    if (debug.drive) this.driving.startInCar();
+    if (debug.lock) world.city.lock.airlock.hold(debug.lock === 'outer' || debug.lock === 'open', debug.lock === 'inner' || debug.lock === 'open');
 
     this.prompt = new InteractionPrompt(host);
     const prefs = loadAudioPrefs();
@@ -195,16 +207,22 @@ export class Game {
   private frame(dt: number): void {
     if (this.debug.time === null) this.gameTime += dt;
     this.world.update(this.gameTime);
-    if (this.playing) this.player.update(dt);
-    this.world.city.update(dt, this.player.feet);
+    const driving = this.driving;
+    if (this.playing && !driving.inCar) this.player.update(dt);
+    const use = this.playing && this.input.consumePress('KeyE');
+    const usedByCar = driving.update(dt, this.playing, use);
+    // In the car the West Gate's airlock does not see a walker (the car never enters it).
+    this.world.city.update(dt, driving.inCar ? NOBODY : this.player.feet);
+    // Review time (?time) holds the craft where ?craft put it, as it holds the star.
+    this.world.vehicles.update(this.debug.time === null ? dt : 0, this.gameTime, driving.inCar ? null : this.player.feet);
     this.camera.updateMatrixWorld();
-    this.world.house.update(dt, this.camera, this.player.feet, this.playing && this.input.consumePress('KeyE'));
+    this.world.house.update(dt, this.camera, this.player.feet, use && !usedByCar && !driving.inCar);
     const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);
     this.world.indoors = indoors;
     this.world.estate.view(this.camera, indoors);
     this.world.house.culling.update(this.camera, indoors);
-    const aimed = this.world.house.doors.aimed;
-    this.prompt.set(this.playing && aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null);
+    const aimed = driving.inCar ? null : this.world.house.doors.aimed;
+    this.prompt.set(!this.playing ? null : (driving.prompt ?? (aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null)));
     if (this.debug.wobble !== null) {
       // Flicker review: a yaw sweep that returns to the same view every period, with a different
       // amplitude (so a different motion history and speed) each time; the period is prime so the

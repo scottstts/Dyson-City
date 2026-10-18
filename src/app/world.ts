@@ -6,7 +6,7 @@
  * view from inside the Dome (the sky through its glass, with its frame): everything under the Dome.
  * The frame itself blends the two by which way each face looks (city/materials/ceramic.ts).
  */
-import { Mesh, Scene, type WebGPURenderer } from 'three/webgpu';
+import { Mesh, Scene, type Node, type WebGPURenderer } from 'three/webgpu';
 import { pmremTexture } from 'three/tsl';
 import { createAtmosphereNodes, type AtmosphereTextures } from '../atmosphere/luts';
 import { StarState } from '../sky/star/starState';
@@ -37,6 +37,7 @@ import { FIELD_Y } from '../field/layout';
 import { House } from '../house/house';
 import { buildEstate, type Estate } from '../estate/estate';
 import type { HouseAssets } from '../house/assets';
+import { buildVehicles, type Vehicles } from '../vehicles/vehicles';
 
 export interface World {
   readonly scene: Scene;
@@ -56,6 +57,8 @@ export interface World {
   readonly house: House;
   /** The estate round it (docs/estate.md). */
   readonly estate: Estate;
+  /** The car and the craft (docs/vehicles.md). */
+  readonly vehicles: Vehicles;
   /** The eye is inside the house (Game sets it): outdoor captures do not refresh. */
   indoors: boolean;
   /** The star's atmosphere, composited onto sky pixels by the pipeline. */
@@ -119,6 +122,10 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   scene.add(estate.group);
   city.walk.walls.meshes.push(estate.walk);
   const houseCopies = [...house.captureCopies(), ...estate.captureCopies()];
+  const tVehicles = performance.now();
+  const vehicles = buildVehicles(city.walk.walls, city.lock);
+  scene.add(vehicles.group);
+  console.info(`[Dyson] vehicles: ${(performance.now() - tVehicles).toFixed(0)} ms`);
   house.culling.track([...field.statics, ...field.moving, ...estate.outdoorMeshes]);
   const tWalls = performance.now();
   const fieldWalls = addFieldWalls(city.walk.walls, [...field.statics, ...field.moving]);
@@ -146,7 +153,12 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const tRaster = performance.now();
   const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, estateFloor));
   console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
-  platformMaterial.aoNode = shade.ao();
+  // The vehicles' shade as they move (vehicles/shade.ts) takes the pad's light, its sealer's
+  // reflection of the zenith included (AO does not reach the clear coat): under a body the view up
+  // is the body.
+  const vehicleShade = vehicles.shade.node();
+  platformMaterial.aoNode = shade.ao().mul(vehicleShade);
+  platformMaterial.clearcoatNode = (platformMaterial.clearcoatNode as Node<'float'>).mul(vehicleShade);
   platformMaterial.needsUpdate = true;
   house.setLook({ shade: shade.ao, envTexture: interior.target.texture });
   estate.setLook({ shade: shade.ao, envTexture: interior.target.texture });
@@ -154,6 +166,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const tProbes = performance.now();
   const probes = createFieldProbes(renderer, sky, field, startTime, { extras: [...city.captureExtras(), ...captureSite, ...houseCopies], interior, transmittance: GLASS_TRANSMISSION, shade: shade.ao });
   console.info(`[Dyson] field probes: ${(performance.now() - tProbes).toFixed(0)} ms`);
+  vehicles.setLook({ central: probes.central, outdoor: environment.target.texture, ao: shade.ao });
   // The estate's own probe: the house, its garden's walls and buildings, the field beyond.
   const estateProbe = createEstateProbe(renderer, sky, startTime, { extras: [...city.captureExtras(), ...captureSite.map((m) => m.clone()), ...house.captureCopies(), ...estate.captureCopies(), ...field.captureCopies({})], interior, transmittance: GLASS_TRANSMISSION });
   house.setLook({ env: estateProbe.env, envTexture: estateProbe.environment.target.texture });
@@ -171,6 +184,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     field,
     house,
     estate,
+    vehicles,
     indoors: false,
     gas,
     starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame, gas),

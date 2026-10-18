@@ -32,6 +32,9 @@ import { FIELD_CRANE } from './models/fieldCrane';
 import { FIELD_SLEW } from './models/fieldSlew';
 import { FIELD_VENT } from './models/fieldVent';
 import type { TextureModel } from './synth/spectral';
+import { VEHICLE_CAR } from './models/vehicleCar';
+import { VEHICLE_CRAFT } from './models/vehicleCraft';
+import { synthImpact } from './synth/vehicle';
 import type { GroundSurface } from '../city/walk';
 
 export type FootKey = `${GroundSurface}:${FootGait}`;
@@ -64,6 +67,10 @@ export interface AudioBank {
   /** Seamless loops at RMS 1: the kettle simmering, leaves in the breeze. */
   kettle: Float32Array;
   rustle: Float32Array;
+  /** The vehicles (docs/audio.md, "The car", "The craft"): drive and engine loops at RMS 1; the car's knocks, peak 1. */
+  car: Float32Array;
+  craft: Float32Array;
+  impact: Float32Array[];
 }
 
 export interface DoorSounds {
@@ -226,11 +233,15 @@ export function buildAudioBank(sr: number): AudioBank {
     ticks: { longcase: clockBeats('longcase', sr, 901), mantel: clockBeats('mantel', sr, 951) },
     kettle: atRms(synthKettle(9, sr, 991)),
     rustle: atRms(synthRustle(19, sr, 997)),
+    // Long loops: the drive's tonal lines are a few hertz wide.
+    car: atRms(synthTexture(VEHICLE_CAR, 19, sr, rng(1101))),
+    craft: atRms(synthTexture(VEHICLE_CRAFT, 18, sr, rng(1201))),
+    impact: [1301, 1302, 1303].map((seed) => synthImpact(sr, seed)),
   };
 }
 
 /** The bank's sample buffers, for a transfer list. */
 export function bankBuffers(b: AudioBank): ArrayBuffer[] {
-  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.kettle, b.rustle];
+  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.kettle, b.rustle, b.car, b.craft, ...b.impact];
   return arrays.map((a) => a.buffer as ArrayBuffer);
 }

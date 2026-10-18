@@ -2,13 +2,20 @@
 
 Code: `src/city/eastLock/`. `spec.ts` holds every dimension. Intent is `docs/city_plan.md` §6; the West Gate it is modelled on is `docs/gate.md`.
 
-## Status: a foundation
+## The airlock
 
-Built for the craft (step 4), which will drive it. Nothing moves on its own, nothing responds to the walker, and there are no lamps, vents or sound yet.
+The craft drives it (`airlock.ts`, `docs/vehicles.md`). Nothing responds to the walker; there are no lamps or vents yet.
 
-- `EastLock.setOpenness(outer, inner)` poses the leaves and hoists.
-- `?lock=closed|outer|inner|open` holds a pose for review.
-- Walkers never pass it: its piers and both lips are walls.
+- **Driven by request.** The craft asks for a side, and the airlock sequences it:
+  - `outer`: shut the inner gate, vent the chamber to 0.55 bar, open the outer;
+  - `inner`: shut the outer, fill to 1 bar, open the inner;
+  - `closed`: shut both.
+- **The West Gate's actuators at craft speed:** bolts 0.5 s, leaf travel 3.2 s, pressure 2.5 s.
+- **Never open both ways,** and a gate opens only onto equal pressure. The craft asks a gate to shut only once it is clear of the sweep (`tests/craftFlight.test.ts`).
+- **The craft sits inside the leaves' sweep.** Each leaf turns about a trunnion above its own half of the chamber, so a craft waiting there is inside the circle the leaf sweeps; its open pose clears the craft by 8 m.
+- **Sound:** the West Gate's hydraulics, roll, stops and shuts from its own hoists and leaves, +4 dB (`docs/audio.md`).
+- **Review:** `?lock=closed|outer|inner|open` holds a pose and ignores the craft.
+- **Walls:** walkers never pass it; its piers and both lips are walls.
 
 ## Construction
 

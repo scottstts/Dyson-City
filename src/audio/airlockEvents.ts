@@ -2,7 +2,14 @@
  * Reads the airlock (city/gate/airlock.ts) each frame and turns its state changes into sound events.
  * The airlock stays pure logic and knows nothing of sound. Pure: no Web Audio.
  */
-import type { Airlock, GateActuator } from '../city/gate/airlock';
+import type { GateActuator } from '../city/gate/airlock';
+
+/** Either airlock (the West Gate's, the East Lock's): its two gates and its chamber's pressure. */
+export interface AirlockState {
+  readonly outer: GateActuator;
+  readonly inner: GateActuator;
+  readonly pressure: number;
+}
 
 export type GateName = 'outer' | 'inner';
 
@@ -41,13 +48,13 @@ export class AirlockWatcher {
   private pressure: number;
   private flowing = false;
 
-  constructor(lock: Airlock) {
+  constructor(lock: AirlockState) {
     this.phases = { outer: lock.outer.phase, inner: lock.inner.phase };
     this.pressure = lock.pressure;
   }
 
   /** Events since the last call. */
-  step(lock: Airlock): AirlockSoundEvents {
+  step(lock: AirlockState): AirlockSoundEvents {
     const gates: AirlockSoundEvents['gates'] = [];
     for (const gate of ['outer', 'inner'] as const) {
       const now = lock[gate].phase;

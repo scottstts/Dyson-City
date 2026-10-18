@@ -88,7 +88,7 @@ Every room walkable and furnished:
 
 - **The garden is one raised bed.** The estate is a terrace of real soil, 1.2–1.8 m above the pad, held by a dressed stone retaining wall with a balustrade on its top, its gateway and steps toward the Gate Court. That makes deep soil for trees plausible, keeps every plant in a bed (nothing grows out of paving), and draws the sharp line between green and field.
 - **Inside the wall:** a gravel drive from the gateway to the porch, a mown and striped lawn, mature specimen trees, a small orchard, a kitchen garden, a lily pond (the Dome's air is 1 bar and humid), a glasshouse, clipped hedges, flower borders against the house, climbers on the walls.
-- **The carriage house** beside the drive is where the car lives.
+- **The carriage house** beside the drive (the car, too wide for its doors, stands on the Gate Court).
 - **Framed openings.** The perimeter is hedge and trees with gaps cut into them (claires-voies), so from the garden the machines appear as framed pictures, not a wall of gold.
 - **The back garden ends at the glass.** A path, a bench, then the Dome's drum glass, and beyond it the bare metal deck to the horizon with the sphere rising out of the haze: the cosiest place in the game looking out at the end of the world.
 
@@ -147,13 +147,13 @@ A science, technology and industry compound: the instruments and plants that a c
 - **The East Lock** is the craft airlock, in the East Collar opposite the West Gate on the Spinward axis. It is the West Gate's construction at a larger size: sector gates, a chamber and a gatehouse through the Dome's skin within the collar's arch (96 m wide, crown at 90 m). Sized for craft up to ~50 m. Part of the Dome, built with step 3.
 - **The pad** sits on the datum at the centre: a ~90 m disc of dark heat-resistant ceramic tiles, its markings in bronze inlay, the bronze datum disc kept at its centre, set into the limestone.
 - **Behaviour:** craft arrive and leave on their own, never boarded. An arrival comes in level along the band under the Veil (visible from outside, crossing the deck toward the Dome), waits as the East Lock cycles, then flies the craft corridor along the axis at a few tens of metres up, slows over the Halo and settles on the pad. It rests a while, then leaves the same way.
-- The craft themselves are separate assets, built in step 4.
+- The craft is built (step 4): `docs/vehicles.md`. One craft at a time, about 30 s of each visit under the Dome, hovering with its ventral foil just clear of the pad (it has no flat underside to land on).
 
 ## 7. Roads and the car
 
 - **Few roads, all wide** (~20 m), on the Dome's grid: the **Axis Road** from the Gate Court through the Cordon's main portal east to the Halo, the **Meridian** north and south from the Halo to the Cordon's gates, four **avenues** under the rib lines at x, z = ±192, a **ring road** under the Halo and a **perimeter road** inside the Cordon. Every hero stands in a precinct and is reached from the avenues; there are no spurs. The Gate Court opens onto the estate's gateway. The axis east of the Halo is the craft corridor, not a road; it leaves through the Cordon's open craft gate.
 - **Surface:** dark polished basalt slabs set flush into the limestone, edged with bronze inlay. No painted markings.
-- **The car** lives in the estate's carriage house and is driven by the player round the field. It stays inside the Dome. Built separately in step 4.
+- **The car** is parked on the Gate Court beside the estate's gateway (it cannot fit the carriage house's doors) and is driven by the player anywhere at pad level under the Dome, never onto the estate. Built in step 4: `docs/vehicles.md`.
 
 ## 8. Moments the plan is designed for
 
@@ -196,6 +196,6 @@ These are the acceptance views: when built, each must read as described.
    - **Window glass** for the house. The Dome's glass is an analytic post pass for its ellipsoid only.
    - **Interior light:** the bundle's lightmaps, probe grid and room reflection captures, and the eye-adaptation range that decides how dark the rooms read (§4).
 3. **The Field.** The Halo and pad, the five heroes, the tower clusters, the network, roads, and the East Lock in the Dome. Built: `docs/field.md`, `docs/east-lock.md`. The East Lock is a foundation the craft (step 4) will drive.
-4. **Vehicles and other moving things.** The car, the craft and their behaviour, separate assets.
+4. **Vehicles and other moving things.** Built: `docs/vehicles.md`. The car and the craft ported from `refs/`, the car driven in the third person, the craft flying its visits through the East Lock's airlock, their sound in `docs/audio.md`.
 
 Each part gets its own system doc in `docs/` as it is built; this plan stays the overall intent.

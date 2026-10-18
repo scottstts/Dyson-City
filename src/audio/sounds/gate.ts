@@ -12,6 +12,9 @@
  *    seating with heavy clanks, the structure's boom); landing shut, the vault door's shut. A dipole
  *    at the skin's centre, radiating into both spaces it divides.
  *  - The floor bolts: a heavy lock's throw, as they withdraw and as they shoot home.
+ *
+ * The East Lock is the same construction at craft size and sounds the same (`LOCK_GATE_SOUND`):
+ * its hoists and leaves, a little louder for leaves twice the size, and no floor bolts.
  */
 import { Emitter } from '../emitter';
 import type { AudioEngine } from '../engine';
@@ -21,14 +24,83 @@ import { LEVEL } from '../mix';
 import { playInto, VariantPicker } from './oneShot';
 import type { GateEvent, GateName } from '../airlockEvents';
 import type { GateActuator } from '../../city/gate/airlock';
-import { TIMING } from '../../city/gate/airlock';
 import { GATE } from '../../city/gate/spec';
 import { boltPose, hoistPoses } from '../../city/gate/mechanism';
+import { LOCK, toWorld } from '../../city/eastLock/spec';
+import { lockHoistEnds } from '../../city/eastLock/lock';
 import type { Zone } from '../acoustics';
+import type { Vec3 } from '../../geometry/polyMesh';
 
-/** Leaf speed at the middle of its eased travel (openness per second). */
-const MAX_LEAF_SPEED = 1.5 / TIMING.travel;
 const BOLT_Z = [-4.5, 4.5];
+
+/** Where one gate's sounds come from at openness s, and the spaces they radiate into. */
+export interface GateSoundGeometry {
+  /** Each hoist's middle (side −1, 1). */
+  hoist(side: -1 | 1, s: number): Vec3;
+  /** The leaf skin's centre and its normal. */
+  leaf(s: number): { at: Vec3; axis: Vec3 };
+  /** The floor bolts' heads (none for the East Lock). */
+  bolts: ((i: number, e: number) => Vec3) | null;
+  machineZone: readonly Zone[] | 'located';
+  sides: readonly Zone[] | 'located';
+}
+
+/** A whole gatehouse's sounds: both gates' geometry and a level on the mix's. */
+export interface GateSoundSpec {
+  name: string;
+  outer: GateSoundGeometry;
+  inner: GateSoundGeometry;
+  gain: number;
+}
+
+function westGate(trunnionX: number, lipX: number, machineZone: Zone, sides: [Zone, Zone]): GateSoundGeometry {
+  return {
+    hoist(side, s) {
+      const p = hoistPoses(trunnionX, side, s);
+      return [(p.barrel.t[0] + p.rod.t[0]) / 2, (p.barrel.t[1] + p.rod.t[1]) / 2, (p.barrel.t[2] + p.rod.t[2]) / 2];
+    },
+    leaf(s) {
+      const th = GATE.thetaBottom + GATE.openAngle * s + (GATE.thetaTop - GATE.thetaBottom) / 2;
+      return { at: [trunnionX + GATE.R * Math.cos(th), GATE.trunnionY + GATE.R * Math.sin(th), 0], axis: [Math.cos(th), Math.sin(th), 0] };
+    },
+    bolts: (i, e) => boltPose(lipX, BOLT_Z[i], e).t,
+    machineZone: [machineZone],
+    sides,
+  };
+}
+
+function lockGate(trunnionX: number): GateSoundGeometry {
+  return {
+    hoist(side, s) {
+      const { A, B } = lockHoistEnds(trunnionX, side, s);
+      return [(A[0] + B[0]) / 2, (A[1] + B[1]) / 2, (A[2] + B[2]) / 2];
+    },
+    leaf(s) {
+      const th = LOCK.thetaBottom + LOCK.openAngle * s + (LOCK.thetaTop - LOCK.thetaBottom) / 2;
+      // Built in the West Gate's frame and mirrored onto the east (spec.ts toWorld).
+      return { at: toWorld([trunnionX + LOCK.R * Math.cos(th), LOCK.trunnionY + LOCK.R * Math.sin(th), 0]), axis: [-Math.cos(th), Math.sin(th), 0] };
+    },
+    bolts: null,
+    // The chamber straddles the glass's line: each sound is placed by where it is.
+    machineZone: 'located',
+    sides: 'located',
+  };
+}
+
+export const WEST_GATE_SOUND: GateSoundSpec = {
+  name: 'gate',
+  outer: westGate(GATE.outerTrunnionX, GATE.outerLipX, 'outside', ['outside', 'chamber']),
+  inner: westGate(GATE.innerTrunnionX, GATE.innerLipX, 'chamber', ['chamber', 'city']),
+  gain: 1,
+};
+
+/** Leaves of radius 34 m against the West Gate's: ~+4 dB. */
+export const LOCK_GATE_SOUND: GateSoundSpec = {
+  name: 'lock',
+  outer: lockGate(LOCK.outerTrunnionX),
+  inner: lockGate(LOCK.innerTrunnionX),
+  gain: 1.6,
+};
 /** The pump's speed on starting (fraction) and its spin-up time constant (s), as measured. */
 const SPIN_FROM = 0.62;
 const SPIN_UP = 0.75;
@@ -73,8 +145,11 @@ class Hydraulics {
   /** Set when the stop has its own sound (the lift-stop): the run cuts out instead of spinning down. */
   private cut = false;
 
-  constructor(engine: AudioEngine, hoists: Emitter[], random: () => number) {
+  private readonly gain: number;
+
+  constructor(engine: AudioEngine, hoists: Emitter[], random: () => number, gain: number) {
     const ctx = engine.ctx;
+    this.gain = gain;
     this.level = new GainNode(ctx, { gain: 0 });
     for (const h of hoists) this.level.connect(new GainNode(ctx, { gain: Math.SQRT1_2 })).connect(h.input);
     this.loop = new Loop(ctx, engine.buffer(engine.bank.hydraulicRun), this.level, random);
@@ -100,7 +175,7 @@ class Hydraulics {
     const load = lift ? speed : 0;
     glide(this.loop.rate!, this.spin * (1 - 0.015 * load), t, 0.03);
     const fade = this.on ? Math.min(1, (this.spin - SPIN_FROM + 0.08) / 0.2) : Math.max(0, (this.spin - SPIN_FROM) / (1 - SPIN_FROM));
-    glide(this.level.gain, LEVEL.hydraulic * fade * Math.pow(10, (1.5 * load) / 20), t, this.cut && !this.on ? 0.02 : 0.05);
+    glide(this.level.gain, this.gain * LEVEL.hydraulic * fade * Math.pow(10, (1.5 * load) / 20), t, this.cut && !this.on ? 0.02 : 0.05);
     if (!this.on && fade < 0.01) this.loop.stop(t + 0.1);
   }
 }
@@ -113,8 +188,11 @@ class Roll {
   private swellTarget = 1;
   private readonly random: () => number;
 
-  constructor(engine: AudioEngine, leaf: Emitter, random: () => number) {
+  private readonly gain: number;
+
+  constructor(engine: AudioEngine, leaf: Emitter, random: () => number, gain: number) {
     this.random = random;
+    this.gain = gain;
     this.level = new GainNode(engine.ctx, { gain: 0 });
     this.level.connect(leaf.input);
     this.loop = new Loop(engine.ctx, engine.buffer(engine.bank.leafRumble), this.level, random);
@@ -126,15 +204,16 @@ class Roll {
     // ±2.5 dB at 0.5–6 Hz, as the recorded roll swells.
     if (this.random() < dt * 4) this.swellTarget = Math.pow(10, between(this.random, -2.5, 2.5) / 20);
     this.swell += (this.swellTarget - this.swell) * (1 - Math.exp(-dt / 0.12));
-    glide(this.level.gain, LEVEL.leafRoll * speed * this.swell, t, 0.06);
+    glide(this.level.gain, this.gain * LEVEL.leafRoll * speed * this.swell, t, 0.06);
     if (speed <= 0.005) this.loop.stop(t + 0.3);
   }
 }
 
 interface GateRig {
   act: GateActuator;
-  trunnionX: number;
-  lipX: number;
+  geo: GateSoundGeometry;
+  /** Leaf speed at the middle of its eased travel (openness per second). */
+  maxSpeed: number;
   hoists: Emitter[];
   leaf: Emitter;
   bolts: Emitter[];
@@ -151,29 +230,29 @@ export class GateSounds {
   private readonly latches: AudioBuffer[];
   private readonly random = rng(0x6a7e);
   private readonly picker = new VariantPicker(this.random);
+  private readonly gain: number;
 
-  constructor(engine: AudioEngine, outer: GateActuator, inner: GateActuator) {
+  constructor(engine: AudioEngine, outer: GateActuator, inner: GateActuator, spec: GateSoundSpec = WEST_GATE_SOUND) {
+    this.gain = spec.gain;
     const b = engine.bank;
     this.start = engine.buffer(b.hydraulicStart);
     this.stops = b.hydraulicStop.map((x) => engine.buffer(x));
     this.shuts = b.leafShut.map((x) => engine.buffer(x));
     this.latches = b.latch.map((x) => engine.buffer(x));
 
-    const rig = (name: GateName, act: GateActuator, trunnionX: number, lipX: number, machineZone: Zone, sides: [Zone, Zone]): GateRig => {
-      const hoists = [-1, 1].map((s) => new Emitter(engine, { name: `${name}.hoist${s}`, zones: [machineZone], refDistance: 2.5 }));
+    const rig = (gate: GateName, act: GateActuator, geo: GateSoundGeometry): GateRig => {
+      const name = `${spec.name}.${gate}`;
+      const hoists = [-1, 1].map((s) => new Emitter(engine, { name: `${name}.hoist${s}`, zones: geo.machineZone, refDistance: 2.5 }));
       const leaf = new Emitter(engine, {
         name: `${name}.leaf`,
-        zones: sides,
+        zones: geo.sides,
         refDistance: 7,
         directivity: { axis: [1, 0, 0], rear: 0.45, rearCutoff: 1800, dipole: true },
       });
-      const bolts = BOLT_Z.map((z) => new Emitter(engine, { name: `${name}.bolt${z}`, zones: sides, refDistance: 0.5, simplePanning: true }));
-      return { act, trunnionX, lipX, hoists, leaf, bolts, hydraulics: new Hydraulics(engine, hoists, this.random), roll: new Roll(engine, leaf, this.random), prevOpenness: act.openness };
+      const bolts = geo.bolts ? BOLT_Z.map((z) => new Emitter(engine, { name: `${name}.bolt${z}`, zones: geo.sides, refDistance: 0.5, simplePanning: true })) : [];
+      return { act, geo, maxSpeed: 1.5 / act.timing.travel, hoists, leaf, bolts, hydraulics: new Hydraulics(engine, hoists, this.random, spec.gain), roll: new Roll(engine, leaf, this.random, spec.gain), prevOpenness: act.openness };
     };
-    this.rigs = {
-      outer: rig('outer', outer, GATE.outerTrunnionX, GATE.outerLipX, 'outside', ['outside', 'chamber']),
-      inner: rig('inner', inner, GATE.innerTrunnionX, GATE.innerLipX, 'chamber', ['chamber', 'city']),
-    };
+    this.rigs = { outer: rig('outer', outer, spec.outer), inner: rig('inner', inner, spec.inner) };
   }
 
   /** Per frame: emitters follow the moving parts; the hydraulics and the roll follow the leaf. */
@@ -181,18 +260,18 @@ export class GateSounds {
     for (const g of Object.values(this.rigs)) {
       const s = g.act.openness;
       g.hoists.forEach((h, i) => {
-        const p = hoistPoses(g.trunnionX, i === 0 ? -1 : 1, s);
-        h.setPosition((p.barrel.t[0] + p.rod.t[0]) / 2, (p.barrel.t[1] + p.rod.t[1]) / 2, (p.barrel.t[2] + p.rod.t[2]) / 2);
+        const p = g.geo.hoist(i === 0 ? -1 : 1, s);
+        h.setPosition(p[0], p[1], p[2]);
       });
       // The skin's centre, and its normal as the leaf's axis.
-      const th = GATE.thetaBottom + GATE.openAngle * s + (GATE.thetaTop - GATE.thetaBottom) / 2;
-      g.leaf.setPosition(g.trunnionX + GATE.R * Math.cos(th), GATE.trunnionY + GATE.R * Math.sin(th), 0);
-      g.leaf.setAxis(Math.cos(th), Math.sin(th), 0);
+      const leaf = g.geo.leaf(s);
+      g.leaf.setPosition(leaf.at[0], leaf.at[1], leaf.at[2]);
+      g.leaf.setAxis(leaf.axis[0], leaf.axis[1], leaf.axis[2]);
       g.bolts.forEach((b, i) => {
-        const p = boltPose(g.lipX, BOLT_Z[i], g.act.bolts);
-        b.setPosition(p.t[0], p.t[1], p.t[2]);
+        const p = g.geo.bolts!(i, g.act.bolts);
+        b.setPosition(p[0], p[1], p[2]);
       });
-      const speed = dt > 0 ? Math.min(Math.abs(s - g.prevOpenness) / dt / MAX_LEAF_SPEED, 1) : 0;
+      const speed = dt > 0 ? Math.min(Math.abs(s - g.prevOpenness) / dt / g.maxSpeed, 1) : 0;
       g.prevOpenness = s;
       const phase = g.act.phase;
       const moving = phase === 'opening' || phase === 'closing';
@@ -207,18 +286,18 @@ export class GateSounds {
     const pick = (list: AudioBuffer[]) => list[this.picker.pick(list.length)];
     switch (event) {
       case 'unbolt':
-        for (const h of g.hoists) playInto(h, this.start, t, LEVEL.hydraulic * Math.SQRT1_2);
+        for (const h of g.hoists) playInto(h, this.start, t, this.gain * LEVEL.hydraulic * Math.SQRT1_2);
         break;
       case 'reverse':
         // The direction valve shifting onto the load.
-        for (const h of g.hoists) playInto(h, this.start, t, LEVEL.hydraulic * 0.5);
+        for (const h of g.hoists) playInto(h, this.start, t, this.gain * LEVEL.hydraulic * 0.5);
         break;
       case 'opened':
         g.hydraulics.cutOut();
-        playInto(g.leaf, pick(this.stops), t, LEVEL.openStop, between(r, 0.98, 1.02));
+        playInto(g.leaf, pick(this.stops), t, this.gain * LEVEL.openStop, between(r, 0.98, 1.02));
         break;
       case 'closed':
-        playInto(g.leaf, pick(this.shuts), t, LEVEL.shut, between(r, 0.98, 1.02));
+        playInto(g.leaf, pick(this.shuts), t, this.gain * LEVEL.shut, between(r, 0.98, 1.02));
         break;
       case 'unbolted':
       case 'bolted':

@@ -10,7 +10,7 @@
  * Cost: captured at boot; afterwards refreshed one probe at a time as the frame turns (the sky in
  * them moves), a face per frame, so the refresh never stacks up in one frame.
  */
-import type { Node, Object3D, WebGPURenderer } from 'three/webgpu';
+import type { Node, Object3D, Texture, WebGPURenderer } from 'three/webgpu';
 import { createEnvironment, type Environment } from '../sky/environment';
 import type { Sky } from '../sky/skyNode';
 import { parallaxEnvironment } from '../render/parallaxEnv';
@@ -23,6 +23,11 @@ export const PROBE = { size: 256, refreshAngle: Math.PI / 180 } as const;
 export interface FieldProbes {
   /** Advances the round-robin refresh (call once per frame). */
   update(gameTime: number): void;
+  /**
+   * The probe captured over the pad, with its parallax proxy widened to the whole compound: what
+   * something moving anywhere in the field (the vehicles) reflects.
+   */
+  readonly central: { texture: Texture; centre: [number, number, number]; radius: number };
 }
 
 export function createFieldProbes(renderer: WebGPURenderer, sky: Sky, field: Field, startTime: number, scene: { extras: Object3D[]; interior: Environment; transmittance: number; shade?: () => Node<'float'> }): FieldProbes {
@@ -54,7 +59,10 @@ export function createFieldProbes(renderer: WebGPURenderer, sky: Sky, field: Fie
   });
   const probes = [...byKey.values()].map((p) => p.env);
   let next = 0;
+  const halo = field.zones.find((z) => z.name === 'halo')!;
+  const centre = byKey.get(halo.probe.centre.join(','))!.env;
   return {
+    central: { texture: centre.target.texture, centre: halo.probe.centre, radius: 460 },
     update(t) {
       // One probe at a time: stay on it while it is mid-refresh.
       const env = probes[next];

@@ -6,7 +6,7 @@ Code: `src/player/`. The controller (`controller.ts`) owns the walk (2 m/s), run
 - **Storeys walk on 3D meshes** (`walkMesh.ts`: the house, the estate). Triangles split by slope into floors and walls. Walls count only within the body's band (feet + 0.42 to + 1.75 m), so a riser under 0.42 m is a step. `ground(x, z, yMax)` is the highest floor at or below `yMax`, so the floor under the feet is found on any storey. Door leaves are dynamic triangle sets that stop against the body (`docs/house.md`).
   - **A sole, not a point:** a floor within 3 cm in plan holds the feet (at its nearest point, never extrapolated). Without it a 2 cm crack between two proxies read as no floor: the walker started to fall and dropped through the porch deck.
   - **Landing is swept** over each frame's drop: any floor between last frame's feet and this frame's catches them. Testing only 5 cm above the new feet let a fall faster than 3 m/s at 60 Hz tunnel through a thin deck (`tests/controller.test.ts`).
-- **E uses** what the eye aims at (the house's doors); `Input.consumePress` reports a key press once.
+- **E uses** what the eye aims at (the house's doors), or gets in and out of the car within reach (`docs/vehicles.md`; the car takes the press first); `Input.consumePress` reports a key press once.
 
 ## Head motion
 

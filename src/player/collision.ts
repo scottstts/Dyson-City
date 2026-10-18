@@ -22,6 +22,7 @@ const CELL = 8;
 export class CollisionWorld {
   private readonly grid = new Map<string, Segment[]>();
   private readonly disabled = new Set<string>();
+  private readonly dynamic = new Map<string, Segment[]>();
   /** 3D walls (and floors) of storeyed places. */
   readonly meshes: WalkMesh[] = [];
 
@@ -76,6 +77,81 @@ export class CollisionWorld {
     return [px, pz];
   }
 
+  /**
+   * Visits each enabled segment whose grid cells overlap a plan box once (the car's collision:
+   * vehicles/car/collision.ts). `seen` is the caller's scratch set, cleared here.
+   */
+  forEachNear(x0: number, z0: number, x1: number, z1: number, seen: Set<object>, fn: (ax: number, az: number, bx: number, bz: number) => void): void {
+    seen.clear();
+    for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) {
+      for (let j = Math.floor(z0 / CELL); j <= Math.floor(z1 / CELL); j++) {
+        const list = this.grid.get(`${i},${j}`);
+        if (!list) continue;
+        for (const s of list) {
+          if (seen.has(s) || (s.tag && this.disabled.has(s.tag))) continue;
+          seen.add(s);
+          fn(s.ax, s.az, s.bx, s.bz);
+        }
+      }
+    }
+  }
+
+  /**
+   * The first wall along a plan ray from (x0, z0) to (x1, z1), as a fraction of it (1: clear).
+   * Static segments only (the chase camera: vehicles/car/chaseCamera.ts).
+   */
+  raycast(x0: number, z0: number, x1: number, z1: number, seen: Set<object>): number {
+    let best = 1;
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    this.forEachNear(Math.min(x0, x1), Math.min(z0, z1), Math.max(x0, x1), Math.max(z0, z1), seen, (ax, az, bx, bz) => {
+      const ex = bx - ax;
+      const ez = bz - az;
+      const den = dx * ez - dz * ex;
+      if (Math.abs(den) < 1e-12) return;
+      const t = ((ax - x0) * ez - (az - z0) * ex) / den;
+      const u = ((ax - x0) * dz - (az - z0) * dx) / den;
+      if (t >= 0 && t < best && u >= 0 && u <= 1) best = t;
+    });
+    return best;
+  }
+
+  /**
+   * A moving solid's outline (a parked car), resolved like any wall until it is replaced or
+   * cleared (null). Kept out of the grid: it is tested directly.
+   */
+  setDynamic(tag: string, pts: readonly [number, number][] | null): void {
+    if (!pts) {
+      this.dynamic.delete(tag);
+      return;
+    }
+    let list = this.dynamic.get(tag);
+    if (!list) this.dynamic.set(tag, (list = []));
+    list.length = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i];
+      const b = pts[(i + 1) % pts.length];
+      list.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], tag });
+    }
+  }
+
+  private readonly out: [number, number] = [0, 0];
+
+  /** A circle at (px, pz) pushed off one segment, into `out`: false if it does not touch it. */
+  private push(s: Segment, px: number, pz: number, r: number): boolean {
+    const ex = s.bx - s.ax;
+    const ez = s.bz - s.az;
+    const len2 = ex * ex + ez * ez;
+    const t = len2 > 0 ? Math.min(Math.max(((px - s.ax) * ex + (pz - s.az) * ez) / len2, 0), 1) : 0;
+    const cx = s.ax + ex * t;
+    const cz = s.az + ez * t;
+    const d = Math.hypot(px - cx, pz - cz);
+    if (d >= r || d <= 1e-9) return false;
+    this.out[0] = cx + ((px - cx) / d) * r;
+    this.out[1] = cz + ((pz - cz) / d) * r;
+    return true;
+  }
+
   /** Pushes a circle out of every segment it overlaps. */
   resolve(x: number, z: number, r: number): [number, number] {
     let px = x;
@@ -85,6 +161,7 @@ export class CollisionWorld {
       const ci = Math.floor(px / CELL);
       const cj = Math.floor(pz / CELL);
       const seen = new Set<Segment>();
+      for (const list of this.dynamic.values()) for (const s of list) if (this.push(s, px, pz, r)) [px, pz, moved] = [this.out[0], this.out[1], true];
       for (let i = ci - 1; i <= ci + 1; i++) {
         for (let j = cj - 1; j <= cj + 1; j++) {
           const list = this.grid.get(`${i},${j}`);

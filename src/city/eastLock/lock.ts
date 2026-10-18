@@ -1,8 +1,7 @@
 /**
  * The East Lock in the scene (docs/east-lock.md): the fixed gatehouse, the two leaves and their
- * hoists, posed from each gate's openness. It is the foundation the craft (step 4) will drive:
- * nothing here moves on its own and nothing responds to the walker; `setOpenness` is the whole
- * interface, and `?lock=closed|outer|inner|open` holds a pose for review.
+ * hoists, posed each frame from the craft's airlock (airlock.ts). Nothing responds to the walker;
+ * `?lock=closed|outer|inner|open` holds a pose for review.
  */
 import { Group, Matrix4, Mesh, MeshPhysicalNodeMaterial, type Material, type Texture } from 'three/webgpu';
 import { float, mix, positionWorld, pmremTexture, smoothstep, vec3, dot } from 'three/tsl';
@@ -19,11 +18,16 @@ import { DOME } from '../dome/spec';
 import { buildLockStructure, lockHoistPivotA } from './structure';
 import { buildLockLeaf, lockLugPin } from './leaf';
 import { LOCK, lockLeafAngle, mirrorMesh, toWorld } from './spec';
+import { CraftAirlock } from './airlock';
 
 export interface EastLock {
   readonly group: Group;
+  /** The craft's airlock: the craft asks it for a side, the leaves follow it. */
+  readonly airlock: CraftAirlock;
   /** Poses both gates: openness 0 (shut) to 1 (open). */
   setOpenness(outer: number, inner: number): void;
+  /** Per frame: runs the airlock and poses the leaves (only while one moves). */
+  update(dt: number): void;
   bindEnvironments(outdoor: Texture, interior: Texture): void;
 }
 
@@ -144,9 +148,22 @@ export function buildEastLock(): EastLock {
   };
   setOpenness(0, 0);
   const all = [stone, bronze, basalt, rubber, steel, chrome] as MeshPhysicalNodeMaterial[];
+  const airlock = new CraftAirlock();
+  let posed: [number, number] = [0, 0];
   return {
     group,
+    airlock,
     setOpenness,
+    update(dt) {
+      airlock.update(dt);
+      const o = airlock.outer.openness;
+      const i = airlock.inner.openness;
+      if (o !== posed[0] || i !== posed[1]) {
+        setOpenness(o, i);
+        posed = [o, i];
+        group.updateMatrixWorld();
+      }
+    },
     bindEnvironments(outdoor, interior) {
       for (const m of all) {
         m.envNode = lockEnvironment(outdoor, interior);

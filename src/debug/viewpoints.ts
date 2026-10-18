@@ -107,6 +107,9 @@ export const VIEWPOINTS: Record<string, Spawn> = {
   loom: look([12, 192], [170, 147], deg(14)),
   mast: { position: [100, -20], yaw: deg(-50), pitch: deg(30) },
   halo: { position: [30, 140], yaw: deg(12), pitch: deg(10) },
+  /** Vehicles: the car parked on the Gate Court; the pad from the ring road (a craft over it with ?craft=hover). */
+  car: look([-440, -6], [-452, -20], deg(-4)),
+  pad: look([62, 58], [0, 0], deg(14)),
   lock: { position: [620, 60], yaw: deg(70), pitch: deg(10) },
   /** The Cordon from the perimeter road: the south gate's pylons and bridge, the arcade running off. */
   cordon: look([70, 412], [0, 440], deg(8)),

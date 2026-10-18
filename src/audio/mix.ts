@@ -42,4 +42,12 @@ export const LEVEL = {
   kettle: 0.09,
   /** A tree's rustle, RMS, at its crown's radius. */
   rustle: 0.012,
+  /**
+   * The car at 1.5 m (its size): the drive's hum at full load, the tyres rolling at top speed, their
+   * scrub at the limit, a hard knock on a wall (peak), the wheels' actuators running (RMS) and their
+   * latch at the stop (on the hydraulics' and the latch's recorded scales).
+   */
+  car: { drive: 0.16, roll: 0.07, scrub: 0.05, impact: 0.7, deploy: 0.035, latch: 0.12 },
+  /** The craft's engines at full burn, RMS, at 8 m (their size). */
+  craft: 0.55,
 } as const;

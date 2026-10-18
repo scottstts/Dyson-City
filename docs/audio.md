@@ -109,6 +109,37 @@ These rules apply to all future sounds, not just the current ones.
 - **Valves.** The open valve thunks with a broadband pop and a ~40 Hz thump; the close valve thunks and cuts the flow.
 - The same voice vents and fills.
 
+## The East Lock (`sounds/gate.ts`, `LOCK_GATE_SOUND`)
+
+- **The West Gate's sounds from the lock's own machinery:**
+  - its hoists' middles;
+  - its leaves' skin centres, mirrored onto the east;
+  - no floor bolts.
+- **Gate geometry is data** (`GateSoundSpec`), so both gatehouses share one implementation.
+- **+4 dB** for leaves twice the radius.
+- **Placed by position** (`'located'`): its chamber straddles the glass's line.
+
+## The car (`sounds/vehicles.ts`, `synth/vehicle.ts`)
+
+- **The drive** is the user's recording, cloned as a texture (`models/vehicleCar.ts`): the motors' low hum near 180 Hz and the inverter's tonal line near 790 Hz.
+  - The recording is one steady speed, so how it responds is from the mechanism: pitch follows rotor speed, from an inverter idle (0.55) at rest to 1.45 at the top speed; level and brightness follow the load, power or regeneration.
+  - It spins up as the driver gets in and down after they leave.
+- **From its mechanism:**
+  - rolling on stone: band noise near 400 Hz rising with speed;
+  - scrub at the tyres' limit: a narrow band near 1.3 kHz;
+  - a scrape while it slides along a wall;
+  - a knock on a hit, scaled by the contact's impulse: a crack, a thump and the shell's damped panel modes.
+  - the wheels deploying and drawing in: the hub actuators' run, the hydraulic power unit's clone pitched up (a small unit) and quiet, in proportion to their speed; a light latch (the vault latch's clone, pitched up) at each stop.
+- **One emitter** at the car, reverb send physical.
+- **Levels** `LEVEL.car`: first pass, to be tuned by ear.
+
+## The craft
+
+- **The engines' roar** is the user's recording, cloned (`models/vehicleCraft.ts`, broadband, no tones). It comes from the main nozzle, beamed aft (rear gain 0.4, dull ahead), its level, pitch and brightness following the burn.
+- **It feeds the city's reverberation,** so an arrival fills the Dome. It is not behind the estate's silencer: the plan wants the craft heard through the whole Dome.
+- **Only under the Dome** (the user's decision, over the physical leak through the glass and a shut leaf). A listener outside the Dome, or in the West Gate's chamber with the inner gate shut, hears nothing of it: the roar is cut at its source, so its reverberation goes too (`craftAudible`). Once the inner gate starts to open, the chamber hears it through the gap, the path opening with the leaf.
+- **Level** `LEVEL.craft`: first pass.
+
 ## The field (`sounds/field.ts`)
 
 - **Seven clones** of the user's recordings (textures in `models/field*.ts`): transformer hum, a cryogenic plant, a pump set, a furnace, an overhead crane, a slewing drive, a relief valve's roar.

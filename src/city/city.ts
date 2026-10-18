@@ -29,11 +29,11 @@ export interface City {
   /** What the eye sees of the star from a position (glare scaling). */
   starVisibility(eye: Vector3): StarView;
   readonly gate: WestGate;
-  /** The craft airlock in the East Collar (posed by the craft, step 4). */
+  /** The craft airlock in the East Collar (driven by the craft: vehicles/craft). */
   readonly lock: EastLock;
   /** Walls and walkable surfaces for the player. */
   readonly walk: CityWalk;
-  /** Per frame: runs the airlock for a player standing at `feet`. */
+  /** Per frame: runs the West Gate's airlock for a player standing at `feet`, and the East Lock's for the craft. */
   update(dt: number, feet: Vector3): void;
 }
 
@@ -107,6 +107,7 @@ export function buildCity(): City {
     update(dt, feet) {
       gate.update(dt, feet, walk.walls);
       gate.group.updateMatrixWorld();
+      lock.update(dt);
     },
   };
 }

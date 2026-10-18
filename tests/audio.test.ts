@@ -240,7 +240,7 @@ describe('cloned sounds', () => {
     expect(Math.abs(at / SR - bank.door.strike)).toBeLessThan(0.06);
     expect(peak(bank.door.open[0])).toBeLessThan(0.5);
     // The kettle and the rustle loop seamlessly at RMS 1.
-    for (const loop of [bank.kettle, bank.rustle]) {
+    for (const loop of [bank.kettle, bank.rustle, bank.car, bank.craft]) {
       expect(finite(loop)).toBe(true);
       let ms = 0;
       let step = 0;
@@ -251,6 +251,12 @@ describe('cloned sounds', () => {
       expect(Math.sqrt(ms / loop.length)).toBeCloseTo(1, 3);
       // Periodic: the wrap is no bigger a step than the loop's own (clicks make big steps anywhere).
       expect(Math.abs(loop[0] - loop[loop.length - 1])).toBeLessThanOrEqual(step);
+    }
+    // The car's knocks peak at 1 and ring down within their length.
+    for (const k of bank.impact) {
+      expect(peak(k)).toBeCloseTo(1, 6);
+      const tail = k.subarray(Math.round(k.length * 0.9));
+      expect(peak(tail)).toBeLessThan(0.01);
     }
     // A walking step on turf is quieter than on stone; on gravel, louder than on turf.
     const loud = (k: keyof typeof bank.footsteps) => bank.footsteps[k].reduce((m, x) => m + band(x, 250, 16000), 0);

@@ -1,7 +1,7 @@
 /**
  * What the sound hears of the world (audio/gameAudio.ts AudioWorld): the airlock, the field's
  * machines (silenced within the estate's walls), the house and the estate's trees, and what is
- * underfoot: the house's floors and porches first, then the estate's terrace, then the field's
+ * underfoot (and the East Lock, the car and the craft): the house's floors and porches first, then the estate's terrace, then the field's
  * roads and the site.
  */
 import type { AudioWorld } from '../audio/gameAudio';
@@ -19,5 +19,8 @@ export function audioWorld(world: World): AudioWorld {
     field: { sources: fieldSoundSources(), vents: world.field.vents, time: () => world.field.time, silenced: estateSilenced },
     house,
     crowns: estate.crowns,
+    lock: world.city.lock.airlock,
+    car: world.vehicles.car,
+    craft: world.vehicles.craft.audio,
   };
 }

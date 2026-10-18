@@ -4,9 +4,10 @@
  * their sources, and lets the engine re-derive every path.
  */
 import { AudioEngine, type ListenerState } from './engine';
-import { AirlockWatcher } from './airlockEvents';
+import { AirlockWatcher, type AirlockState } from './airlockEvents';
 import { Footsteps } from './sounds/footsteps';
-import { GateSounds } from './sounds/gate';
+import { GateSounds, LOCK_GATE_SOUND } from './sounds/gate';
+import { CarSounds, CraftSounds, type AudioCar, type AudioCraft } from './sounds/vehicles';
 import { VentSounds } from './sounds/vents';
 import { FieldSounds, type AudioField } from './sounds/field';
 import { HouseSounds, type AudioHouse } from './sounds/house';
@@ -27,6 +28,10 @@ export interface AudioWorld {
   /** The house and the estate's trees (absent in tools without them). */
   house?: AudioHouse;
   crowns?: readonly AudioCrown[];
+  /** The East Lock's airlock, the car and the craft (absent in tools without them). */
+  lock?: AirlockState;
+  car?: AudioCar;
+  craft?: AudioCraft;
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -51,6 +56,9 @@ export class GameAudio {
   private readonly house: HouseSounds | null;
   private readonly estate: EstateSounds | null;
   private readonly houseDoors: AudioHouse['doors'] | null;
+  private readonly lock: { state: AirlockState; watcher: AirlockWatcher; sounds: GateSounds } | null;
+  private readonly car: CarSounds | null;
+  private readonly craft: CraftSounds | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
   /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
@@ -82,6 +90,10 @@ export class GameAudio {
     this.house = house ? new HouseSounds(this.engine, house) : null;
     this.houseDoors = house?.doors ?? null;
     this.estate = world.crowns ? new EstateSounds(this.engine, world.crowns) : null;
+    const lock = world.lock;
+    this.lock = lock ? { state: lock, watcher: new AirlockWatcher(lock), sounds: new GateSounds(this.engine, lock.outer, lock.inner, LOCK_GATE_SOUND) } : null;
+    this.car = world.car ? new CarSounds(this.engine, world.car) : null;
+    this.craft = world.craft ? new CraftSounds(this.engine, world.craft) : null;
   }
 
   /**
@@ -129,6 +141,12 @@ export class GameAudio {
     this.pending.length = 0;
 
     this.gate.update(dt, t);
+    if (this.lock) {
+      for (const g of this.lock.watcher.step(this.lock.state).gates) this.lock.sounds.play(g.gate, g.event, t);
+      this.lock.sounds.update(dt, t);
+    }
+    this.car?.update(dt, t);
+    this.craft?.update(t, l);
     this.vents.update(dt, t, this.airlock);
     this.field?.update(dt, t, l);
     this.house?.update(t, l);

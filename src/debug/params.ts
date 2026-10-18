@@ -17,6 +17,8 @@
  *   ?gate=closed|outer|inner                                 hold the West Gate's airlock in a state (both shut, outer or inner open)
  *   ?lock=closed|outer|inner|open                            pose the East Lock's gates (for review; the craft drive it in play)
  *   ?vent                                                    lift the Cold Hold's largest relief stack at once (vapour and sound review)
+ *   ?craft=<leg>[:s]                                         run the craft's visit forward to a leg (approach, hold, enter, inbound, hover, outbound, depart), s seconds in
+ *   ?drive                                                   start in the car, behind it (vehicles review)
  */
 import type { DebugView, ToneMapper } from '../render/pipeline';
 
@@ -39,6 +41,8 @@ export interface DebugParams {
   gate: 'closed' | 'outer' | 'inner' | null;
   lock: 'closed' | 'outer' | 'inner' | 'open' | null;
   vent: boolean;
+  craft: string | null;
+  drive: boolean;
 }
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare', 'veil'];
@@ -78,5 +82,7 @@ export function readDebugParams(search = window.location.search, hostname = wind
     gate: ((g) => (g === 'closed' || g === 'outer' || g === 'inner' ? g : null))(q.get('gate')),
     lock: ((g) => (g === 'closed' || g === 'outer' || g === 'inner' || g === 'open' ? g : null))(q.get('lock')),
     vent: q.has('vent'),
+    craft: q.get('craft'),
+    drive: q.has('drive'),
   };
 }

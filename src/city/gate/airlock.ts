@@ -17,15 +17,27 @@ export const TIMING = { bolts: 1.0, travel: 6.0, settle: 0.6, cycle: 5.0, idleCl
 /** Distance (m) within which an approaching player opens a gate. */
 export const APPROACH = 9;
 
-type Phase = 'closed' | 'unbolting' | 'opening' | 'open' | 'closing' | 'bolting';
+export type Phase = 'closed' | 'unbolting' | 'opening' | 'open' | 'closing' | 'bolting';
 
 function ease(t: number): number {
   return t * t * (3 - 2 * t);
 }
 
+/** A gate's run times (s): bolts withdraw/shoot, the leaf travels, the settle on the open stop. */
+export interface GateTiming {
+  bolts: number;
+  travel: number;
+  settle: number;
+}
+
 /** One sector gate: bolts, then the leaf. Requests may reverse it mid-travel. */
 export class GateActuator {
   phase: Phase = 'closed';
+  readonly timing: GateTiming;
+
+  constructor(timing: GateTiming = TIMING) {
+    this.timing = timing;
+  }
   /** Leaf travel 0..1 (linear in time; `openness` is eased). */
   private travel = 0;
   /** Bolts: 1 = shot (engaged), 0 = withdrawn. */
@@ -35,7 +47,7 @@ export class GateActuator {
 
   get openness(): number {
     // A slight damped settle on the open stop.
-    const settle = this.phase === 'open' && this.settleT < TIMING.settle ? 0.004 * Math.exp(-this.settleT * 7) * Math.sin(this.settleT * 26) : 0;
+    const settle = this.phase === 'open' && this.settleT < this.timing.settle ? 0.004 * Math.exp(-this.settleT * 7) * Math.sin(this.settleT * 26) : 0;
     return Math.min(Math.max(ease(this.travel) + settle, 0), 1.002);
   }
 
@@ -71,11 +83,11 @@ export class GateActuator {
   update(dt: number): void {
     switch (this.phase) {
       case 'unbolting':
-        this.bolts = Math.max(0, this.bolts - dt / TIMING.bolts);
+        this.bolts = Math.max(0, this.bolts - dt / this.timing.bolts);
         if (this.bolts === 0) this.phase = 'opening';
         break;
       case 'opening':
-        this.travel = Math.min(1, this.travel + dt / TIMING.travel);
+        this.travel = Math.min(1, this.travel + dt / this.timing.travel);
         if (this.travel === 1) {
           this.phase = 'open';
           this.settleT = 0;
@@ -85,11 +97,11 @@ export class GateActuator {
         this.settleT += dt;
         break;
       case 'closing':
-        this.travel = Math.max(0, this.travel - dt / TIMING.travel);
+        this.travel = Math.max(0, this.travel - dt / this.timing.travel);
         if (this.travel === 0) this.phase = 'bolting';
         break;
       case 'bolting':
-        this.bolts = Math.min(1, this.bolts + dt / TIMING.bolts);
+        this.bolts = Math.min(1, this.bolts + dt / this.timing.bolts);
         if (this.bolts === 1) this.phase = 'closed';
         break;
       default:
