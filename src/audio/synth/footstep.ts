@@ -1,10 +1,10 @@
 /**
  * Footsteps (docs/audio.md, "Footsteps"), resynthesised from four recordings: six steps on polished
  * stone (models/footsteps.ts), three through lawn grass (models/footstepsGrass.ts), six on fine
- * gravel over sand (models/footstepsGravel.ts) and six on a timber floor (models/footstepsWood.ts).
+ * gravel over sand (models/footstepsGravel.ts) and twenty on a timber floor (models/footstepsWood.ts).
  * Each recorded step is a variant; every playback has new fine structure.
  *
- * Walking on stone, grass, gravel and the house's timber floors are the recordings themselves. The other gaits reshape them as a
+ * Walking on stone, grass, gravel and the house's hard floors (all of them voiced as timber) are the recordings themselves. The other gaits reshape them as a
  * body would: running plants the foot harder and quicker (the heel-to-ball roll compressed, more
  * force), landing brings both feet down nearly together with the body's weight behind them (more
  * low end), stopping is a light half-step, and pushing off is mostly the ball and the sole's scuff.
@@ -13,7 +13,7 @@
  *  - basalt is harder than the recorded stone (a little brighter); bronze sills ring;
  *  - the deck's glazed plates over structure are hollow (a low-mid body, a glassy ring, dust);
  *  - the porches' boards span a void: the timber recording, hollower and lower;
- *  - rugs and stair runners lie on the timber floors: its thud kept, its tap swallowed.
+ *  - rugs, runners and mats lie on the hard floors: the timber's thud kept, its tap swallowed.
  * Pure: returns sample arrays.
  */
 import { addPrint, BAND_COUNT, printLength, THIRD_OCTAVES, type SpectralPrint } from './spectral';
@@ -75,8 +75,8 @@ const SURFACES: Record<GroundSurface, number[]> = {
   deck: tilt((f) => bump(f, 200, 0.8, 5) + ramp(f, 2000, 6000)),
   grass: tilt(() => 0),
   gravel: tilt(() => 0),
-  // The recording, its lowest octaves trimmed to it (with a high-pass: addSurface).
-  wood: tilt((f) => -6 * (1 - ramp(f, 110, 160))),
+  // The recording itself (its band leakage trimmed by real filters: addSurface).
+  wood: tilt(() => 0),
   // Boards over the porch's void: the timber floor hollower, lower.
   boards: tilt((f) => bump(f, 130, 0.7, 4) - 2 * ramp(f, 2000, 8000)),
   // Pile and underlay: the heel's thud stays, the click is swallowed (with a low-pass: addSurface).
@@ -142,9 +142,9 @@ function addSurface(out: Float32Array, surface: GroundSurface, gait: FootGait, s
       filter(out, sr, ['lowpass', 1300, 0.6], ['lowpass', 2000, 0.7]);
       return;
     case 'wood':
-      // The clone's strikes leak into the lowest bands (6 dB/octave), which band gains cannot take
-      // back: below ~100 Hz it ran 5–19 dB over the recording. A real high-pass sets it right (±4 dB).
-      filter(out, sr, ['highpass', 80, 0.7]);
+      // Each strike's band-pass leaks 6 dB/octave, which band gains cannot take back: above 6 kHz the
+      // clone ran 4–12 dB over the recording, below 40 Hz over it too. Real filters set both (±4 dB).
+      filter(out, sr, ['highpass', 62, 0.7], ['lowpass', 6500, 0.6]);
       return;
     case 'boards': {
       // The void under the porch's deck: a few low modes struck at the heel, ringing longer than a floor on joists.

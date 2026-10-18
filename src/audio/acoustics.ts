@@ -146,6 +146,15 @@ export function wallDistance(zone: Zone, x: number, z: number): number {
   return Math.max(Math.min(pier, Math.abs(drum), house), MIN_WALL_DISTANCE);
 }
 
+/**
+ * A source's share of the slap off the listener's nearest face, its path out and back `slapPath`
+ * (2 × wallDistance) and the source `d` away: whole within that path (the listener's own sounds),
+ * then falling 1/d, as a far source reaches the face about as far away as it reaches the ears.
+ */
+export function slapShare(slapPath: number, d: number): number {
+  return Math.min(1, slapPath / d);
+}
+
 /** The house's walls in plan (world): its foundation outline. */
 const HOUSE_WALLS = HOUSE_FOOTPRINT[0].map(([x, z]) => H(x, z));
 const HOUSE_BOUND = (() => {

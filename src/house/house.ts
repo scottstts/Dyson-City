@@ -17,7 +17,7 @@ import type { DrawGroup, CollisionMesh, Marker } from './compile';
 import { BakedLight, rgb9e5Texture } from './bakedLight';
 import { applyLook, buildMaterial, type HouseLook, type MaterialContext } from './materials';
 import { HouseDoor, HouseDoors } from './doors';
-import { HouseFloors } from './floors';
+import { HouseFloors, indoorSurface } from './floors';
 import type { GroundSurface } from '../city/walk';
 import { IndoorCulling } from './culling';
 import { roomOf } from './rooms';
@@ -254,7 +254,8 @@ export class House {
   /** What is underfoot at a world point on the house's floors, porches and steps (null off them). */
   surfaceAt(x: number, y: number, z: number): GroundSurface | null {
     const h = this.toHouse(x, y, z);
-    return this.floors.at(h.x, h.y, h.z);
+    const s = this.floors.at(h.x, h.y, h.z);
+    return s === 'stone' ? indoorSurface(s, roomOf(this.assets.rooms, h.x, -h.z, h.y) !== null) : s;
   }
 
   update(dt: number, camera: Camera, feet: Vector3, use: boolean): void {

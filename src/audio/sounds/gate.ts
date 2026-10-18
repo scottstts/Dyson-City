@@ -20,7 +20,7 @@ import { Emitter } from '../emitter';
 import type { AudioEngine } from '../engine';
 import { glide } from '../params';
 import { between, rng } from '../dsp';
-import { LEVEL } from '../mix';
+import { DOME_SEND, LEVEL } from '../mix';
 import { playInto, VariantPicker } from './oneShot';
 import type { GateEvent, GateName } from '../airlockEvents';
 import type { GateActuator } from '../../city/gate/airlock';
@@ -51,6 +51,8 @@ export interface GateSoundSpec {
   outer: GateSoundGeometry;
   inner: GateSoundGeometry;
   gain: number;
+  /** Reverb send of its emitters. */
+  send: number;
 }
 
 function westGate(trunnionX: number, lipX: number, machineZone: Zone, sides: [Zone, Zone]): GateSoundGeometry {
@@ -92,6 +94,8 @@ export const WEST_GATE_SOUND: GateSoundSpec = {
   outer: westGate(GATE.outerTrunnionX, GATE.outerLipX, 'outside', ['outside', 'chamber']),
   inner: westGate(GATE.innerTrunnionX, GATE.innerLipX, 'chamber', ['chamber', 'city']),
   gain: 1,
+  // The chamber's balance, tuned by ear.
+  send: 1,
 };
 
 /** Leaves of radius 34 m against the West Gate's: ~+4 dB. */
@@ -100,6 +104,8 @@ export const LOCK_GATE_SOUND: GateSoundSpec = {
   outer: lockGate(LOCK.outerTrunnionX),
   inner: lockGate(LOCK.innerTrunnionX),
   gain: 1.6,
+  // Heard across the Dome: falling with distance, as the craft is.
+  send: DOME_SEND,
 };
 /** The pump's speed on starting (fraction) and its spin-up time constant (s), as measured. */
 const SPIN_FROM = 0.62;
@@ -242,11 +248,12 @@ export class GateSounds {
 
     const rig = (gate: GateName, act: GateActuator, geo: GateSoundGeometry): GateRig => {
       const name = `${spec.name}.${gate}`;
-      const hoists = [-1, 1].map((s) => new Emitter(engine, { name: `${name}.hoist${s}`, zones: geo.machineZone, refDistance: 2.5 }));
+      const hoists = [-1, 1].map((s) => new Emitter(engine, { name: `${name}.hoist${s}`, zones: geo.machineZone, refDistance: 2.5, send: spec.send }));
       const leaf = new Emitter(engine, {
         name: `${name}.leaf`,
         zones: geo.sides,
         refDistance: 7,
+        send: spec.send,
         directivity: { axis: [1, 0, 0], rear: 0.45, rearCutoff: 1800, dipole: true },
       });
       const bolts = geo.bolts ? BOLT_Z.map((z) => new Emitter(engine, { name: `${name}.bolt${z}`, zones: geo.sides, refDistance: 0.5, simplePanning: true })) : [];

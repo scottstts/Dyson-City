@@ -33,7 +33,8 @@ interface ZoneBus {
   input: GainNode;
   ret: GainNode;
   retFilter: BiquadFilterNode;
-  slap?: { delay: DelayNode; gain: GainNode };
+  /** Fed per emitter (its own send, weighted by its distance), not from `input`. */
+  slap?: { input: GainNode; delay: DelayNode; gain: GainNode };
 }
 
 export class AudioEngine {
@@ -47,6 +48,7 @@ export class AudioEngine {
   private readonly buses: Record<Zone, ZoneBus>;
   private readonly emitters: Emitter[] = [];
   private listenerFirst = true;
+  private readonly slapPaths: Record<Zone, number> = { outside: 0, chamber: 0, city: 0, house: 0 };
   /** Is a world point inside the house's rooms? (Set once the house is known.) */
   interior: ((x: number, y: number, z: number) => boolean) | null = null;
 
@@ -90,14 +92,15 @@ export class AudioEngine {
       const bus: ZoneBus = { input, ret, retFilter };
       if (zone === 'outside' || zone === 'city') {
         // The nearest big face (the drum, the gatehouse) returns a slap that moves with the listener.
+        const slapIn = ctx.createGain();
         const delay = ctx.createDelay(MAX_SLAP + 0.1);
         const lp = ctx.createBiquadFilter();
         lp.type = 'lowpass';
         lp.frequency.value = 4000;
         const gain = ctx.createGain();
         gain.gain.value = 0;
-        input.connect(delay).connect(lp).connect(gain).connect(retFilter);
-        bus.slap = { delay, gain };
+        slapIn.connect(delay).connect(lp).connect(gain).connect(retFilter);
+        bus.slap = { input: slapIn, delay, gain };
       }
       buses[zone] = bus;
     }
@@ -118,6 +121,16 @@ export class AudioEngine {
 
   zoneInput(zone: Zone): AudioNode {
     return this.buses[zone].input;
+  }
+
+  /** The input of a zone's slap echo (the outside and the city have one). */
+  slapInput(zone: Zone): AudioNode | null {
+    return this.buses[zone].slap?.input ?? null;
+  }
+
+  /** The slap's path this frame (m): out to the listener's nearest big face and back (acoustics.ts slapShare). */
+  slapPath(zone: Zone): number {
+    return this.slapPaths[zone];
   }
 
   addEmitter(e: Emitter): void {
@@ -146,6 +159,7 @@ export class AudioEngine {
       glide(bus.retFilter.frequency, p.cutoff, t, 0.05);
       if (bus.slap) {
         const d = wallDistance(zone, l.x, l.z);
+        this.slapPaths[zone] = 2 * d;
         glide(bus.slap.delay.delayTime, Math.min((2 * d) / SPEED_OF_SOUND, MAX_SLAP), t, 0.3);
         glide(bus.slap.gain.gain, WALL_REFLECTION / (2 * d), t, 0.1);
       }

@@ -9,6 +9,8 @@ import { synthTick } from '../src/audio/synth/house';
 import { synthValve } from '../src/audio/synth/valve';
 import { addPrint, BAND_COUNT, printLength, synthTexture, texturePsd, THIRD_OCTAVES, type SpectralPrint } from '../src/audio/synth/spectral';
 import { buildAudioBank } from '../src/audio/bank';
+import { VariantPicker } from '../src/audio/sounds/oneShot';
+import { floorSurface } from '../src/house/floors';
 import { VAULT_SHUT } from '../src/audio/models/vaultShut';
 import { HYDRAULIC_STOP } from '../src/audio/models/hydraulicStop';
 import { HYDRAULIC_RUN } from '../src/audio/models/hydraulicRun';
@@ -262,11 +264,43 @@ describe('cloned sounds', () => {
     const loud = (k: keyof typeof bank.footsteps) => bank.footsteps[k].reduce((m, x) => m + band(x, 250, 16000), 0);
     expect(loud('grass:walk')).toBeLessThan(loud('stone:walk') / 4);
     expect(loud('gravel:walk')).toBeGreaterThan(loud('grass:walk'));
+    // A walk on the house's floors has every recorded step, at levels a dB or two apart (the
+    // recording's 17 dB spread was its microphone's distance).
+    for (const k of ['wood:walk', 'rug:walk'] as const) {
+      const db = bank.footsteps[k].map((x) => 10 * Math.log10(energy(x)));
+      expect(db.length).toBeGreaterThanOrEqual(20);
+      expect(Math.max(...db) - Math.min(...db)).toBeLessThan(6);
+    }
   }, 30000);
 });
 
 describe('footsteps', () => {
   const surfaces = FOOT_SURFACES;
+
+  it('know two floors in the house: hard and soft', () => {
+    const inside = ['floor_oak', 'floor_parquet', 'floor_pine', 'oak_tread', 'oak_threshold', 'floor_encaustic', 'floor_flag', 'marble_hearth', 'tile_hex', 'brick'];
+    for (const m of inside) expect(floorSurface(m)).toBe('wood');
+    for (const m of ['rug_parlour', 'stair_runner', 'coir_mat']) expect(floorSurface(`${m}__gltf`)).toBe('rug');
+    // Outdoors: the dressed sandstone steps and the porches' boards.
+    expect(floorSurface('sandstone')).toBe('stone');
+    expect(floorSurface('porch_floor')).toBe('boards');
+  });
+
+  it('never return to a step within half the variants', () => {
+    const picker = new VariantPicker(rng(7), 10);
+    const seq = Array.from({ length: 400 }, () => picker.pick(20));
+    for (let i = 0; i < seq.length; i++) expect(seq.slice(Math.max(0, i - 10), i)).not.toContain(seq[i]);
+    // Every variant comes round.
+    expect(new Set(seq).size).toBe(20);
+    // Memory 1: never twice in a row.
+    const one = new VariantPicker(rng(8));
+    let last = -1;
+    for (let i = 0; i < 100; i++) {
+      const v = one.pick(3);
+      expect(v).not.toBe(last);
+      last = v;
+    }
+  });
 
   it('strike harder running than walking, and harder still landing', () => {
     for (const s of surfaces) {
@@ -319,7 +353,6 @@ describe('footsteps', () => {
       return band(x, 70, 250) / energy(x);
     };
     expect(low('boards')).toBeGreaterThan(low('wood'));
-    expect(low('wood')).toBeGreaterThan(low('stone'));
   });
 });
 

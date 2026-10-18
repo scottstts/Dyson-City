@@ -23,14 +23,14 @@ const WALK_SPEED = 2;
 export class Footsteps {
   private readonly feet: [Emitter, Emitter];
   private readonly bank = new Map<string, AudioBuffer[]>();
-  private readonly picker: VariantPicker;
+  /** One picker per floor and gait, each remembering its own recent steps. */
+  private readonly pickers = new Map<string, VariantPicker>();
   private readonly random = rng(0xf007);
   private readonly surfaceAt: (x: number, z: number, y: number) => GroundSurface;
   private side = 0;
 
   constructor(engine: AudioEngine, surfaceAt: (x: number, z: number, y: number) => GroundSurface) {
     this.surfaceAt = surfaceAt;
-    this.picker = new VariantPicker(this.random);
     // In the house a step feeds the room's reverb at its level at 1 m (sounds/house.ts); the gate's
     // chamber keeps the send it was tuned by ear with.
     const make = (name: string) => new Emitter(engine, { name, zones: 'located', refDistance: FOOT_REF, sendScale: (zone) => (zone === 'house' ? FOOT_REF : 1) });
@@ -68,8 +68,12 @@ export class Footsteps {
         force = Math.min(Math.max(e.impact / 3.5, 0.4), 1.6);
         break;
     }
-    const list = this.bank.get(`${this.surfaceAt(x, z, y)}:${gait}` satisfies FootKey)!;
-    const buffer = list[this.picker.pick(list.length)];
+    const key = `${this.surfaceAt(x, z, y)}:${gait}` satisfies FootKey;
+    const list = this.bank.get(key)!;
+    let picker = this.pickers.get(key);
+    // Half the variants are kept out after each pick: no step returns within the next n/2.
+    if (!picker) this.pickers.set(key, (picker = new VariantPicker(this.random, Math.floor(list.length / 2))));
+    const buffer = list[picker.pick(list.length)];
     const foot = this.feet[this.side];
     // Both feet land together on a landing; otherwise feet alternate.
     if (gait !== 'land') this.side = 1 - this.side;

@@ -44,7 +44,8 @@ These rules apply to all future sounds, not just the current ones.
   - **House.** One response for every room (a zone's reverberation is diffuse): a furnished 6 × 5 × 3.8 m room, T60 ~0.5 s in the mids, image-source early reflections over the first 40 ms.
   - **But each room's reverb is its own.** A house sound (doors, clocks, footsteps on the house's floors) feeds the house's reverb at its level at 1 m, and in full only while the listener is in the room it sounds in (`house/rooms.ts`, the rooms' boxes). From another room, or outdoors, it is −20 dB (`ROOM_LEAK`, first pass, by ear), and outdoors the shell's path applies on top. Before this a steady sound in the kitchen, fed at its 0.3 m level into one reverb heard in every room, filled the whole house ~30 dB over its own direct sound and leaked out of the front door.
   - **The send is the level at 1 m.** An IR's level is relative to the direct sound at 1 m, but an emitter's input is its level at `refDistance`, so its send should be scaled by `refDistance`. Only the house's sounds do so (`EmitterOptions.sendScale`). Everywhere else the send is still the input as it is: the gate chamber's balance (footsteps ~10 dB wetter than physical, the leaf ~17 dB drier) was tuned by ear on it and is kept, by the user's decision.
-- **Slap.** The nearest big face returns a moving echo, a delay of 2d/c with gain 0.8/(2d). Outside that face is the drum or the piers' west ends; in the city, the drum's glass, the piers' east ends or the house's walls (its foundation outline, so footsteps on the terrace slap off the facade). The chamber and the house have no slap: their rooms are in their responses.
+- **Slap.** The nearest big face returns a moving echo, a delay of 2d/c with gain 0.8/(2d).
+  - Each emitter feeds it on its own send, its share falling 1/r once the source is r farther away than the slap's path 2d (`slapShare`). A source at the listener (the footsteps) keeps it whole. *Rejected:* the slap fed from the zone's bus, the same for every source. Beside the drum's glass or the house's walls, the craft across the Dome slapped back as loud as one 50 m away, about 20 dB over its own direct sound: it stopped falling with distance at 100 m. Outside that face is the drum or the piers' west ends; in the city, the drum's glass, the piers' east ends or the house's walls (its foundation outline, so footsteps on the terrace slap off the facade). The chamber and the house have no slap: their rooms are in their responses.
   - It is a continuous distance to the real faces. The passage between the piers is open, not a wall.
   - The distance is held at 2.5 m or more. An earlier version measured to a "gatehouse face" across the passage opening; near zero distance the gain diverged and blew up the output.
 
@@ -77,8 +78,11 @@ These rules apply to all future sounds, not just the current ones.
   - six steps on polished marble;
   - three through lawn grass, cut at each step's onset (0.45 s). The steady rumble between steps is taken off as the gaps' floor, but the low thud each footfall makes in the turf is kept. *Rejected:* the first grass fit. Its windows straddled two steps (0.7 s of swish each), and it dropped every band below 160 Hz as rumble, which took the foot's thud with it: a long, hissy step 8–15 dB too bright above 4 kHz;
   - six on fine gravel over sand;
-  - six on a timber floor (heel then toe tapping the boards, and the boards' low body), cut at each step (0.5 s), the room's tone taken off as the floor. Its clone leaks 5–19 dB into the bands below 100 Hz (each strike's band-pass at 6 dB/octave), which band gains cannot take back: a real high-pass at 80 Hz sets it within ±4 dB of the recording.
-  - Stone, grass, gravel and the house's timber floors are the recordings themselves; the porches' boards and the rugs and runners are built on the timber, the outdoor hard floors on the marble.
+  - twenty on a timber floor (heel then toe tapping the boards, and the boards' low body), cut at each step (0.5 s), the room's tone taken off as the floor. Each strike's band-pass leaks 6 dB/octave, which band gains cannot take back: real filters (high-pass 62 Hz, low-pass 6.5 kHz) set the clone's mean step within ±2 dB of the recording's from 31 Hz to 1.3 kHz and ±4 dB above.
+  - The recording passes its microphone: its steps span 17 dB, mostly distance, which the emitter already gives. In the bank each step keeps a quarter of its departure from the walk's mean.
+  - Stone, grass, gravel and the house's hard floors are the recordings themselves; the porches' boards and the rugs and runners are built on the timber, the outdoor hard floors on the marble.
+- **No cycle.** A walk has every step its recording holds (twenty on the timber), a run up to six, the rarer gaits three. Each floor and gait has its own picker, which keeps the last half of its variants out. *Rejected:* three variants per floor with one picker, which only avoided an immediate repeat: walking across a room the steps fell into an audible cycle (the user's complaint: the sampled sound procedural synthesis should avoid).
+- **Memory.** Each step is cut where it has decayed 70 dB under its peak. The fixed lengths (room for the slowest gait's ring) were 40 % silence, kept twice (the bank and its AudioBuffers). The bank's footsteps are ~17 MB; the bank builds in ~2.8 s in its worker.
 - **Gaits reshape it:**
   - run: the roll compressed to 0.68, +5 dB;
   - land: 0.55, +7 dB, +5 dB more below 250 Hz, with a second foot ~25 ms later;
@@ -87,9 +91,10 @@ These rules apply to all future sounds, not just the current ones.
 - **Floors:**
   - basalt is a little brighter; the deck has a hollow 200 Hz body, glassy ring and grit; bronze rings;
   - the porches' `boards` span a void: the timber recording hollower and lower, with a few low modes ringing longer;
-  - `rug` (rugs, runners, mats, on the timber floors) keeps the thud and loses the tap through a real low-pass. Band gains alone cannot darken a print by more than ~10 dB: each strike's band-pass leaks 6 dB/octave, so the strong low bands fill the highs.
+  - `rug` (rugs, runners, mats, on the hard floors) keeps the thud and loses the tap through a real low-pass. Band gains alone cannot darken a print by more than ~10 dB: each strike's band-pass leaks 6 dB/octave, so the strong low bands fill the highs.
+- **The house has two floors to the ear** (the user's decision): hard and soft. Boards, parquet, encaustic tiles, flags, hearths and brick are all `wood`, the timber recording; rugs, runners and mats are `rug`. Within the rooms' boxes anything hard is the hard floor (`indoorSurface`): the foundation's sandstone top shows in the inner doorways. Outside, the sandstone steps stay stone and the porches' decks `boards`.
 - **Levels.** The bank is scaled so a walking step on stone peaks at `LEVEL.footstep`. The grass and gravel recordings have their own scales: a step there is set against one on stone by loudness above ~250 Hz, not by peak (a low thud carries energy the ear barely weighs; a crunch is many peaks). Turf is 8 dB under stone, gravel and timber 2 dB under. Each foot is its own emitter, 0.11 m either side of the body's line, with a `'located'` zone.
-- **What is underfoot** is asked at the feet with their height (the house has storeys): the house's floors first (`house/floors.ts`: the up-facing faces of the floor materials rasterised per 0.1 m cell in the house worker, every height a cell holds kept, so a rug over boards and three storeys share a cell), then the estate's class grid (`estate/surface.ts`: lawn and meadow grass, drive, walks and ramp gravel, flags, brick and the walls' tops stone), then the field's roads and the site (`app/audioWorld.ts`). Walking in from the gateway the feet meet steps, porch boards, the coir mat, the oak threshold, the vestibule's mat and tiles, the hall's boards and runner (`tests/houseWalk.test.ts`).
+- **What is underfoot** is asked at the feet with their height (the house has storeys): the house's floors first (`house/floors.ts`: the up-facing faces of the floor materials rasterised per 0.1 m cell in the house worker, every height a cell holds kept, so a rug over boards and three storeys share a cell), then the estate's class grid (`estate/surface.ts`: lawn and meadow grass, drive, walks and ramp gravel, flags, brick and the walls' tops stone), then the field's roads and the site (`app/audioWorld.ts`). Walking in from the gateway the feet meet steps, porch boards, the coir mat, the oak threshold, the vestibule's mat, its tiles and the hall's boards (both hard), and the runner (`tests/houseWalk.test.ts`).
 
 ## The West Gate (`sounds/gate.ts`)
 
@@ -124,6 +129,7 @@ These rules apply to all future sounds, not just the current ones.
   - no floor bolts.
 - **Gate geometry is data** (`GateSoundSpec`), so both gatehouses share one implementation.
 - **+4 dB** for leaves twice the radius.
+- **Heard across the Dome by distance,** like the craft: its emitters feed the city's reverberation at `DOME_SEND`. The West Gate keeps its full send (the chamber's balance, tuned by ear).
 - **Placed by position** (`'located'`): its chamber straddles the glass's line.
 
 ## The car (`sounds/vehicles.ts`, `synth/vehicle.ts`)
@@ -144,6 +150,11 @@ These rules apply to all future sounds, not just the current ones.
 
 - **The engines' roar** is the user's recording, cloned (`models/vehicleCraft.ts`, broadband, no tones). It comes from the main nozzle, beamed aft (rear gain 0.4, dull ahead), its level, pitch and brightness following the burn.
 - **It feeds the city's reverberation,** so an arrival fills the Dome. It is not behind the estate's silencer: the plan wants the craft heard through the whole Dome.
+- **It falls with distance across the whole Dome** (the user's rule): loud close by, very quiet from the far side. Two things held it level:
+  - the slap (see Acoustics), ~−16 dB re its level at 8 m wherever the listener stood by a wall;
+  - the city's reverberation. It is lifted 10 dB, and at full send it held the level from 400 m to the far side. The craft feeds it without the lift (`DOME_SEND` 0.3 in `mix.ts`).
+
+  Now, by a wall, the roar falls steadily from 20 m to 1 km. At 1 km it is ~31 dB under its level at 30 m (`tests/vehicleSound.test.ts`).
 - **Only under the Dome** (the user's decision, over the physical leak through the glass and a shut leaf). A listener outside the Dome, or in the West Gate's chamber with the inner gate shut, hears nothing of it: the roar is cut at its source, so its reverberation goes too (`craftAudible`). Once the inner gate starts to open, the chamber hears it through the gap, the path opening with the leaf.
 - **Level** `LEVEL.craft`: first pass.
 
@@ -204,7 +215,8 @@ These rules apply to all future sounds, not just the current ones.
   - zones, transmission and the slap distance's continuity;
   - IR decay times (±20 %) and levels;
   - clones resynthesising at their models' levels, texture loops and the bank's scaling;
-  - gaits ordered by force on every floor; gravel louder than turf (at the bank's scale), rugs dark, boards hollower than timber, timber than stone;
+  - gaits ordered by force on every floor; gravel louder than turf (at the bank's scale), rugs dark, boards hollower than timber;
+  - the house's two floors (hard, soft), every recorded timber step in the bank at even levels, and the picker never returning to a step within half its variants;
   - the house's shell and open doors, the slap off its walls, the clocks' tick and tock;
   - the door's split, the loops' seams, the lawn's level against stone;
   - the airlock's event order;

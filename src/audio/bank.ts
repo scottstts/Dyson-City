@@ -146,8 +146,15 @@ function doorSounds(sr: number): DoorSounds {
 export type FieldLoop = 'hum' | 'cryo' | 'pump' | 'furnace' | 'crane' | 'slew' | 'vent';
 const FIELD_MODELS: Record<FieldLoop, TextureModel> = { hum: FIELD_HUM, cryo: FIELD_CRYO, pump: FIELD_PUMP, furnace: FIELD_FURNACE, crane: FIELD_CRANE, slew: FIELD_SLEW, vent: FIELD_VENT };
 
-/** Footstep variants per floor and gait (each a different recorded step, new fine structure). */
-export const FOOT_BANK_VARIANTS = 3;
+/**
+ * Footstep variants per floor and gait, each a different recorded step with new fine structure. A
+ * walk has every step its recording holds and a run up to six: with three, the steps of a walk
+ * across a room fell into an audible cycle. The rarer gaits keep three.
+ */
+export function footBankVariants(surface: GroundSurface, gait: FootGait): number {
+  const steps = footSource(surface).length;
+  return gait === 'walk' ? Math.max(steps, 3) : gait === 'run' ? Math.min(Math.max(steps, 3), 6) : 3;
+}
 /**
  * Walking steps on the other recordings against one on stone (dB, by loudness above ~250 Hz): turf
  * takes the heel's click; gravel crunches nearly as loud as a heel on marble.
@@ -166,6 +173,27 @@ function rms(x: Float32Array): number {
 function scaled(x: Float32Array, s: number): Float32Array {
   for (let i = 0; i < x.length; i++) x[i] *= s;
   return x;
+}
+
+/**
+ * A one-shot cut where it has decayed 70 dB under its peak, with a 5 ms fade: the footsteps' fixed
+ * lengths (room for the slowest gait's ring) were 40 % silence, kept twice (here and as AudioBuffers).
+ */
+function trimTail(x: Float32Array, sr: number): Float32Array {
+  const floor = peak(x) * 3e-4;
+  let end = x.length;
+  while (end > 1 && Math.abs(x[end - 1]) < floor) end--;
+  const out = x.slice(0, end);
+  const n = Math.min(out.length, Math.round(0.005 * sr));
+  for (let i = 0; i < n; i++) out[out.length - 1 - i] *= i / n;
+  return out;
+}
+
+/** Pulls each one-shot's energy toward the list's log-mean, keeping `keep` of its departure (in dB). */
+function evenLevels(list: Float32Array[], keep: number): void {
+  const db = list.map((x) => 10 * Math.log10(rms(x) ** 2 * x.length + 1e-30));
+  const mean = db.reduce((m, v) => m + v, 0) / db.length;
+  list.forEach((x, i) => scaled(x, Math.pow(10, ((mean - db[i]) * (1 - keep)) / 20)));
 }
 
 function renderPrint(p: SpectralPrint, sr: number, seed: number, tail = 0.05): Float32Array {
@@ -187,14 +215,19 @@ export function buildAudioBank(sr: number): AudioBank {
   for (const s of FOOT_SURFACES)
     for (const g of FOOT_GAITS) {
       const list: Float32Array[] = [];
-      for (let v = 0; v < FOOT_BANK_VARIANTS; v++) list.push(synthFootstep(s, g, v + (seed % 3), sr, seed++ * 7919));
+      const n = footBankVariants(s, g);
+      const first = seed % footSource(s).length;
+      for (let v = 0; v < n; v++) list.push(synthFootstep(s, g, first + v, sr, seed++ * 7919));
+      // The timber recording passes its microphone: its steps span 17 dB, mostly distance, which the
+      // emitter already gives. A step keeps a quarter of its departure from the walk's mean.
+      if (footSource(s) === FOOTSTEP_WOOD) evenLevels(list, 0.25);
       footsteps[`${s}:${g}`] = list;
     }
-  const meanPeak = (k: FootKey) => footsteps[k].reduce((m, x) => m + peak(x), 0) / FOOT_BANK_VARIANTS;
+  const meanPeak = (k: FootKey) => footsteps[k].reduce((m, x) => m + peak(x), 0) / footsteps[k].length;
   const ref = meanPeak('stone:walk');
   // The lawn and gravel recordings have their own scales: a step there is set against one on stone
   // by loudness, not peak (a low thud carries energy the ear barely weighs; a crunch is many peaks).
-  const meanLoud = (k: FootKey) => footsteps[k].reduce((m, x) => m + loudness(x, sr), 0) / FOOT_BANK_VARIANTS;
+  const meanLoud = (k: FootKey) => footsteps[k].reduce((m, x) => m + loudness(x, sr), 0) / footsteps[k].length;
   const against = (db: number, k: FootKey) => Math.pow(10, db / 20) * Math.sqrt(meanLoud('stone:walk') / meanLoud(k));
   const lawn = against(GRASS_DB, 'grass:walk');
   const gravel = against(GRAVEL_DB, 'gravel:walk');
@@ -202,7 +235,7 @@ export function buildAudioBank(sr: number): AudioBank {
   for (const [key, list] of Object.entries(footsteps)) {
     const src = footSource(key.split(':')[0] as GroundSurface);
     const s = (src === FOOTSTEP_GRASS ? lawn : src === FOOTSTEP_GRAVEL ? gravel : src === FOOTSTEP_WOOD ? timber : 1) / ref;
-    for (const x of list) scaled(x, s);
+    list.forEach((x, i) => (list[i] = trimTail(scaled(x, s), sr)));
   }
 
   const hydraulicRun = synthTexture(HYDRAULIC_RUN, 18, sr, rng(101));

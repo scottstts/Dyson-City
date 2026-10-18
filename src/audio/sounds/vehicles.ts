@@ -15,7 +15,8 @@
  *
  * The craft, from its main nozzle: its engines' roar (the user's recording resynthesised), beamed
  * aft (quieter and duller ahead of it), its level, pitch and brightness following the burn. It feeds
- * the city's reverberation, so its arrival fills the Dome. It is a sound of the Dome only (by the
+ * the city's reverberation (without its lift: DOME_SEND), so its arrival fills the Dome while its
+ * level still falls with distance across it. It is a sound of the Dome only (by the
  * user's decision): a listener outside it, or in the West Gate's chamber with the inner gate shut,
  * hears nothing of it; once the inner gate starts to open, the chamber hears it through the gap.
  */
@@ -23,7 +24,7 @@ import { Emitter } from '../emitter';
 import type { AudioEngine } from '../engine';
 import { glide } from '../params';
 import { between, rng } from '../dsp';
-import { LEVEL } from '../mix';
+import { DOME_SEND, LEVEL } from '../mix';
 import { playInto, VariantPicker } from './oneShot';
 import { PAD_HEIGHT } from '../../ground/site';
 import type { ListenerState } from '../engine';
@@ -201,6 +202,7 @@ export class CraftSounds {
       name: 'craft',
       zones: 'located',
       refDistance: 8,
+      send: DOME_SEND,
       directivity: { axis: [1, 0, 0], rear: 0.4, rearCutoff: 1800 },
     });
     this.roar = new LoopVoice(engine.ctx, engine.buffer(engine.bank.craft), this.emitter.input, { type: 'lowpass', frequency: 3000, Q: 0.5 }, this.random);

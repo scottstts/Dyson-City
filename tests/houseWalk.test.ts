@@ -5,6 +5,7 @@ import { inside } from '../src/estate/sdf2';
 import { HOUSE_GRADE } from '../src/estate/levels';
 import { TestWalker } from './helpers/walker';
 import { roomOf } from '../src/house/rooms';
+import { indoorSurface } from '../src/house/floors';
 import { hasPack, houseWorld } from './helpers/houseWorld';
 
 /**
@@ -19,7 +20,8 @@ describe.skipIf(!hasPack)('walking the house', () => {
   const local = (w: { x: number; y: number; z: number }) => new Vector3(w.x, w.y, w.z).applyMatrix4(root.clone().invert());
   const underfoot = (w: { x: number; y: number; z: number }) => {
     const p = local(w);
-    return floors.at(p.x, p.y, p.z);
+    // As the house hears it (House.surfaceAt): rooms' boxes are in Blender axes (x, −z, y).
+    return indoorSurface(floors.at(p.x, p.y, p.z), roomOf(boxes, p.x, -p.z, p.y) !== null);
   };
   /** Walks in quarter-metre steps, listing the surfaces met underfoot in order. */
   const along = (w: TestWalker, dx: number, dz: number, dist: number) => {
@@ -53,8 +55,8 @@ describe.skipIf(!hasPack)('walking the house', () => {
     const seen = along(w, toHouse.x, toHouse.z, 12);
     expect(local(w).z).toBeLessThan(-3);
     expect(w.y).toBeCloseTo(HOUSE_GRADE + 1.05, 2);
-    // Steps, porch boards, the coir mat, the oak threshold, the vestibule's mat and tiles, the hall's boards and runner.
-    expect(seen.join(' ')).toBe('off stone boards rug wood rug stone wood rug');
+    // Steps, porch boards, the coir mat, the oak threshold, the vestibule's mat, its tiles and the hall's boards (both hard), the runner.
+    expect(seen.join(' ')).toBe('off stone boards rug wood rug wood rug');
   });
 
   it('climbs the west porch steps onto its deck', () => {

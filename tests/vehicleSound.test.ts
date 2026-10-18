@@ -6,6 +6,9 @@ import { describe, expect, it } from 'vitest';
 import { LOCK_GATE_SOUND, WEST_GATE_SOUND } from '../src/audio/sounds/gate';
 import { craftAudible } from '../src/audio/sounds/vehicles';
 import { LOCK, toWorld } from '../src/city/eastLock/spec';
+import { slapShare } from '../src/audio/acoustics';
+import { REVERBS, synthesizeImpulse } from '../src/audio/reverb';
+import { DOME_SEND } from '../src/audio/mix';
 
 describe('the East Lock’s sounds', () => {
   it('come from its hoists and leaves on the east side, the outer beyond the inner', () => {
@@ -37,5 +40,26 @@ describe('the craft’s sound', () => {
     expect(craftAudible({ zone: 'outside', innerOpen: 1 })).toBe(false);
     expect(craftAudible({ zone: 'chamber', innerOpen: 0 })).toBe(false);
     expect(craftAudible({ zone: 'chamber', innerOpen: 0.01 })).toBe(true);
+  });
+});
+
+describe('the Dome-wide sources', () => {
+  it('fall with distance across the whole Dome, even beside a wall', () => {
+    // Steady power at the ears relative to the source's level at its size (the craft's 8 m), for a
+    // listener 2.5 m from a big face (the slap's strongest): direct 1/d, the slap's share, and the
+    // city's reverberation at the Dome-wide send.
+    const [l] = synthesizeImpulse(REVERBS.city, 16000, 37);
+    let reverb = 0;
+    for (const v of l) reverb += v * v;
+    const path = 2 * 2.5;
+    const level = (d: number) => {
+      const slap = (DOME_SEND * 0.8 * slapShare(path, d)) / path;
+      return 10 * Math.log10((8 / d) ** 2 + slap ** 2 + DOME_SEND ** 2 * reverb);
+    };
+    const ds = [20, 50, 100, 200, 400, 700, 1000];
+    for (let i = 1; i < ds.length; i++) expect(level(ds[i])).toBeLessThan(level(ds[i - 1]) - 1);
+    expect(level(1000)).toBeLessThan(level(30) - 25);
+    // A source at the listener keeps its whole slap (footsteps by the house's walls).
+    expect(slapShare(path, 1.6)).toBe(1);
   });
 });

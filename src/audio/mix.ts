@@ -47,3 +47,10 @@ export const LEVEL = {
   /** The craft's engines at full burn, RMS, at 8 m (their size). */
   craft: 0.55,
 } as const;
+
+/**
+ * Reverb sends of the Dome-wide sources: the craft and the East Lock (docs/audio.md, "The craft").
+ * The city's reverberation is lifted 10 dB so the space is felt; at that lift a source fed in full
+ * holds the same level from 400 m to the far side, so these feed it without the lift.
+ */
+export const DOME_SEND = 0.3;

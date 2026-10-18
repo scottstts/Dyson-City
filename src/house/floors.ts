@@ -19,11 +19,22 @@ const FLAT = 0.85;
 /** Surfaces by material (glTF names without Blender's `__gltf` suffix). */
 export function floorSurface(material: string): GroundSurface | null {
   const m = material.replace(/__gltf$/, '');
-  if (/^(floor_(oak|parquet|pine)|oak_(tread|threshold))$/.test(m)) return 'wood';
+  // Indoors there are two floors to the ear: hard (boards, tiles, flags, hearths; all voiced as the
+  // timber recording) and soft (rugs, runners, mats). The sandstone is the steps and the foundation
+  // outside (where the foundation's top shows in an inner doorway: indoorSurface).
   if (/^(rug_|stair_runner|coir)/.test(m)) return 'rug';
-  if (/^(floor_(encaustic|flag)|marble_hearth|tile_|sandstone|brick)/.test(m)) return 'stone';
+  if (/^(floor_(oak|parquet|pine|encaustic|flag)|oak_(tread|threshold)|marble_hearth|tile_|brick)/.test(m)) return 'wood';
+  if (/^sandstone/.test(m)) return 'stone';
   if (/^porch_floor/.test(m)) return 'boards';
   return null;
+}
+
+/**
+ * The surface underfoot as heard in the house: within its rooms anything hard is the hard floor
+ * (the foundation's sandstone top shows in the inner doorways).
+ */
+export function indoorSurface(s: GroundSurface | null, inRoom: boolean): GroundSurface | null {
+  return inRoom && s === 'stone' ? 'wood' : s;
 }
 
 /** The surfaces a part's floors add: per entry a cell key, the surface's height and its kind. */

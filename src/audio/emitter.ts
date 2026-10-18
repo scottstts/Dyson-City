@@ -17,7 +17,7 @@
  * where the listener stands in that zone). Nothing bypasses this to play "2D".
  */
 import type { AudioEngine, ListenerState } from './engine';
-import { airCutoff, mediumFactor, SPEED_OF_SOUND, transmission, ZONES, type Path, type Zone } from './acoustics';
+import { airCutoff, mediumFactor, slapShare, SPEED_OF_SOUND, transmission, ZONES, type Path, type Zone } from './acoustics';
 import { glide } from './params';
 
 export interface Directivity {
@@ -67,7 +67,8 @@ export class Emitter {
   private readonly lowpass: BiquadFilterNode;
   private readonly gain: GainNode;
   private readonly panner: PannerNode;
-  private readonly sends: { zone: Zone; gain: GainNode }[];
+  /** Per zone: the reverb send, and the slap send where the zone has a slap. */
+  private readonly sends: { zone: Zone; gain: GainNode; slap: GainNode | null }[];
   private readonly sendLevel: number;
   private readonly sendScale: ((zone: Zone) => number) | undefined;
   private readonly directivity: Directivity | undefined;
@@ -100,7 +101,14 @@ export class Emitter {
       const g = ctx.createGain();
       g.gain.value = 0;
       this.delay.connect(g).connect(engine.zoneInput(zone));
-      return { zone, gain: g };
+      const slapIn = engine.slapInput(zone);
+      let slap: GainNode | null = null;
+      if (slapIn) {
+        slap = ctx.createGain();
+        slap.gain.value = 0;
+        this.delay.connect(slap).connect(slapIn);
+      }
+      return { zone, gain: g, slap };
     });
     engine.addEmitter(this);
   }
@@ -166,8 +174,12 @@ export class Emitter {
     glide(this.lowpass.frequency, cutoff, t, tc);
     glide(this.gain.gain, path.gain * medium * dirGain, t, tc);
     for (const s of this.sends) {
-      const g = zones.includes(s.zone) ? (this.sendLevel * mediumFactor(s.zone, l.bar)) / zones.length : 0;
-      glide(s.gain.gain, g > 0 && this.sendScale ? g * this.sendScale(s.zone) : g, t, tc);
+      let g = zones.includes(s.zone) ? (this.sendLevel * mediumFactor(s.zone, l.bar)) / zones.length : 0;
+      if (g > 0 && this.sendScale) g *= this.sendScale(s.zone);
+      glide(s.gain.gain, g, t, tc);
+      // The slap off the listener's nearest face. Fed from the bus alone, a craft across the Dome
+      // slapped off the glass by the listener as loud as one 50 m away, ~20 dB over its direct sound.
+      if (s.slap) glide(s.slap.gain, g * slapShare(this.engine.slapPath(s.zone), d), t, tc);
     }
     this.first = false;
   }

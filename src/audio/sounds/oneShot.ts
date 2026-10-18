@@ -15,22 +15,26 @@ export function playInto(emitter: Emitter, buffer: AudioBuffer, t: number, gain:
   return src;
 }
 
-/** Picks one of `n` variants, never the same twice in a row. */
+/**
+ * Picks one of `n` variants, never one of the last `memory` picks (at most n − 1 of them). Memory 1
+ * never plays the same twice in a row; a longer one keeps a run of steps from settling into a cycle.
+ */
 export class VariantPicker {
-  private last = -1;
+  private readonly recent: number[] = [];
   private readonly random: () => number;
-  constructor(random: () => number) {
+  private readonly memory: number;
+  constructor(random: () => number, memory = 1) {
     this.random = random;
+    this.memory = memory;
   }
   pick(n: number): number {
     if (n <= 1) return 0;
-    let i: number;
-    if (this.last < 0 || this.last >= n) i = Math.floor(this.random() * n);
-    else {
-      i = Math.floor(this.random() * (n - 1));
-      if (i >= this.last) i++;
-    }
-    this.last = i;
+    const recent = this.recent.filter((v) => v < n).slice(-Math.min(this.memory, n - 1));
+    let i = Math.floor(this.random() * (n - recent.length));
+    // The i-th variant not among the recent ones.
+    for (const v of [...recent].sort((p, q) => p - q)) if (i >= v) i++;
+    this.recent.push(i);
+    if (this.recent.length > this.memory) this.recent.shift();
     return i;
   }
 }
