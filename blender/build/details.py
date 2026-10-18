@@ -23,9 +23,21 @@ CHIMNEYS = [
 COURSE = 0.075
 
 
+# Stacks rising from inside the top floor (C3, through the box room): the part in the room is an
+# interior breast, baked with the rooms; only what stands above the room's ceiling is the exterior.
+# As one exterior object the whole stack was lit as if outdoors, and in the box room it glowed.
+INDOOR_STACKS = {"C3": "BoxRoom"}
+
+
 def chimney(name, x0, y0, x1, y1, z0, z1, col):
     g = core.Geo()
-    # shaft
+    # shaft (a stack rising from a room: only above its ceiling)
+    if name in INDOOR_STACKS:
+        zc = P.CEIL[2]
+        core.obj(f"Stack_{name}", box(x0, x1, y0, y1, z0, zc), "House/Interior/Stacks", "brick", smooth=None)
+        # the exterior part starts just over the ceiling, in the roof's void (its foot flush with the
+        # ceiling would z-fight it)
+        z0 = zc + 0.01
     g.add(box(x0, x1, y0, y1, z0, z1 - 0.62))
     # recessed panels on each face of the shaft's upper part (cut later), a band of corbel courses
     z = z1 - 0.62

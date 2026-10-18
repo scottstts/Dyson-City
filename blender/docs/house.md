@@ -73,9 +73,15 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
   stands for 31,800 cd/m², and lamps are lit at their real flux on that scale (so they barely register
   against daylight, as indoors at noon). Fires are out.
 - Lightmapped (UV map `Lightmap`, one atlas per floor `bake/LM_G|L1|L2.exr`, half float): the large
-  planar architecture only, walls, floors, ceilings and chimney breasts. Hidden faces (exterior backs
+  planar architecture only: walls, floors, ceilings, chimney breasts, the stacks that rise through a
+  room (`Stack_*`) and the stairs' plaster bodies (soffits and spandrels).
+  - The stairs' bodies were probe-lit at first: per vertex, along soffits with vertices only at
+    their ends, they took the open landing's light into the cul-de-sac under the flight and glowed.
+  - C3 rises from the top floor through the box room: the part in the room is `Stack_C3` (interior,
+    baked), only what stands above the ceiling is the exterior chimney. As one exterior object it
+    was lit as if outdoors and glowed in the room. Hidden faces (exterior backs
   of the walls, wall cores) are left out of the atlas. Objects carry `lightmap` / `lightmap_uv` props.
-  - **Trims, stairs, mantels and interior door frames are probe-lit**, like the furniture. *Rejected:*
+  - **Trims, the rest of the stairs, mantels and interior door frames are probe-lit**, like the furniture. *Rejected:*
     lightmapping them. Smart-projected, each moulding face was a sub-texel sliver (dark combs);
     charted as strips, they were still a few texels across, scattered among unrelated charts, and the
     denoiser and the margin fill mixed their noise with their neighbours (camouflage blotches along

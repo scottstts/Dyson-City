@@ -63,6 +63,11 @@ ENV = os.path.join(BASE, "house_env.hdr")
 # cornice, skirting and wainscot panel. Their light varies over metres; the probes carry that.
 LM_PREFIX = ("Structure_",)
 LM_FIRE = ("_Breast",)
+# The stairs' plaster bodies (soffits and spandrels): large planes whose light depends on the stair
+# over them. Probe-lit per vertex they took the open landing's light into the cul-de-sac under the
+# flight and glowed.
+LM_STAIR = ("MainStair_Body", "TopStair_Body")
+# Chimney stacks rising through a room (Stack_*, build/details.py) are lightmapped like the breasts.
 LM_SIZE = {0: 2048, 1: 2048, 2: 2048}   # the export's own size: the QA measures what ships
 LM_MARGIN = 0.0025          # pack margin, UV units (5 texels)
 # Daylight (the capture through the portals) and the lamps are baked apart and summed: together, the
@@ -70,7 +75,6 @@ LM_MARGIN = 0.0025          # pack margin, UV units (5 texels)
 # scale) are almost never sampled, so lamp-lit texels came out black or speckled.
 BAKE_SAMPLES = {"day": 3072, "lamps": 2048}
 MIN_CHART = 0.30            # m of atlas: ~5 texels across (a narrow jamb or breast face)
-TRIM_DENSITY = 1.0          # the breasts' texel density relative to walls, floors and ceilings
 VALID_AO = 0.02             # short-range AO below which a texel is under something (enclosed: ~0). At
                             # 0.15 the open hollows of a cornice and a wainscot panel's recesses (0.3–0.6
                             # under a 5 cm reach, but lower at their roots) were taken for hidden, refilled
@@ -305,7 +309,7 @@ def groups():
         if not _is_house(o):
             continue
         n = o.name
-        ok = n.startswith(LM_PREFIX) or (n.startswith("Fireplace_") and n.endswith(LM_FIRE))
+        ok = n.startswith(LM_PREFIX) or (n.startswith("Fireplace_") and n.endswith(LM_FIRE)) or n in LM_STAIR or n.startswith("Stack_")
         if not ok:
             # lit from the probes: no lightmap left over from an earlier bake
             for k in ("lightmap", "lightmap_uv"):
@@ -450,11 +454,9 @@ def buried(objs):
 def lightmap_uvs(level, objs):
     """Second UV map `Lightmap`: one atlas per floor.
 
-    - Walls, floors and ceilings (Structure_*): smart-projected room-facing faces (large planar charts).
-    - Everything else (trims, stairs, fireplaces, door frames): charted by its own UVs, which the
-      builders lay as continuous strips along each swept run (u along it, v round the profile) or as
-      per-face metres on boxes.
-    - Every chart at uniform texel density (trims at TRIM_DENSITY), at least MIN_CHART wide.
+    - All smart-projected (large planar charts): of walls, floors and ceilings (Structure_*) the
+      room-facing faces; of the breasts and stair bodies every face not pressed into another solid.
+    - Every chart at uniform texel density, at least MIN_CHART wide.
     Faces never seen (exterior backs, wall cores) collapse onto one texel in the corner."""
     for o in bpy.context.selected_objects:
         o.select_set(False)
@@ -473,28 +475,19 @@ def lightmap_uvs(level, objs):
         me.uv_layers["UVMap"].active_render = True
         me.uv_layers.active = me.uv_layers["Lightmap"]
         me.polygons.foreach_set("select", charted(o))
-    # trims: their own strips
-    for o in trims:
-        src = o.data.uv_layers["UVMap"].data
-        dst = o.data.uv_layers["Lightmap"].data
-        buf = np.zeros(len(src) * 2, dtype=np.float32)
-        src.foreach_get("uv", buf)
-        dst.foreach_set("uv", buf)
-    # structure: smart project
-    if structure:
-        for o in structure:
-            o.select_set(True)
-        bpy.context.view_layer.objects.active = structure[0]
-        bpy.ops.object.mode_set(mode="EDIT")
-        bpy.ops.mesh.select_mode(type="FACE")
-        bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.0, area_weight=0.0,
-                                 correct_aspect=True, scale_to_bounds=False)
-        bpy.ops.object.mode_set(mode="OBJECT")
-        for o in structure:
-            o.select_set(False)
+    for o in objs:
+        o.select_set(True)
+    bpy.context.view_layer.objects.active = objs[0]
+    bpy.ops.object.mode_set(mode="EDIT")
+    bpy.ops.mesh.select_mode(type="FACE")
+    bpy.ops.uv.smart_project(angle_limit=math.radians(60), island_margin=0.0, area_weight=0.0,
+                             correct_aspect=True, scale_to_bounds=False)
+    bpy.ops.object.mode_set(mode="OBJECT")
+    for o in objs:
+        o.select_set(False)
     for o in objs:
         o.data.polygons.foreach_set("select", charted(o))
-        _normalise_islands(o, 1.0 if o in structure else TRIM_DENSITY)
+        _normalise_islands(o, 1.0)
     # pack every chart of the floor together (no rescaling between them: their density is set)
     for o in objs:
         o.select_set(True)
