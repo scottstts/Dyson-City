@@ -52,6 +52,11 @@ export const LEVEL = {
    * beside the listener (0.5 m, 1.2 m off).
    */
   speech: { gate: 2.2, chamber: 2.0, portal: 2.4, car: 1.1, near: 0.55 },
+  /**
+   * The chime before an announcement, peak, relative to its speech's: a ringing tone carries ~15 dB
+   * more energy per peak than speech, so it sits well under it.
+   */
+  chime: 0.3,
 } as const;
 
 /**

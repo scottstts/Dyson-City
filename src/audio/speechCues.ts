@@ -20,7 +20,7 @@ import type { Speech } from './loadSpeech';
 /** How far back out (m) a listener must go before a crossing announces again. */
 const REARM = 3;
 /** Interval (s) of the craft's announcement while it and the listener are over the pad. */
-export const PAD_REPEAT = 4.5;
+export const PAD_REPEAT = 5.5;
 /** The pad's circle in plan: the pad and its white apron, out to the ring road under the Halo. */
 export const PAD_AREA_R = RING_ROAD.r0;
 

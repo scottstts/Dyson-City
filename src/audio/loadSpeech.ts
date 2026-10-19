@@ -5,10 +5,21 @@
  * at the loudspeaker, as every other level is the level at its source.
  */
 import type { AirlockCue } from '../city/gate/airlock';
+import { CHIME } from './synth/chime';
 
 export const SPEECHES = ['enter-dome', 'pressurization', 'depressurization', 'exit', 'enter-estate', 'enter-compound', 'drive', 'aircraft-perimeter'] as const;
 export type Speech = (typeof SPEECHES)[number];
 export type SpeechClips = Record<Speech, AudioBuffer>;
+
+/** Announcements the chime (synth/chime.ts) comes before: all but the chamber's. */
+export function chimed(speech: Speech): boolean {
+  return speech !== 'pressurization' && speech !== 'depressurization';
+}
+
+/** Seconds from an announcement's start (its chime, if it has one) to the end of its speech. */
+export function speechLength(speech: Speech, clip: { duration: number }): number {
+  return (chimed(speech) ? CHIME.lead : 0) + clip.duration;
+}
 
 /** Which recording the West Gate's airlock announces each step with. */
 export const AIRLOCK_SPEECH: Record<AirlockCue, Speech> = {
@@ -37,9 +48,9 @@ export async function loadSpeech(ctx: BaseAudioContext): Promise<SpeechClips> {
   return Object.fromEntries(SPEECHES.map((name, i) => [name, buffers[i]])) as SpeechClips;
 }
 
-/** The airlock waits out each announcement (city/gate/airlock.ts): their lengths (s). */
-export function airlockAnnouncements(clips: SpeechClips): Record<AirlockCue, number> {
+/** The airlock waits out each announcement (city/gate/airlock.ts): their lengths (s), chimes included. */
+export function airlockAnnouncements(clips: Record<Speech, { duration: number }>): Record<AirlockCue, number> {
   const out = {} as Record<AirlockCue, number>;
-  for (const cue of Object.keys(AIRLOCK_SPEECH) as AirlockCue[]) out[cue] = clips[AIRLOCK_SPEECH[cue]].duration;
+  for (const cue of Object.keys(AIRLOCK_SPEECH) as AirlockCue[]) out[cue] = speechLength(AIRLOCK_SPEECH[cue], clips[AIRLOCK_SPEECH[cue]]);
   return out;
 }

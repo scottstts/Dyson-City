@@ -200,7 +200,7 @@ These rules apply to all future sounds, not just the current ones.
 - **No kettle.** *Rejected* (by ear): a kettle simmering on the range.
 - **Levels** (`LEVEL.door`, `tick`): first-pass values, to be tuned by ear.
 
-## Announcements (`loadSpeech.ts`, `speechCues.ts`, `sounds/speech.ts`)
+## Announcements (`loadSpeech.ts`, `speechCues.ts`, `sounds/speech.ts`, `synth/chime.ts`)
 
 - **The user's recordings, played as they are** (`public/speeches/`, fetched and decoded at boot, each scaled to a peak of 1). They are the one exception to resynthesis. Everything else is as for any sound: each is a loudspeaker in the world, played through an emitter, with delay, spreading, air, paths, medium, reverb and HRTF.
 - **Where each sounds from:**
@@ -209,7 +209,11 @@ These rules apply to all future sounds, not just the current ones.
   - `enter-compound`: the main portal's arch, at its spring height;
   - `drive`: the car's cabin, moving with it;
   - `enter-estate`, `aircraft-perimeter`: beside the listener and moving with them, 1.2 m off ahead and to the right where it began. It is not head-locked, so turning still places it.
-- **The airlock waits for its announcements** (`city/gate/airlock.ts`, lengths set at boot from the clips, plus a 0.5 s pause):
+- **The chime.** Every announcement except `pressurization` and `depressurization` opens with a brief two-tone chime from the same loudspeaker, so it is placed, carried and reverberated exactly as its speech is. The speech starts 0.75 s after the first strike (`CHIME.lead`).
+  - It is built from the mechanism: two tuned tone bars, rising a fourth (E5, then A5 0.24 s later). Each rings its fundamental and a tone bar's tuned overtones (4×, 10×), the higher ones dying sooner. A soft mallet gives a ~1.5 ms rise, not a click; a faint second harmonic is the horn's; the fundamental's two bending modes 1.5 Hz apart give a slow shimmer. The second bar rings on under the first word, then fades by 1.5 s.
+  - It is synthesised once when the sound starts, and it is the same every time, as a chime unit is.
+  - Level: `LEVEL.chime`, peak relative to its speech's (a ringing tone carries far more energy per peak than speech). First pass.
+- **The airlock waits for its announcements** (`city/gate/airlock.ts`, lengths set at boot from the clips and their chimes, plus a 0.5 s pause):
   - a shut outer gate opens to a player arriving from the band only after `enter-dome` (venting first, silently, if the chamber was left at the city's pressure);
   - a player sealed in the chamber is filled only after `pressurization`, vented only after `depressurization`;
   - `exit` follows the outer gate shutting and bolting behind a player who went out through the chamber. Nothing waits for it.
@@ -218,7 +222,7 @@ These rules apply to all future sounds, not just the current ones.
   - `enter-estate`: crossing the terrace's outer wall face inward (the silencer's line);
   - `enter-compound`: crossing the main portal's line eastward, between its pylons;
   - `drive`: taking the car;
-  - `aircraft-perimeter`: only while both the craft and the listener are over the pad's circle in plan (the dark pad and its white apron, out to the ring road, r 100 m): at once, then every 4.5 s. When either leaves it, the one playing plays out and no other begins. *Rejected:* announcing on stepping onto the pad alone, and through the craft's whole settle–turn–lift window wherever the listener stood in the compound.
+  - `aircraft-perimeter`: only while both the craft and the listener are over the pad's circle in plan (the dark pad and its white apron, out to the ring road, r 100 m): at once, then every 5.5 s (the chime and the speech take 4 s). When either leaves it, the one playing plays out and no other begins. *Rejected:* announcing on stepping onto the pad alone, and through the craft's whole settle–turn–lift window wherever the listener stood in the compound.
 - **Voices.** Two pooled emitters. A recording already playing is not restarted; a third announcement takes the voice that finishes first.
 - **Levels** `LEVEL.speech`: first pass, to be tuned by ear.
 
@@ -244,5 +248,5 @@ These rules apply to all future sounds, not just the current ones.
   - the house's shell and open doors, the slap off its walls, the clocks' tick and tock;
   - the door's split, the loops' seams, the lawn's level against stone;
   - the airlock's event order;
-- `tests/airlock.test.ts`: the announcements' order on a walk in and out, and nothing moving while a held one plays; `tests/speechCues.test.ts`: the crossings and the craft's window.
+- `tests/airlock.test.ts`: the announcements' order on a walk in and out, and nothing moving while a held one plays; `tests/speechCues.test.ts`: the crossings and the pad's rule; `tests/chime.test.ts`: the chime's two bars, its clickless start and decay, which announcements it opens and the airlock's wait including it.
   - the controller's foot events.

@@ -11,6 +11,10 @@
  *  - beside the listener, moving with them (enter-estate, aircraft-perimeter): a speaker an arm's
  *    length off ahead and to the right where it began, so turning the head still places it.
  *
+ * All but the chamber's announcements open with the chime (synth/chime.ts) from the same
+ * loudspeaker, so it is placed, carried and reverberated as its speech is; the speech follows
+ * CHIME.lead after it.
+ *
  * Two voices: a recording already playing is not started again, and a third announcement takes
  * the voice that would finish first.
  */
@@ -18,7 +22,8 @@ import { Emitter, type Directivity } from '../emitter';
 import type { AudioEngine, ListenerState } from '../engine';
 import { DOME_SEND, LEVEL } from '../mix';
 import { playInto } from './oneShot';
-import type { Speech, SpeechClips } from '../loadSpeech';
+import { chimed, speechLength, type Speech, type SpeechClips } from '../loadSpeech';
+import { CHIME, synthChime } from '../synth/chime';
 import { GATE } from '../../city/gate/spec';
 import { FIELD_Y, CORDON } from '../../field/layout';
 import { PORTAL_ARCH } from '../../field/cordon';
@@ -63,7 +68,7 @@ export interface SpeechTargets {
 interface Voice {
   emitter: Emitter;
   speech: Speech | null;
-  src: AudioBufferSourceNode | null;
+  sources: AudioBufferSourceNode[];
   end: number;
   /** For 'near': the speaker's offset from the ears, set when it begins. */
   offset: Vec;
@@ -73,14 +78,16 @@ export class SpeechSounds {
   private readonly voices: Voice[];
   private readonly clips: SpeechClips;
   private readonly targets: SpeechTargets;
+  private readonly chime: AudioBuffer;
 
   constructor(engine: AudioEngine, clips: SpeechClips, targets: SpeechTargets) {
     this.clips = clips;
+    this.chime = engine.buffer(synthChime(engine.ctx.sampleRate));
     this.targets = targets;
     this.voices = [0, 1].map((i) => ({
       emitter: new Emitter(engine, { name: `speech-${i}`, zones: 'located', refDistance: 1 }),
       speech: null,
-      src: null,
+      sources: [],
       end: 0,
       offset: [0, 0, 0],
     }));
@@ -89,11 +96,12 @@ export class SpeechSounds {
   play(speech: Speech, t: number, l: ListenerState): void {
     if (this.voices.some((v) => v.speech === speech && v.end > t)) return;
     const voice = this.voices.reduce((a, b) => (a.end <= b.end ? a : b));
-    voice.src?.stop(t);
+    for (const s of voice.sources) s.stop(t);
+    voice.sources.length = 0;
     const anchor = ANCHOR[speech];
     const buffer = this.clips[speech];
     voice.speech = speech;
-    voice.end = t + buffer.duration;
+    voice.end = t + speechLength(speech, buffer);
     voice.emitter.setRefDistance(REF[anchor]);
     voice.emitter.revoice(SEND[anchor], anchor === 'gate' ? GATE_HORN : undefined);
     if (anchor === 'near') {
@@ -108,7 +116,9 @@ export class SpeechSounds {
       voice.offset[2] = NEAR.d * ((fz / n) * c + (fx / n) * s);
     }
     this.place(voice, l);
-    voice.src = playInto(voice.emitter, buffer, t, LEVEL.speech[anchor]);
+    const level = LEVEL.speech[anchor];
+    if (chimed(speech)) voice.sources.push(playInto(voice.emitter, this.chime, t, level * LEVEL.chime));
+    voice.sources.push(playInto(voice.emitter, buffer, chimed(speech) ? t + CHIME.lead : t, level));
   }
 
   /** Per frame, before the engine's update: the moving speakers follow the car and the listener. */
@@ -118,7 +128,7 @@ export class SpeechSounds {
       if (v.end + 2.5 < t) {
         // Done (with the propagation delay's tail): free for the next.
         v.speech = null;
-        v.src = null;
+        v.sources.length = 0;
         continue;
       }
       this.place(v, l);
