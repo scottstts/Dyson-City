@@ -85,6 +85,7 @@ export class HouseDoor {
   rate = 0;
   private readonly shut: Vector3;
   private readonly corners: Vector3[] = [];
+  private readonly tris = new Float32Array(BOX_TRIS.length * 3);
 
   constructor(spec: DoorSpec, leaf: Group) {
     this.spec = spec;
@@ -131,21 +132,19 @@ export class HouseDoor {
     return out.set(...this.spec.handle).applyMatrix4(this.leaf.matrixWorld);
   }
 
-  /** The leaf's collision box as 12 world-space triangles. */
+  /**
+   * The leaf's collision box as 12 world-space triangles, written into the leaf's own buffer (the
+   * walk mesh holds it as this door's dynamic set; a moving leaf rewrites it every frame).
+   */
   collision(): Float32Array | null {
     if (!this.corners.length) return null;
-    const w = this.corners.map((c) => c.clone().applyMatrix4(this.leaf.matrixWorld));
-    const faces = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]];
-    const out = new Float32Array(faces.length * 2 * 9);
+    const out = this.tris;
     let o = 0;
-    for (const f of faces) {
-      for (const tri of [[f[0], f[1], f[2]], [f[0], f[2], f[3]]]) {
-        for (const k of tri) {
-          out[o++] = w[k].x;
-          out[o++] = w[k].y;
-          out[o++] = w[k].z;
-        }
-      }
+    for (const k of BOX_TRIS) {
+      const w = CORNER.copy(this.corners[k]).applyMatrix4(this.leaf.matrixWorld);
+      out[o++] = w.x;
+      out[o++] = w.y;
+      out[o++] = w.z;
     }
     return out;
   }
@@ -153,6 +152,9 @@ export class HouseDoor {
 
 const tmp = new Vector3();
 const dir = new Vector3();
+const CORNER = new Vector3();
+/** The box's six faces (corners indexed by bits x, y, z), two triangles each. */
+const BOX_TRIS = [[0, 2, 3, 1], [4, 5, 7, 6], [0, 1, 5, 4], [2, 6, 7, 3], [0, 4, 6, 2], [1, 3, 7, 5]].flatMap((f) => [f[0], f[1], f[2], f[0], f[2], f[3]]);
 
 export class HouseDoors {
   readonly list: HouseDoor[] = [];

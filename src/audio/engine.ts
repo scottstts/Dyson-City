@@ -3,7 +3,7 @@
  * (docs/audio.md). Works on any BaseAudioContext, so the offline preview tool renders exactly what
  * the game plays. All timing is explicit (`t`), never read from the context inside updates.
  */
-import { SPEED_OF_SOUND, transmission, wallDistance, zoneAt, ZONES, type Zone } from './acoustics';
+import { OPEN_PATH, SPEED_OF_SOUND, transmission, wallDistance, zoneAt, ZONES, type Path, type Zone } from './acoustics';
 import { glide } from './params';
 import type { Emitter } from './emitter';
 import type { AudioBank } from './bank';
@@ -49,6 +49,8 @@ export class AudioEngine {
   private readonly emitters: Emitter[] = [];
   private listenerFirst = true;
   private readonly slapPaths: Record<Zone, number> = { outside: 0, chamber: 0, city: 0, house: 0 };
+  /** Each zone's path to the listener this frame: the same for every emitter radiating into it. */
+  private readonly paths: Record<Zone, Readonly<Path>> = { outside: OPEN_PATH, chamber: OPEN_PATH, city: OPEN_PATH, house: OPEN_PATH };
   /** Is a world point inside the house's rooms? (Set once the house is known.) */
   interior: ((x: number, y: number, z: number) => boolean) | null = null;
 
@@ -128,6 +130,11 @@ export class AudioEngine {
     return this.buses[zone].slap?.input ?? null;
   }
 
+  /** The path from a zone to the listener this frame (acoustics.ts transmission; set by update). */
+  path(zone: Zone): Readonly<Path> {
+    return this.paths[zone];
+  }
+
   /** The slap's path this frame (m): out to the listener's nearest big face and back (acoustics.ts slapShare). */
   slapPath(zone: Zone): number {
     return this.slapPaths[zone];
@@ -155,6 +162,7 @@ export class AudioEngine {
     for (const zone of ZONES) {
       const bus = this.buses[zone];
       const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen, l.houseOpen);
+      this.paths[zone] = p;
       glide(bus.ret.gain, p.gain, t, 0.05);
       glide(bus.retFilter.frequency, p.cutoff, t, 0.05);
       if (bus.slap) {

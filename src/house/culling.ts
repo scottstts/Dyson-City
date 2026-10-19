@@ -4,15 +4,22 @@
  * and in the camera's frustum makes a frustum of its own (the eye through the opening's rectangle,
  * near plane on the opening); an outdoor mesh is drawn if its bounding sphere meets any of them.
  * Outdoors everything is restored.
+ *
+ * Each opening's planes are allocated once: its near plane is fixed, its four side planes (through
+ * the eye) are rewritten in place each indoor frame, so culling allocates nothing per frame.
  */
-import { Frustum, Matrix4, Plane, Sphere, Vector3, type Camera, type Mesh, type Object3D } from 'three/webgpu';
+import { Box3, Frustum, Matrix4, Plane, Sphere, Vector3, type Camera, type Mesh, type Object3D } from 'three/webgpu';
 import type { Aperture } from './compile';
 
 interface Opening {
   centre: Vector3;
   outward: Vector3;
   corners: Vector3[];
-  box: { min: Vector3; max: Vector3 };
+  box: Box3;
+  /** A point 1 m outside the opening's middle: the side planes keep their positive side toward it. */
+  beyond: Vector3;
+  /** Four side planes (eye through each edge), then the near plane on the opening. */
+  planes: Plane[];
 }
 
 const sphere = new Sphere();
@@ -23,7 +30,8 @@ export class IndoorCulling {
   private readonly openings: Opening[] = [];
   private readonly outdoor: Mesh[] = [];
   private readonly frustum = new Frustum();
-  private readonly planes: Plane[][] = [];
+  /** The openings in view this frame (reused). */
+  private readonly visible: Opening[] = [];
   private active = false;
 
   add(apertures: Aperture[], houseMatrix: Matrix4): void {
@@ -40,17 +48,16 @@ export class IndoorCulling {
         [1, max.y],
         [-1, max.y],
       ].map(([s, y]) => new Vector3(centre.x + across.x * half * s, y, centre.z + across.z * half * s).applyMatrix4(houseMatrix));
-      const worldMin = new Vector3(Infinity, Infinity, Infinity);
-      const worldMax = new Vector3(-Infinity, -Infinity, -Infinity);
-      for (const c of corners) {
-        worldMin.min(c);
-        worldMax.max(c);
-      }
+      const worldCentre = centre.applyMatrix4(houseMatrix);
+      const outward = out.transformDirection(houseMatrix);
+      const planes = [new Plane(), new Plane(), new Plane(), new Plane(), new Plane().setFromNormalAndCoplanarPoint(outward, worldCentre)];
       this.openings.push({
-        centre: centre.applyMatrix4(houseMatrix),
-        outward: out.transformDirection(houseMatrix),
+        centre: worldCentre,
+        outward,
         corners,
-        box: { min: worldMin, max: worldMax },
+        box: new Box3().setFromPoints(corners),
+        beyond: worldCentre.clone().addScaledVector(outward, 1),
+        planes,
       });
     }
   }
@@ -79,26 +86,37 @@ export class IndoorCulling {
     projView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.frustum.setFromProjectionMatrix(projView);
     const eye = camera.position;
-    this.planes.length = 0;
+    const visible = this.visible;
+    visible.length = 0;
     for (const o of this.openings) {
       // Facing the eye from outside it (the eye is on the room's side), and in view.
       if (toEye.copy(eye).sub(o.centre).dot(o.outward) > -0.05) continue;
-      if (!this.frustum.intersectsBox(o.box as unknown as import('three/webgpu').Box3)) continue;
-      const planes: Plane[] = [];
+      if (!this.frustum.intersectsBox(o.box)) continue;
       for (let i = 0; i < 4; i++) {
-        const a = o.corners[i];
-        const b = o.corners[(i + 1) % 4];
-        const p = new Plane().setFromCoplanarPoints(eye, a, b);
+        const p = o.planes[i].setFromCoplanarPoints(eye, o.corners[i], o.corners[(i + 1) % 4]);
         // Keep the plane's positive side toward the opening's middle.
-        if (p.distanceToPoint(o.centre.clone().addScaledVector(o.outward, 1)) < 0) p.negate();
-        planes.push(p);
+        if (p.distanceToPoint(o.beyond) < 0) p.negate();
       }
-      planes.push(new Plane().setFromNormalAndCoplanarPoint(o.outward, o.centre));
-      this.planes.push(planes);
+      visible.push(o);
     }
     for (const m of this.outdoor) {
       sphere.copy(m.geometry.boundingSphere!).applyMatrix4(m.matrixWorld);
-      m.visible = this.planes.some((planes) => planes.every((p) => p.distanceToPoint(sphere.center) > -sphere.radius));
+      m.visible = seenThrough(visible, sphere);
     }
   }
+}
+
+/** Does the sphere meet any opening's frustum (inside all five of its planes)? */
+function seenThrough(openings: readonly Opening[], s: Sphere): boolean {
+  for (const o of openings) {
+    let inside = true;
+    for (const p of o.planes) {
+      if (p.distanceToPoint(s.center) <= -s.radius) {
+        inside = false;
+        break;
+      }
+    }
+    if (inside) return true;
+  }
+  return false;
 }

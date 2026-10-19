@@ -10,7 +10,7 @@
  * The verts/faces/faceMat/uvs layout matches the geometry-quality kit's MeshData, so its topology
  * audit (tools/geometry-kit) reads a PolyMesh directly.
  */
-import { BufferGeometry, Float32BufferAttribute, ShapeUtils, Uint32BufferAttribute, Vector2 } from 'three';
+import { BufferAttribute, BufferGeometry, ShapeUtils, Vector2 } from 'three';
 
 export type Vec3 = [number, number, number];
 export type Vec2 = [number, number];
@@ -203,10 +203,11 @@ export function emitParts(parts: PolyMesh[], opts: EmitOptions): BufferGeometry 
     vBase += s.pos.length / 3;
     iBase += s.idx.length;
   });
-  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new Float32BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new Float32BufferAttribute(uv, 2));
-  g.setIndex(new Uint32BufferAttribute(idx, 1));
+  // The arrays above are this geometry's own: adopted, not copied again.
+  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setAttribute('normal', new BufferAttribute(nrm, 3));
+  g.setAttribute('uv', new BufferAttribute(uv, 2));
+  g.setIndex(new BufferAttribute(idx, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();
   return g;

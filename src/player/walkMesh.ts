@@ -14,14 +14,54 @@
  *  - ceilings (facing down) block like walls within the band: a sloped ceiling that comes down below
  *    the head (the gable room's slopes) stops the body; one overhead is clipped away.
  *
- * Triangles live in plan cells; a few dynamic triangle sets (door leaves) are tested directly.
+ * Triangles live in plan cells; a few dynamic triangle sets (door leaves) are tested directly, each
+ * classified by slope and bounded once when it is set, so a query rejects a set it cannot touch
+ * before testing its triangles (the same tests, in the same order, for every set it does test).
  */
 
 const CELL = 1;
 /** Slope split: floors face up within ~57° of vertical. */
-const FLOOR_NY = 0.55;
+export const FLOOR_NY = 0.55;
 /** A floor this close in plan (m) still holds the feet: proxies' cracks are narrower. */
-const SOLE = 0.03;
+export const SOLE = 0.03;
+/** Slack on a dynamic set's bounds over the triangle tests' own tolerances (rounding only). */
+const BOUND_EPS = 1e-4;
+
+/**
+ * A dynamic triangle set: its triangles, which of them are floors, and the bounds of each class
+ * (x0, z0, x1, z1, y0, y1; empty bounds are inverted, so every test rejects them).
+ */
+interface DynamicSet {
+  tris: Float32Array;
+  floor: Uint8Array;
+  floorBox: Float64Array;
+  wallBox: Float64Array;
+  /** Every triangle (overlapsDynamic tests both classes). */
+  allBox: Float64Array;
+}
+
+function emptyBox(b: Float64Array): void {
+  b[0] = b[1] = b[4] = Infinity;
+  b[2] = b[3] = b[5] = -Infinity;
+}
+
+function growBox(b: Float64Array, T: Float32Array, o: number): void {
+  for (let k = 0; k < 9; k += 3) {
+    const x = T[o + k], y = T[o + k + 1], z = T[o + k + 2];
+    if (x < b[0]) b[0] = x;
+    if (x > b[2]) b[2] = x;
+    if (z < b[1]) b[1] = z;
+    if (z > b[3]) b[3] = z;
+    if (y < b[4]) b[4] = y;
+    if (y > b[5]) b[5] = y;
+  }
+}
+
+/** Can a circle (centre x, z, radius r) in the band [y0, y1] touch anything inside the box? */
+function boxReach(b: Float64Array, x: number, z: number, r: number, y0: number, y1: number): boolean {
+  const m = r + BOUND_EPS;
+  return !(b[5] < y0 - BOUND_EPS || b[4] > y1 + BOUND_EPS || x < b[0] - m || x > b[2] + m || z < b[1] - m || z > b[3] + m);
+}
 
 interface Store {
   /** 9 floats per triangle (a, b, c). */
@@ -39,7 +79,7 @@ export class WalkMesh {
   private readonly walls: Store = { tri: [], box: [] };
   private readonly floorCells = new Map<number, number[]>();
   private readonly wallCells = new Map<number, number[]>();
-  private readonly dynamic = new Map<string, Float32Array>();
+  private readonly dynamic = new Map<string, DynamicSet>();
   private readonly tags = new Map<string, { floors: number[]; walls: number[] }>();
   private readonly disabled = new Set<number>();
   private readonly ownerOfWall: number[] = [];
@@ -112,8 +152,27 @@ export class WalkMesh {
 
   /** Replaces a dynamic triangle set (world space, 9 floats per triangle; empty to remove). */
   setDynamic(name: string, tris: Float32Array | null): void {
-    if (tris && tris.length) this.dynamic.set(name, tris);
-    else this.dynamic.delete(name);
+    if (!tris || !tris.length) {
+      this.dynamic.delete(name);
+      return;
+    }
+    // A moving leaf is set every frame: its record and arrays are reused.
+    let d = this.dynamic.get(name);
+    if (!d) {
+      d = { tris, floor: new Uint8Array(tris.length / 9), floorBox: new Float64Array(6), wallBox: new Float64Array(6), allBox: new Float64Array(6) };
+      this.dynamic.set(name, d);
+    }
+    d.tris = tris;
+    if (d.floor.length !== tris.length / 9) d.floor = new Uint8Array(tris.length / 9);
+    emptyBox(d.floorBox);
+    emptyBox(d.wallBox);
+    emptyBox(d.allBox);
+    for (let o = 0, t = 0; o < tris.length; o += 9, t++) {
+      const floor = triNy(tris, o) >= FLOOR_NY;
+      d.floor[t] = floor ? 1 : 0;
+      growBox(floor ? d.floorBox : d.wallBox, tris, o);
+      growBox(d.allBox, tris, o);
+    }
   }
 
   /** Highest floor over (x, z) at or below yMax; −Infinity if none. */
@@ -131,10 +190,13 @@ export class WalkMesh {
         if (y !== null && y <= yMax && y > best) best = y;
       }
     }
-    for (const tris of this.dynamic.values()) {
-      for (let o = 0; o < tris.length; o += 9) {
-        const ny = triNy(tris, o);
-        if (ny < FLOOR_NY) continue;
+    for (const d of this.dynamic.values()) {
+      // triHeight holds only within SOLE of a floor's plan, at a height inside its y range.
+      const b = d.floorBox;
+      if (b[4] > yMax + BOUND_EPS || !boxReach(b, x, z, SOLE, -Infinity, Infinity)) continue;
+      const tris = d.tris;
+      for (let o = 0, t = 0; o < tris.length; o += 9, t++) {
+        if (!d.floor[t]) continue;
         const y = triHeight(tris, o, x, z, SOLE);
         if (y !== null && y <= yMax && y > best) best = y;
       }
@@ -176,10 +238,12 @@ export class WalkMesh {
           }
         }
       }
-      for (const tris of this.dynamic.values()) {
-        for (let o = 0; o < tris.length; o += 9) {
-          const ny = triNy(tris, o);
-          if (ny >= FLOOR_NY) continue;
+      for (const d of this.dynamic.values()) {
+        // pushOff holds only for a circle within r of a wall's plan, in the wall's y range.
+        if (!boxReach(d.wallBox, px, pz, r, y0, y1)) continue;
+        const tris = d.tris;
+        for (let o = 0, t = 0; o < tris.length; o += 9, t++) {
+          if (d.floor[t]) continue;
           const out = pushOff(tris, o, px, pz, r, y0, y1);
           if (out) {
             px = out[0];
@@ -195,8 +259,9 @@ export class WalkMesh {
 
   /** Does a circle overlap any dynamic set named `name` within the band (doors check before moving)? */
   overlapsDynamic(name: string, x: number, z: number, r: number, y0: number, y1: number): boolean {
-    const tris = this.dynamic.get(name);
-    if (!tris) return false;
+    const d = this.dynamic.get(name);
+    if (!d || !boxReach(d.allBox, x, z, r, y0, y1)) return false;
+    const tris = d.tris;
     for (let o = 0; o < tris.length; o += 9) if (pushOff(tris, o, x, z, r, y0, y1)) return true;
     return false;
   }
@@ -208,7 +273,7 @@ export class WalkMesh {
 
 const SEEN = new Set<number>();
 
-function triNy(T: ArrayLike<number>, o: number): number {
+export function triNy(T: ArrayLike<number>, o: number): number {
   const ux = T[o + 3] - T[o], uy = T[o + 4] - T[o + 1], uz = T[o + 5] - T[o + 2];
   const vx = T[o + 6] - T[o], vy = T[o + 7] - T[o + 1], vz = T[o + 8] - T[o + 2];
   const nx = uy * vz - uz * vy;
@@ -222,7 +287,7 @@ function triNy(T: ArrayLike<number>, o: number): number {
  * Height of the triangle's plane over (x, z) if the point lies inside its plan; within `tol` of
  * it, the height at the triangle's nearest point (never extrapolated); else null.
  */
-function triHeight(T: ArrayLike<number>, o: number, x: number, z: number, tol = 0): number | null {
+export function triHeight(T: ArrayLike<number>, o: number, x: number, z: number, tol = 0): number | null {
   const ax = T[o], ay = T[o + 1], az = T[o + 2];
   const bx = T[o + 3], by = T[o + 4], bz = T[o + 5];
   const cx = T[o + 6], cy = T[o + 7], cz = T[o + 8];
@@ -287,7 +352,7 @@ function clipY(n: number, bound: number, sign: number): number {
  * The triangle clipped to the band, projected to plan: if the circle overlaps it, the corrected
  * centre (pushed off its nearest edge), else null.
  */
-function pushOff(T: ArrayLike<number>, o: number, px: number, pz: number, r: number, y0: number, y1: number): [number, number] | null {
+export function pushOff(T: ArrayLike<number>, o: number, px: number, pz: number, r: number, y0: number, y1: number): [number, number] | null {
   for (let i = 0; i < 9; i++) P[i] = T[o + i];
   let n = clipY(3, y0, 1);
   if (n < 2) return null;

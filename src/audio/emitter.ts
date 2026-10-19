@@ -17,7 +17,7 @@
  * where the listener stands in that zone). Nothing bypasses this to play "2D".
  */
 import type { AudioEngine, ListenerState } from './engine';
-import { airCutoff, mediumFactor, slapShare, SPEED_OF_SOUND, transmission, ZONES, type Path, type Zone } from './acoustics';
+import { airCutoff, mediumFactor, slapShare, SPEED_OF_SOUND, ZONES, type Zone } from './acoustics';
 import { glide } from './params';
 
 export interface Directivity {
@@ -74,6 +74,8 @@ export class Emitter {
   private readonly directivity: Directivity | undefined;
   private readonly engine: AudioEngine;
   private first = true;
+  /** The zone a 'located' source is in this frame (reused). */
+  private readonly located: Zone[] = ['outside'];
 
   constructor(engine: AudioEngine, opts: EmitterOptions) {
     const ctx = engine.ctx;
@@ -141,14 +143,21 @@ export class Emitter {
     const d = Math.max(Math.hypot(dx, dy, dz), 0.05);
 
     // The loudest path from any zone the source radiates into.
-    const zones = this.zones === 'located' ? [this.engine.locate(x, y, z)] : this.zones;
-    let path: Path = { gain: 0, cutoff: 20 };
+    let zones = this.zones;
+    if (zones === 'located') {
+      this.located[0] = this.engine.locate(x, y, z);
+      zones = this.located;
+    }
+    // Each zone's path to the listener is the engine's, derived once this frame.
+    let pathGain = 0;
+    let pathCutoff = 20;
     let medium = 0;
     for (const zone of zones) {
-      const p = transmission(zone, l.zone, l.outerOpen, l.innerOpen, l.houseOpen);
+      const p = this.engine.path(zone);
       const m = mediumFactor(zone, l.bar);
-      if (p.gain * m > path.gain * medium) {
-        path = p;
+      if (p.gain * m > pathGain * medium) {
+        pathGain = p.gain;
+        pathCutoff = p.cutoff;
         medium = m;
       }
     }
@@ -165,14 +174,14 @@ export class Emitter {
       dirCutoff = 20000 * Math.pow(dv.rearCutoff / 20000, off);
     }
 
-    const cutoff = Math.min(path.cutoff, airCutoff(l.zone, d), dirCutoff);
+    const cutoff = Math.min(pathCutoff, airCutoff(l.zone, d), dirCutoff);
     const tc = this.first ? 0 : 0.04;
     glide(this.panner.positionX, x, t, tc);
     glide(this.panner.positionY, y, t, tc);
     glide(this.panner.positionZ, z, t, tc);
     glide(this.delay.delayTime, Math.min(d / SPEED_OF_SOUND, MAX_DELAY), t, this.first ? 0 : 0.08);
     glide(this.lowpass.frequency, cutoff, t, tc);
-    glide(this.gain.gain, path.gain * medium * dirGain, t, tc);
+    glide(this.gain.gain, pathGain * medium * dirGain, t, tc);
     for (const s of this.sends) {
       let g = zones.includes(s.zone) ? (this.sendLevel * mediumFactor(s.zone, l.bar)) / zones.length : 0;
       if (g > 0 && this.sendScale) g *= this.sendScale(s.zone);

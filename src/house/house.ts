@@ -9,7 +9,7 @@
  * reflections over rooms ~7 stops darker). Walking: the house's collision proxies become 3D walls
  * and floors (player/walkMesh.ts); the leaves are moving walls (doors.ts).
  */
-import { BufferGeometry, Float32BufferAttribute, Group, Matrix4, Mesh, Uint32BufferAttribute, Vector3, type Material, type MeshPhysicalNodeMaterial, type Object3D, type Camera, type Texture } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, Group, Matrix4, Mesh, Vector3, type Material, type MeshPhysicalNodeMaterial, type Object3D, type Camera, type Texture } from 'three/webgpu';
 import { attribute } from 'three/tsl';
 import type { Node } from 'three/webgpu';
 import type { HouseAssets, LoadedPart, PartName } from './assets';
@@ -218,18 +218,20 @@ export class House {
   }
 
   /**
-   * Builds the floors (ground floor first) and the rooms' reflections. Called during loading, before
-   * the warm-up: their pipelines compile there with everything else (app/game.ts warmAll).
+   * Builds the floors (ground floor first) and installs the rooms' reflections, all prepared since
+   * the exterior compiled. Called during loading, before the warm-up: their pipelines compile there
+   * with everything else (app/game.ts warmAll).
    */
   async loadInteriors(): Promise<void> {
     const t0 = performance.now();
-    for (const name of ['G', 'L1', 'L2'] as PartName[]) {
-      const part = await this.assets.loadPart(name);
+    // Prepared in the background since the exterior compiled (assets.ts); built here in order.
+    const { floors, reflections } = this.assets.interiors;
+    for (const prepared of floors) {
+      const part = await prepared;
       await this.buildPart(part);
-      console.info(`[Dyson] house ${name}: ${part.compiled.stats.triangles} tris`);
+      console.info(`[Dyson] house ${part.name}: ${part.compiled.stats.triangles} tris`);
     }
-    const captures = await Promise.all(this.assets.rooms.map((r) => this.assets.pack.bytes(`refl_${r.name}`)));
-    this.baked.setAtlas(await this.assets.worker.reflections(captures));
+    this.baked.setAtlas(await reflections);
     console.info(`[Dyson] house interiors built in ${(performance.now() - t0).toFixed(0)} ms`);
     void this.assets.pack.pruneCache();
   }
@@ -265,15 +267,19 @@ export class House {
   }
 }
 
+/**
+ * The worker's arrays are adopted, not copied (BufferAttribute, not Float32BufferAttribute): each
+ * is its own transferred buffer, owned by this geometry alone and never written afterwards.
+ */
 function geometry(g: DrawGroup): BufferGeometry {
   const geo = new BufferGeometry();
-  geo.setAttribute('position', new Float32BufferAttribute(g.position, 3));
-  geo.setAttribute('normal', new Float32BufferAttribute(g.normal, 3));
-  if (g.uv) geo.setAttribute('uv', new Float32BufferAttribute(g.uv, 2));
-  if (g.uv1) geo.setAttribute('uv1', new Float32BufferAttribute(g.uv1, 2));
-  if (g.irradiance) geo.setAttribute('bakedLight', new Float32BufferAttribute(g.irradiance, 3));
-  if (g.indoor) geo.setAttribute('indoor', new Float32BufferAttribute(g.indoor, 1));
-  geo.setIndex(new Uint32BufferAttribute(g.index, 1));
+  geo.setAttribute('position', new BufferAttribute(g.position, 3));
+  geo.setAttribute('normal', new BufferAttribute(g.normal, 3));
+  if (g.uv) geo.setAttribute('uv', new BufferAttribute(g.uv, 2));
+  if (g.uv1) geo.setAttribute('uv1', new BufferAttribute(g.uv1, 2));
+  if (g.irradiance) geo.setAttribute('bakedLight', new BufferAttribute(g.irradiance, 3));
+  if (g.indoor) geo.setAttribute('indoor', new BufferAttribute(g.indoor, 1));
+  geo.setIndex(new BufferAttribute(g.index, 1));
   geo.computeBoundingSphere();
   geo.computeBoundingBox();
   return geo;

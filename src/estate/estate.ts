@@ -3,7 +3,7 @@
  * plan (layout.ts → build.ts). Static parts are emitted by material slot into one mesh per group;
  * repeated elements (balusters, piers) are instanced. The walker gets one walk mesh.
  */
-import { BufferGeometry, Float32BufferAttribute, Group, InstancedMesh, Mesh, Uint32BufferAttribute, type Material, type Matrix4 } from 'three/webgpu';
+import { BufferAttribute, BufferGeometry, Float32BufferAttribute, Group, InstancedMesh, Mesh, Uint32BufferAttribute, type Material, type Matrix4 } from 'three/webgpu';
 import { emitParts } from '../geometry/polyMesh';
 import type { WalkMesh } from '../player/walkMesh';
 import { estateGeometry, estateWalk } from './build';
@@ -88,8 +88,8 @@ function merged(geo: BufferGeometry, matrices: Matrix4[]): BufferGeometry {
     for (let i = 0; i < idx.length; i++) out[k * idx.length + i] = idx[i] + (k * src.length) / 3;
   });
   const g = new BufferGeometry();
-  g.setAttribute('position', new Float32BufferAttribute(pos, 3));
-  g.setIndex(new Uint32BufferAttribute(out, 1));
+  g.setAttribute('position', new BufferAttribute(pos, 3));
+  g.setIndex(new BufferAttribute(out, 1));
   return g;
 }
 

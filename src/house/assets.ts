@@ -1,7 +1,8 @@
 /**
  * Fetching and compiling the house's parts (no GPU work): the pack's index, the probe grid, and
  * each glTF part compiled in the house worker. The exterior is needed at boot (it stands in every
- * view of the estate and in the field's reflections); the floors stream in afterwards.
+ * view of the estate and in the field's reflections); the floors and the rooms' reflections are
+ * prepared right after it, in the background while the world is built (docs/house.md "Loading").
  */
 import { HousePack, type PackEntry } from './pack';
 import { HouseTextures } from './textures';
@@ -12,6 +13,8 @@ import type { HouseWorkerReply, HouseWorkerRequest } from './houseWorker';
 
 export const PART_NAMES = ['exterior', 'G', 'L1', 'L2'] as const;
 export type PartName = (typeof PART_NAMES)[number];
+/** The floors, in the order they are compiled and built. */
+const FLOOR_NAMES = ['G', 'L1', 'L2'] as const satisfies readonly PartName[];
 
 export interface LoadedPart {
   name: PartName;
@@ -68,6 +71,13 @@ export class HouseWorkerClient {
   }
 }
 
+/** The floors and the rooms' prefiltered reflections, under way (each promise settles once). */
+export interface HouseInteriors {
+  /** Ground floor first: build them in this order. */
+  readonly floors: readonly Promise<LoadedPart>[];
+  readonly reflections: Promise<Uint32Array>;
+}
+
 export interface HouseAssets {
   readonly pack: HousePack;
   readonly textures: HouseTextures;
@@ -76,8 +86,16 @@ export interface HouseAssets {
   readonly rooms: RoomBox[];
   /** The exterior, compiled (boot). */
   readonly exterior: LoadedPart;
-  /** Compiles a floor (fetches its glTF, buffer and images). */
-  loadPart(name: PartName): Promise<LoadedPart>;
+  /** The floors and reflections, started as soon as the exterior is compiled. */
+  readonly interiors: HouseInteriors;
+}
+
+interface FetchedPart {
+  name: PartName;
+  text: string;
+  doc: GltfDocument;
+  bin: ArrayBuffer;
+  images: Promise<void>;
 }
 
 /** Opens the pack and compiles the exterior: the boot-time half of the house. */
@@ -98,20 +116,49 @@ export async function loadHouseAssets(): Promise<HouseAssets> {
   };
   worker.init(probes);
 
-  const loadPart = async (name: PartName): Promise<LoadedPart> => {
-    const gltfName = `house_${name}.gltf`;
-    const text = await pack.text(gltfName);
+  const fetchPart = async (name: PartName): Promise<FetchedPart> => {
+    const text = await pack.text(`house_${name}.gltf`);
     const doc = JSON.parse(text) as GltfDocument;
-    const binName = doc.buffers[0].uri;
     // Images decode in parallel with the compile.
     const images = textures.preload((doc.images ?? []).map((i) => i.uri));
-    const compiled = await worker.part(name, text, await pack.bytes(binName));
-    await images;
-    return { name, doc, compiled };
+    return { name, text, doc, bin: await pack.bytes(doc.buffers[0].uri), images };
   };
-  const exterior = await loadPart('exterior');
+  const compileFetched = async (f: FetchedPart): Promise<LoadedPart> => {
+    const compiled = await worker.part(f.name, f.text, f.bin);
+    await f.images;
+    return { name: f.name, doc: f.doc, compiled };
+  };
+  const exterior = await compileFetched(await fetchPart('exterior'));
   console.info(`[Dyson] house exterior: ${exterior.compiled.stats.triangles} tris, compile ${exterior.compiled.stats.ms.toFixed(0)} ms, total ${(performance.now() - t0).toFixed(0)} ms`);
-  return { pack, textures, worker, probes, rooms, exterior, loadPart };
+  return { pack, textures, worker, probes, rooms, exterior, interiors: prepareInteriors(fetchPart, compileFetched, rooms, pack, worker) };
+}
+
+/**
+ * Starts the floors and reflections behind the exterior. Fetches run one entry ahead of the
+ * worker (which compiles in message order), so at most two floors' raw buffers are alive at once:
+ * the floor compiling and the one fetched behind it. Rejections are observed here and surface when
+ * House.loadInteriors awaits them (the boot's 'interiors' stage).
+ */
+function prepareInteriors(
+  fetchPart: (name: PartName) => Promise<FetchedPart>,
+  compileFetched: (f: FetchedPart) => Promise<LoadedPart>,
+  rooms: readonly RoomBox[],
+  pack: HousePack,
+  worker: HouseWorkerClient,
+): HouseInteriors {
+  const floors: Promise<LoadedPart>[] = [];
+  let fetched: Promise<unknown> = Promise.resolve();
+  for (const name of FLOOR_NAMES) {
+    const gate = Promise.all([fetched, floors[floors.length - 2]]);
+    const f = gate.then(() => fetchPart(name));
+    fetched = f;
+    floors.push(f.then(compileFetched));
+  }
+  const reflections = Promise.all([fetched, floors[floors.length - 2]])
+    .then(() => Promise.all(rooms.map((r) => pack.bytes(`refl_${r.name}`))))
+    .then((captures) => worker.reflections(captures));
+  for (const p of [...floors, reflections]) p.catch(() => undefined);
+  return { floors, reflections };
 }
 
 export type { PackEntry };
