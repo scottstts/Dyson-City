@@ -6,7 +6,7 @@
  *   node tools/terminal-screens/shots.mjs [spec…]
  *
  * A spec is `keys` or `keys@seconds` (keys: u d l r e b, pressed after the boot; seconds: hold the
- * recording then playing there), or `idle`. With no spec, a review set of every page and the
+ * recording then playing there), `boot@seconds` (the boot, that long after the wake), or `idle`. With no spec, a review set of every page and the
  * briefings' beats. Writes tools/out/terminal/<spec>.png.
  */
 import { chromium } from 'playwright-core';
@@ -21,7 +21,7 @@ const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 fs.mkdirSync(OUT, { recursive: true });
 
 const DEFAULT = [
-  'idle', '', 'r', 'rr@9.5', 'rr@15', 'rr@30', 'rr@37.8', 'rr@44', 'rr@54.5', 'rdr', 'rddr', 'dr', 'drr@6', 'drdr@3',
+  'idle', 'boot@0.8', 'boot@2.2', '', 'r', 'rr@9.5', 'rr@15', 'rr@30', 'rr@37.8', 'rr@44', 'rr@54.5', 'rdr', 'rddr', 'dr', 'drr@6', 'drdr@3',
   'ddr@0.6', 'ddr@2.4', 'ddr@4.6', 'ddr@7', 'ddr@9.3', 'ddr@12.5', 'ddr@16', 'ddr@18.5', 'ddr@20.3', 'ddr@22.3', 'ddr@40',
   'dddr@1', 'dddr@2.6', 'dddr@5.5', 'dddr@10', 'dddr@20',
 ];

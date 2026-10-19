@@ -16,11 +16,19 @@ const live: TerminalLive = {
 const screen = new TerminalScreen();
 screen.preload();
 
-/** Draws the screen after pressing `keys`, the recording playing held `at` seconds in (or the boot's voice let go). */
+/**
+ * Draws the screen after pressing `keys`, the recording playing held `at` seconds in (or the boot's
+ * voice let go); `boot` draws the boot `at` seconds after the wake.
+ */
 function shot(keys: string, at: number | null, asleep: boolean): string {
   const os = new TerminalOS();
   let t = 0;
-  if (!asleep) {
+  if (keys === 'boot') {
+    // The boot itself, `at` seconds after the wake.
+    os.wake(0);
+    t = at ?? 1;
+    os.update(t);
+  } else if (!asleep) {
     os.wake(0);
     t = BOOT_TIME + 0.1;
     os.update(t);

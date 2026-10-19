@@ -271,22 +271,26 @@ export class TerminalScreen {
     }
     const cx = 520;
     this.glyph(cx, 560, 210, t, Math.min(1, u * 2.5));
+    // The title on its own line, then the checks in two columns.
+    if (u > 0.04) {
+      this.text('RECKONER COMPUTATION', 900, 300, `600 24px ${FONT.mono}`, INK.amber, 5);
+      this.text('WEST GATE TERMINAL 04', 900, 340, `500 24px ${FONT.mono}`, INK.ink, 3);
+    }
     const lines: [string, string][] = [
-      ['RECKONER COMPUTATION', 'WEST GATE TERMINAL 04'],
-      ['LINK', 'RECKONER · 3 TOWERS · CRYOGEN-COOLED'],
+      ['LINK', 'RECKONER · 3 TOWERS'],
       ['BEAM', 'SOL · 4.37 LY · CARRIER LOCKED'],
       ['RESONATOR', 'FEED LIVE'],
       ['COMPOUND', '7 PRECINCTS NOMINAL'],
       ['EAST LOCK', 'CYCLING ON SCHEDULE'],
       ['GUARDIAN', 'PRESENT'],
     ];
-    const shown = Math.floor(u * (lines.length + 1.5));
+    const shown = Math.floor(u * (lines.length + 1.5)) - 1;
     lines.forEach(([k, v], i) => {
       if (i >= shown) return;
-      const y = 330 + i * 72;
-      this.text(k, 900, y, `600 24px ${FONT.mono}`, i === 0 ? INK.amber : INK.dim, 5);
-      this.text(v, 1250, y, `500 24px ${FONT.mono}`, i === 0 ? INK.ink : INK.ok, 3);
-      if (i > 0) this.text('· · · · · ·', 1110, y, `500 24px ${FONT.mono}`, INK.ghost);
+      const y = 430 + i * 66;
+      this.text(k, 900, y, `600 24px ${FONT.mono}`, INK.dim, 5);
+      this.text('· · · · ·', 1110, y, `500 24px ${FONT.mono}`, INK.ghost);
+      this.text(v, 1250, y, `500 24px ${FONT.mono}`, INK.ok, 3);
     });
     const bar = Math.min(1, u * 1.1);
     this.rule(900, 880, 1760, INK.ghost);
