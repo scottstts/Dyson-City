@@ -13,6 +13,7 @@ import { FieldSounds, type AudioField } from './sounds/field';
 import { HouseSounds, type AudioHouse } from './sounds/house';
 import { SpeechSounds } from './sounds/speech';
 import { SpeechCues } from './speechCues';
+import { TerminalSounds, type AudioTerminal } from './sounds/terminal';
 import { AIRLOCK_SPEECH, type SpeechClips } from './loadSpeech';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
@@ -35,6 +36,8 @@ export interface AudioWorld {
   craft?: AudioCraft;
   /** The announcements' recordings (absent in tools without them: then none is made). */
   speech?: SpeechClips;
+  /** The West Gate terminal (absent in tools without it). */
+  terminal?: AudioTerminal;
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -63,6 +66,7 @@ export class GameAudio {
   private readonly craft: CraftSounds | null;
   private readonly speech: { sounds: SpeechSounds; cues: SpeechCues; airlockCount: number } | null;
   private readonly world: AudioWorld;
+  private readonly terminal: TerminalSounds | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
   /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
@@ -98,6 +102,7 @@ export class GameAudio {
     this.car = world.car ? new CarSounds(this.engine, world.car) : null;
     this.craft = world.craft ? new CraftSounds(this.engine, world.craft) : null;
     this.world = world;
+    this.terminal = world.terminal ? new TerminalSounds(this.engine, world.terminal) : null;
     this.speech = world.speech
       ? { sounds: new SpeechSounds(this.engine, world.speech, { car: world.car ?? null }), cues: new SpeechCues(), airlockCount: world.airlock.announcement.count }
       : null;
@@ -158,6 +163,7 @@ export class GameAudio {
     this.field?.update(dt, t, l);
     this.house?.update(t, l);
     if (this.speech) this.announce(dt, t, l);
+    this.terminal?.update(t, l);
     this.engine.update(l, t);
   }
 

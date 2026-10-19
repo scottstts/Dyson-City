@@ -1,0 +1,67 @@
+{
+  "_": "Timestamped transcripts of the narration (from the user's TTS), by clip: [start, end, text]. tools/terminal-cues.mjs uses them as the subtitles.",
+  "T1": [
+    [0.1,1.15,"Terminal awake."],
+    [1.4,2.5,"Good morning, Guardian."],
+    [2.8,4.3,"It's noon, as always."],
+    [4.75,6.15,"All systems are running."],
+    [6.4,9.4,"Use the arrows to choose, and Enter to open."]
+  ],
+  "T2": [
+    [0.08,2.4,"It began with something small enough to throw."],
+    [2.95,7.4,"In 2061, a handful of seeds left the Sun on sails of light."],
+    [7.9,11.4,"Each one was a forge and a memory, and nothing else."],
+    [11.9,16.35,"They fell toward Alpha Centauri for 22 years, and most of them made it."],
+    [16.8,17.8,"They found rock."],
+    [18.15,23.2,"They made tools out of the rock, and tools out of the tools, and they were not built to stop."],
+    [23.7,33.3,"For 40 years, they took the system apart: asteroid by asteroid, moon by moon, and laid it down in plates around the star, until the plates met."],
+    [33.85,36.4,"In 2127, the sphere closed."],
+    [36.85,38.85,"2 million kilometres across."],
+    [39.2,41,"A star with a roof."],
+    [41.5,46.35,"On the inside, in one small pocket of air, they built a city to keep watch over it."],
+    [46.8,50.8,"A field of golden machines, a road, a house."],
+    [51.35,53.55,"Then, it needed someone to live there."],
+    [54,55.35,"That's where you come in."]
+  ],
+  "T3": [
+    [0.08,1.2,"Compound status."],
+    [1.4,2.9,"All precincts nominal."],
+    [3.15,5.45,"The Veil is holding at normal load."],
+    [5.7,8.05,"Band spin is steady, and the Gyre agrees."],
+    [8.3,9.65,"The Cold Hold is full."],
+    [9.95,14.65,"Craft traffic is on schedule: one every thirty seconds through the East Lock."],
+    [14.95,16.85,"No faults, no alerts."],
+    [17.15,19.05,"One standing order in the house:"],
+    [19.25,20.95,"the kitchen kettle, on."],
+    [21.25,22.9,"No requester on file."]
+  ],
+  "T4": [
+    [0.12,0.95,"Guardian."],
+    [1.15,4.28,"This is President Clara Hayes of the Centauri Accord."],
+    [4.85,8.05,"By the time this reaches you, it will be four years old…"],
+    [8.3,9.65,"…and so will I."],
+    [10.1,13.7,"The Assembly chose you to keep watch where none of us can."],
+    [14,15.55,"You won't need to do much."],
+    [15.8,16.85,"That's the point."],
+    [17.05,17.75,"Be there."],
+    [17.85,18.95,"Look after it."],
+    [19.3,20.5,"And write to us."],
+    [20.85,22,"We'll be listening."]
+  ],
+  "T5": [
+    [0.1,1.2,"Hey, it's Sam."],
+    [1.55,4.3,"They said just talk normally, so… hi."],
+    [4.65,6.8,"Your plants are alive, mostly."],
+    [7.15,9.55,"The cat has decided I'm acceptable."],
+    [10,16.35,"Everyone keeps asking about you, and I tell them you're very important now and can't be reached, which is technically true."],
+    [16.8,18.5,"Send me a picture of the star."],
+    [18.85,20.4,"I know it'll take four years."],
+    [20.7,21.45,"I'll wait."]
+  ],
+  "T6": [
+    [0.08,1.35,"Resonator feed live."],
+    [1.7,2.95,"The star is quiet."],
+    [3.35,7.35,"Surface activity within normal range, and no flares forecast."],
+    [7.8,11.7,"Playing the star's oscillations, sped up a hundred thousand times."]
+  ]
+}

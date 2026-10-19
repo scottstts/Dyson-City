@@ -14,7 +14,6 @@ import type { Input } from '../player/input';
 import type { PlayerController } from '../player/controller';
 import type { CollisionWorld } from '../player/collision';
 import type { CityWalk } from '../city/walk';
-import { PAD_HEIGHT } from '../ground/site';
 import { ChaseCamera } from '../vehicles/car/chaseCamera';
 import { CAR_FOOTPRINT } from '../vehicles/car/collision';
 import type { Car } from '../vehicles/car/car';
@@ -63,7 +62,7 @@ export class Driving {
     this.car.driven = true;
     this.walk.walls.setDynamic('car', null);
     this.chase.reset(this.car.state);
-    this.chase.update(0, [0, 0], this.car.state, this.cameraWalls);
+    this.chase.update(0, [0, 0], this.car.state, this.cameraWalls, this.car.groundY);
     this.chase.apply(this.camera);
   }
 
@@ -83,7 +82,7 @@ export class Driving {
     switch (this.mode) {
       case 'walking': {
         const f = this.player.feet;
-        const near = playing && Math.abs(f.y - PAD_HEIGHT) < 0.5 && car.distance(f.x, f.z) < REACH;
+        const near = playing && Math.abs(f.y - car.groundY) < 0.5 && car.distance(f.x, f.z) < REACH;
         if (near) {
           this.prompt = 'Drive';
           if (use) {
@@ -102,7 +101,7 @@ export class Driving {
         this.pedals(dt, playing);
         car.update(dt, this.input);
         const look = this.keys.consumeLook();
-        this.chase.update(dt, playing ? look : [0, 0], car.state, this.cameraWalls);
+        this.chase.update(dt, playing ? look : [0, 0], car.state, this.cameraWalls, car.groundY);
         if (this.mode === 'entering') this.blend(dt, this.chase.position, this.chase.quaternion, () => (this.mode = 'driving'));
         else this.chase.apply(this.camera);
         if (this.mode === 'driving' && playing && car.state.speed < EXIT_SPEED) {
@@ -191,7 +190,9 @@ export class Driving {
       const z = cz + oz;
       const [rx, rz] = this.walk.walls.resolve(x, z, 0.35);
       if (Math.hypot(rx - x, rz - z) > 1e-3) continue;
-      if (Math.abs(this.walk.ground(x, z, PAD_HEIGHT + 0.4) - PAD_HEIGHT) > 0.05) continue;
+      // Standing on what the car stands on (the pad, or the Stand's deck), not off its edge.
+      const y = this.car.groundY;
+      if (Math.abs(this.walk.ground(x, z, y + 0.4) - y) > 0.05) continue;
       return [x, z];
     }
     return null;

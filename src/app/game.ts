@@ -18,11 +18,15 @@ import type { AtmosphereTextures } from '../atmosphere/luts';
 import { PauseMenu } from '../ui/pauseMenu';
 import { loadAudioPrefs, prefsGain } from '../ui/audioPrefs';
 import type { EntryScreen } from '../ui/entryScreen';
-import { EyeAdaptation } from '../render/adaptation';
+import { ADAPT_MAX, EyeAdaptation } from '../render/adaptation';
 import { InteractionPrompt } from '../ui/prompt';
 import type { GameAudio } from '../audio/gameAudio';
 import { Driving } from './driving';
 import type { FlightPhase } from '../vehicles/craft/flight';
+import { READING_ADAPTATION, TerminalUse } from '../terminal/use';
+import { terminalLive } from '../terminal/live';
+import type { NarrationClips } from '../audio/loadNarration';
+import type { TerminalKey } from '../terminal/os/os';
 
 /** Where the West Gate's airlock is told the walker is while they drive: far from both its gates. */
 const NOBODY = new Vector3(0, 0, 0);
@@ -59,8 +63,17 @@ export class Game {
   private readonly audio: GameAudio;
   private readonly prompt: InteractionPrompt;
   private readonly driving: Driving;
+  private readonly terminal: TerminalUse;
+  private readonly narration: NarrationClips;
+  /** Review (?terminal=keys): the keys still to press, one every REVIEW_KEY seconds after the boot. */
+  private reviewKeys: TerminalKey[] = [];
+  private reviewAt = 0;
+  private reviewJumped = false;
+  /** Review (?tat): the OS's clock, held. */
+  private reviewHold: number | null = null;
 
-  constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement) {
+  constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement, narration: NarrationClips) {
+    this.narration = narration;
     this.handle = handle;
     this.audio = audio;
     this.world = world;
@@ -84,6 +97,7 @@ export class Game {
     this.player.spawn(spawn);
     this.spawnLook = spawn;
     this.driving = new Driving(world.vehicles.car, this.input, this.player, this.camera, world.city.walk, world.vehicles.carWalls);
+    this.terminal = new TerminalUse(world.stand.os, this.input, this.player, this.camera);
     if (debug.probe) addLightingProbes(world.scene, spawn.position, spawn.yaw);
     this.camera.updateMatrixWorld();
 
@@ -111,6 +125,12 @@ export class Game {
       world.vehicles.fastForward(phase as FlightPhase, extra ? Number(extra) : undefined);
     }
     if (debug.drive) this.driving.startInCar();
+    if (debug.terminal !== null) {
+      this.player.spawn(this.terminal.standSpot());
+      this.terminal.startAt(this.gameTime);
+      const names: Record<string, TerminalKey> = { u: 'up', d: 'down', l: 'left', r: 'right', e: 'enter', b: 'back' };
+      this.reviewKeys = [...debug.terminal].map((c) => names[c]).filter((k): k is TerminalKey => !!k);
+    }
     if (debug.lock) world.city.lock.airlock.hold(debug.lock === 'outer' || debug.lock === 'open', debug.lock === 'inner' || debug.lock === 'open');
 
     this.prompt = new InteractionPrompt(host);
@@ -224,6 +244,27 @@ export class Game {
     this.starSeen = -1;
   }
 
+  /** Review (?terminal=keys): presses the queued keys, one at a time, once the terminal has booted. */
+  private reviewTerminal(): void {
+    if (!this.reviewKeys.length) {
+      // Then (?tat) jump the recording forward, once.
+      const os = this.world.stand.os;
+      if (this.debug.terminalAt !== null && os.playback && !this.reviewJumped && this.gameTime >= this.reviewAt) {
+        this.reviewJumped = true;
+        // The recording is held at that moment (stills for review): the OS's clock stops there.
+        os.playback.start = this.gameTime - this.debug.terminalAt;
+        this.reviewHold = this.gameTime;
+        os.version++;
+      }
+      return;
+    }
+    const os = this.world.stand.os;
+    if (os.booting || !os.awake) return;
+    if (this.gameTime < this.reviewAt) return;
+    os.key(this.reviewKeys.shift()!, this.gameTime);
+    this.reviewAt = this.gameTime + 0.35;
+  }
+
   private profileCounter = 0;
   /** Debug: GPU time of the frame's render passes, published on window.__dyson.gpuMs. */
   private profileFrame(): void {
@@ -239,21 +280,26 @@ export class Game {
     if (this.debug.time === null) this.gameTime += dt;
     this.world.update(this.gameTime);
     const driving = this.driving;
-    if (this.playing && !driving.inCar) this.player.update(dt);
+    const terminal = this.terminal;
+    if (this.playing && !driving.inCar && !terminal.active) this.player.update(dt);
     const use = this.playing && this.input.consumePress('KeyE');
-    const usedByCar = driving.update(dt, this.playing, use);
+    // The terminal takes E first (it is never within the car's reach), then the car, then a door.
+    const usedByTerminal = !driving.inCar && terminal.update(dt, this.gameTime, this.playing, use);
+    const usedByCar = !terminal.active && driving.update(dt, this.playing, use && !usedByTerminal);
+    if (terminal.active) driving.update(dt, false, false);
+    this.reviewTerminal();
     // In the car the West Gate's airlock does not see a walker (the car never enters it).
     this.world.city.update(dt, driving.inCar ? NOBODY : this.player.feet);
     // Review time (?time) holds the craft where ?craft put it, as it holds the star.
     this.world.vehicles.update(this.debug.time === null ? dt : 0, this.gameTime, driving.inCar ? null : this.player.feet);
     this.camera.updateMatrixWorld();
-    this.world.house.update(dt, this.camera, this.player.feet, use && !usedByCar && !driving.inCar);
+    this.world.house.update(dt, this.camera, this.player.feet, use && !usedByCar && !usedByTerminal && !driving.inCar && !terminal.active);
     const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);
     this.world.indoors = indoors;
     this.world.estate.view(this.camera, indoors);
     this.world.house.culling.update(this.camera, indoors);
-    const aimed = driving.inCar ? null : this.world.house.doors.aimed;
-    this.prompt.set(!this.playing ? null : (driving.prompt ?? (aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null)));
+    const aimed = driving.inCar || terminal.active ? null : this.world.house.doors.aimed;
+    this.prompt.set(!this.playing || terminal.active ? null : (terminal.prompt ?? driving.prompt ?? (aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null)));
     if (this.debug.wobble !== null) {
       // Flicker review: a yaw sweep that returns to the same view every period, with a different
       // amplitude (so a different motion history and speed) each time; the period is prime so the
@@ -265,6 +311,12 @@ export class Game {
     }
     this.frameIndex++;
     this.camera.updateMatrixWorld();
+    // The Stand's silencer follows the player up and down it, on foot or in the car.
+    const car = this.world.vehicles.car;
+    if (driving.inCar) this.world.stand.listen(dt, car.state.x, car.groundY, car.state.z);
+    else this.world.stand.listen(dt, this.player.feet.x, this.player.feet.y, this.player.feet.z);
+    // The screen's auto-brightness follows the eye's adaptation (terminal/screenMaterial.ts).
+    this.world.stand.update(this.reviewHold ?? this.gameTime, this.camera.position, terminalLive(this.world), this.narration.peaks, this.adaptation?.value ?? 1);
     this.audio.update(dt, this.camera, this.player.feet);
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
@@ -275,7 +327,10 @@ export class Game {
     (this.pipeline.camera.starVisibility as unknown as { value: number }).value = this.starSeen;
     (this.pipeline.camera.starTransmission as unknown as { value: number }).value = star.transmission;
     this.pipeline.render();
-    if (this.adaptation) (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);
+    if (this.adaptation) {
+      this.adaptation.limit = this.terminal.reading ? READING_ADAPTATION : ADAPT_MAX;
+      (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);
+    }
     if (this.debug.profile) this.profileFrame();
   }
 }

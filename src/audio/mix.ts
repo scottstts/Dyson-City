@@ -57,6 +57,11 @@ export const LEVEL = {
    * more energy per peak than speech, so it sits well under it.
    */
   chime: 0.3,
+  /**
+   * The West Gate terminal's speaker (sounds/terminal.ts), at 0.3 m (its grille): a recording's
+   * peak, its interface tones' peak, and the star's song's RMS. First pass, to be tuned by ear.
+   */
+  terminal: { voice: 0.6, ui: 0.16, song: 0.22 },
 } as const;
 
 /**

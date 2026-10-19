@@ -17,6 +17,7 @@ import { plantLots } from '../../src/field/plant/lots';
 import { servicePlan } from '../../src/field/plant/services';
 import { PORTAL_ARCH } from '../../src/field/cordon';
 import { groundRegions } from '../../src/estate/regions';
+import { RAMP, RAMP_FOOT, STAIR, STAIR_FOOT, STAND, TERMINAL, notchPoint, standOutline } from '../../src/terminal/layout';
 import { CARRIAGE_HOUSE, GLASSHOUSE, H, HOUSE_FOOTPRINT, KITCHEN, TERRACE_OUTLINE } from '../../src/estate/layout';
 import { hedgeSpecs } from '../../src/estate/hedges';
 import { poolOutline } from '../../src/estate/pond';
@@ -71,6 +72,13 @@ export function planData() {
     ringTrench: RING_TRENCH_R,
     pad: LANDING_PAD,
     court: GATE_COURT,
+    // The Stand (docs/terminal.md): the drum, its ramp and stair to their feet, the terminal.
+    stand: {
+      outline: standOutline(96),
+      ramp: [notchPoint(RAMP.angle, RAMP_FOOT - 9, -RAMP.half - RAMP.cheek), notchPoint(RAMP.angle, RAMP_FOOT, -RAMP.half - RAMP.cheek), notchPoint(RAMP.angle, RAMP_FOOT, RAMP.half + RAMP.cheek), notchPoint(RAMP.angle, RAMP_FOOT - 9, RAMP.half + RAMP.cheek)],
+      stair: [notchPoint(STAIR.angle, STAIR_FOOT - 1.6, -STAIR.half - STAIR.cheek), notchPoint(STAIR.angle, STAIR_FOOT, -STAIR.half - STAIR.cheek), notchPoint(STAIR.angle, STAIR_FOOT, STAIR.half + STAIR.cheek), notchPoint(STAIR.angle, STAIR_FOOT - 1.6, STAIR.half + STAIR.cheek)],
+      terminal: [STAND.cx + Math.cos(TERMINAL.angle) * TERMINAL.r, STAND.cz + Math.sin(TERMINAL.angle) * TERMINAL.r],
+    },
     gateway: ESTATE_GATEWAY,
     estate: ESTATE,
     house: HOUSE_SITE,

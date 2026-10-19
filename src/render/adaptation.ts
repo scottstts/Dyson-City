@@ -60,6 +60,13 @@ export function adaptStep(current: number, target: number, dt: number): number {
 export class EyeAdaptation {
   /** Current multiplier on the exposure. */
   value = 1;
+  /**
+   * The most the eye may open now (default: ADAPT_MAX). The terminal's screen dims itself by the
+   * eye's adaptation (terminal/screenMaterial.ts): the dimmer panel would open the eye further, and
+   * the loop would run to ADAPT_MAX. While the view is at it, the terminal holds the eye here.
+   */
+  limit = ADAPT_MAX;
+
   private target = 1;
   private readonly rt = new RenderTarget(W, H, { type: HalfFloatType, format: RGBAFormat, depthBuffer: false });
   private readonly quad: QuadMesh;
@@ -107,7 +114,7 @@ export class EyeAdaptation {
           this.pending = false;
         });
     }
-    this.value = adaptStep(this.value, this.target, dt);
+    this.value = adaptStep(this.value, Math.min(this.target, this.limit), dt);
     return this.value;
   }
 }

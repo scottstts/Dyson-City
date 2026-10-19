@@ -155,6 +155,12 @@ export class CarState {
   braking = 0;
   /** The handbrake is on (the rear wheels are locked). */
   handbrake = false;
+  /**
+   * Gravity's share along the ground under the car (m/s², body frame: forward, left): zero on the
+   * flat pad; on a ramp, −g·sin of its slope along the heading (car.ts sets them from the ground).
+   */
+  gradeX = 0;
+  gradeY = 0;
 
   /** Changes direction after standing still with the other pedal held for SHIFT_DELAY. */
   selectGear(input: DriveInput, dt: number): void {
@@ -359,7 +365,8 @@ function stepOnce(s: CarState, input: DriveInput): void {
   // one step).
   const brakeF = -rolling * brake;
   const brakeFront = fzF / Math.max(fzF + fzR, 1);
-  const hold = Math.abs(s.u) <= 0.05 && drivePedal < 0.02 ? -(s.u * m) / DT : 0;
+  // The hold at rest also holds the car against the grade (within the brakes' grip, like any force).
+  const hold = Math.abs(s.u) <= 0.05 && drivePedal < 0.02 ? -(s.u * m) / DT - m * s.gradeX : 0;
   const fxF = drive * P.driveFront + brakeF * brakeFront + hold * 0.5;
   const fxR = drive * (1 - P.driveFront) + brakeF * (1 - brakeFront) + hold * 0.5;
   const locked = input.handbrake && Math.abs(s.u) > 0.5;
@@ -369,8 +376,8 @@ function stepOnce(s: CarState, input: DriveInput): void {
 
   // Resistances.
   const drag = -0.5 * AIR_DENSITY * P.dragArea * s.u * Math.abs(s.u) - P.rolling * W * Math.tanh(s.u / 0.5);
-  const Fx = front.fx + rear.fx + drag;
-  const Fy = front.fy + rear.fy;
+  const Fx = front.fx + rear.fx + drag + m * s.gradeX;
+  const Fy = front.fy + rear.fy + m * s.gradeY;
   let Mz = P.a * front.fy - P.b * rear.fy;
   // Stability control: pulls the yaw rate toward its reference.
   if (esc > 0) {

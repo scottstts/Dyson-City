@@ -1,6 +1,6 @@
 /**
- * The vehicles (docs/vehicles.md, city_plan §6–7): the car, parked on the Gate Court by the
- * estate's gateway and driven by the player anywhere at pad level under the Dome, and the craft,
+ * The vehicles (docs/vehicles.md, city_plan §6–7): the car, parked on the Stand by the West Gate
+ * and driven by the player anywhere at pad level under the Dome (and up the Stand's ramp), and the craft,
  * which comes and goes through the East Lock on its own. Built in the environment stage after the
  * field; lit by the probe over the pad (and outside the glass by the open sky); their shade on the
  * pad joins the platform's.
@@ -15,13 +15,14 @@ import { GATE } from '../city/gate/spec';
 import { TERRACE_OUTLINE } from '../estate/layout';
 import { FIELD_Y } from '../field/layout';
 import type { EastLock } from '../city/eastLock/lock';
+import { CAR_SPOT, carGround } from '../terminal/layout';
 import { Car } from './car/car';
 import { Craft } from './craft/craft';
 import { createVehicleShade, type VehicleShade } from './shade';
 import type { FlightPhase } from './craft/flight';
 
-/** Where the car is parked at the start: the Gate Court's north side, west of the estate's gateway, facing the field. */
-export const CAR_PARKING = { x: -452, z: -20, yaw: Math.PI / 2 } as const;
+/** Where the car is parked at the start: on the Stand by the West Gate, nose to its ramp (docs/terminal.md). */
+export const CAR_PARKING = CAR_SPOT;
 
 export interface Vehicles {
   readonly group: Group;
@@ -41,7 +42,11 @@ export interface Vehicles {
   fastForward(phase: FlightPhase, extra?: number): void;
 }
 
-export function buildVehicles(cityWalls: CollisionWorld, lock: EastLock): Vehicles {
+/**
+ * `addStandWalls` puts the Stand's walls (its drum, cheeks, rails and terminal) where only the car
+ * meets them: the chase camera looks over them, so they are not among its walls.
+ */
+export function buildVehicles(cityWalls: CollisionWorld, lock: EastLock, addStandWalls: (walls: CollisionWorld) => void): Vehicles {
   const group = new Group();
   group.name = 'Vehicles';
   const carWalls = new CollisionWorld();
@@ -49,7 +54,10 @@ export function buildVehicles(cityWalls: CollisionWorld, lock: EastLock): Vehicl
   carWalls.addPolygon(TERRACE_OUTLINE.map(([x, z]) => [x, z]));
   // The West Gate is for walkers: the car never enters its chamber, open or shut.
   carWalls.addSegment(GATE.eastX + 0.5, -GATE.passageHalf - 1, GATE.eastX + 0.5, GATE.passageHalf + 1);
-  const car = new Car([cityWalls, carWalls]);
+  const standWalls = new CollisionWorld();
+  addStandWalls(standWalls);
+  // The car drives the pad, and up the Stand's ramp onto its deck.
+  const car = new Car([cityWalls, carWalls, standWalls], carGround);
   car.park(CAR_PARKING.x, CAR_PARKING.z, CAR_PARKING.yaw);
   const craft = new Craft();
   group.add(car.group, craft.group);

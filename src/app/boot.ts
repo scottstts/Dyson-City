@@ -14,6 +14,7 @@ import { Game } from './game';
 import { GameAudio } from '../audio/gameAudio';
 import { loadAudioBank } from '../audio/loadBank';
 import { airlockAnnouncements, loadSpeech } from '../audio/loadSpeech';
+import { NarrationClips } from '../audio/loadNarration';
 import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 
@@ -66,8 +67,10 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   stage('compile', entry, 0.6);
   // The airlock waits out its announcements (city/gate/airlock.ts).
   Object.assign(world.city.gate.airlock.announce, airlockAnnouncements(speech));
-  const audio = new GameAudio(audioContext, audioWorld(world, speech), audioBank);
-  const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
+  // The terminal's narration loads after boot, in the background (audio/loadNarration.ts).
+  const narration = new NarrationClips();
+  const audio = new GameAudio(audioContext, audioWorld(world, speech, narration), audioBank);
+  const game = new Game(handle, world, atmosphere, audio, debug, entry, host, narration);
   // Every pipeline the game will draw with, compiled through the real passes (game.ts warmAll).
   game.warmAll();
   await nextFrame();
@@ -85,6 +88,7 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
 
   console.info(`[Dyson] boot: ${fatal.stage} took ${(performance.now() - stageStart).toFixed(0)} ms`);
   fatal.stage = 'running';
+  narration.load(audioContext);
   if (!debug.manual) game.start();
   if (debug.autostart) entry.hide();
   else entry.showReady(() => game.enter());

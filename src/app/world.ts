@@ -40,6 +40,9 @@ import { House } from '../house/house';
 import { buildEstate, type Estate } from '../estate/estate';
 import type { HouseAssets } from '../house/assets';
 import { buildVehicles, type Vehicles } from '../vehicles/vehicles';
+import { buildStand, type Stand } from '../terminal/stand';
+import { standFloor } from '../terminal/walk';
+import { createStandProbe } from '../terminal/probe';
 
 export interface World {
   readonly scene: Scene;
@@ -61,6 +64,8 @@ export interface World {
   readonly estate: Estate;
   /** The car and the craft (docs/vehicles.md). */
   readonly vehicles: Vehicles;
+  /** The Stand by the West Gate and its terminal (docs/terminal.md). */
+  readonly stand: Stand;
   /** The eye is inside the house (Game sets it): outdoor captures do not refresh. */
   indoors: boolean;
   /** The star's atmosphere, composited onto sky pixels by the pipeline. */
@@ -123,12 +128,15 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const estate = buildEstate();
   scene.add(estate.group);
   city.walk.walls.meshes.push(estate.walk);
+  const stand = buildStand();
+  scene.add(stand.group);
+  city.walk.walls.meshes.push(stand.walk);
   const houseCopies = [...house.captureCopies(), ...estate.captureCopies()];
   const tVehicles = performance.now();
-  const vehicles = buildVehicles(city.walk.walls, city.lock);
+  const vehicles = buildVehicles(city.walk.walls, city.lock, (w) => stand.addCarWalls(w));
   scene.add(vehicles.group);
   console.info(`[Dyson] vehicles: ${(performance.now() - tVehicles).toFixed(0)} ms`);
-  house.culling.track([...field.statics, ...field.moving, ...estate.outdoorMeshes]);
+  house.culling.track([...field.statics, ...field.moving, ...estate.outdoorMeshes, ...stand.outdoorMeshes]);
   const tWalls = performance.now();
   const fieldWalls = addFieldWalls(city.walk.walls, [...field.statics, ...field.moving]);
   console.info(`[Dyson] field walls: ${fieldWalls} segments, ${(performance.now() - tWalls).toFixed(0)} ms`);
@@ -151,12 +159,12 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const composites = [...city.bindEnvironments(environment.target.texture, interior.target.texture), field.vapour.composite];
   // The star-shade under the field (lighting/starShade.ts), baked once: the platform and the field take it.
   const tShade = performance.now();
-  const occluders = rasterOccluders([...field.statics, ...field.moving, ...house.exteriorMeshes, ...estate.occluders]);
+  const occluders = rasterOccluders([...field.statics, ...field.moving, ...house.exteriorMeshes, ...estate.occluders, ...stand.occluders]);
   // The house's roofs over the eye (city/visibility.ts): its exterior on a fine local map, so the
   // star's glare fades as the eye walks under the porch and in, as under the gate's vault.
   city.addStarOccluders(houseOccluders(house.exteriorMeshes, house.centre));
   const tRaster = performance.now();
-  const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, estateFloor));
+  const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, (x, z) => estateFloor(x, z) ?? standFloor(x, z)));
   console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
   // The vehicles' shade as they move (vehicles/shade.ts) takes the pad's light, its sealer's
   // reflection of the zenith included (AO does not reach the clear coat): under a body the view up
@@ -176,6 +184,9 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const estateProbe = createEstateProbe(renderer, sky, startTime, { extras: [...city.captureExtras(), ...captureSite.map((m) => m.clone()), ...house.captureCopies(), ...estate.captureCopies(), ...field.captureCopies({})], interior, transmittance: GLASS_TRANSMISSION });
   house.setLook({ env: estateProbe.env, envTexture: estateProbe.environment.target.texture });
   estate.setLook({ shade: shade.ao, env: estateProbe.env, envTexture: interior.target.texture });
+  // The Stand's own probe: the gatehouse, the court, the Cordon and the towers, the Stand itself.
+  const standProbe = createStandProbe(renderer, sky, startTime, { extras: [...city.captureExtras(), ...captureSite.map((m) => m.clone()), ...house.captureCopies(), ...estate.captureCopies(), ...field.captureCopies({}), ...stand.captureCopies()], interior, transmittance: GLASS_TRANSMISSION });
+  stand.setLook({ shade: shade.ao, env: standProbe.env, vehicleShade: () => vehicles.shade.node() });
 
   const world: World = {
     scene,
@@ -190,6 +201,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     house,
     estate,
     vehicles,
+    stand,
     indoors: false,
     gas,
     starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame, gas),
@@ -205,6 +217,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
       if (!world.indoors) {
         probes.update(t);
         estateProbe.update(t);
+        standProbe.update(t);
       }
       (sky.options.frame as unknown as { value: number }).value += 1;
     },

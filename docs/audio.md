@@ -182,6 +182,7 @@ These rules apply to all future sounds, not just the current ones.
 - **Relief stacks** (`field/vents.ts`, a seeded schedule): a voice from the pool takes a lifting stack. It pops, its roar follows the stack's flow (brighter at full lift), and it thunks on reseat.
 - **Levels** are `LEVEL.field` and `LEVEL.ventValve` in `mix.ts`: first-pass values, to be tuned by ear.
 - **The estate's silencer** (`estate/silencer.ts`): a device in the estate takes every machine and relief stack away for a listener within its walls (the terrace's outer wall face in plan, the gateway's ramp and the house included). It fades with the listener's place, not in a step: full 4 m outside the wall face, gone 10 m inside, eased (smoothstep), and smoothed over 0.3 s. *Rejected:* a hard cut at the wall face, which switched the field off between two footsteps. The field's emitters all feed one bus after their paths, so the fade acts at the ears, not after each machine's propagation delay. Behind it the voices, levels, spreading and wander run unchanged.
+- **The Stand's silencer** (`terminal/silencer.ts`): the same device on the Stand by the West Gate (`docs/terminal.md`), for the player up on it, on foot or in the car (by the car's ground, not the chase camera). The Stand is too small for a fade across a wall in plan, so it fades with height: full at the foot of the ramp or the stair, gone at the deck, eased, then followed over 0.45 s so the short stair never cuts it between footsteps. Its gain multiplies the estate's.
 
 ## The estate
 
@@ -225,6 +226,14 @@ These rules apply to all future sounds, not just the current ones.
   - `aircraft-perimeter`: only while both the craft and the listener are over the pad's circle in plan (the dark pad and its white apron, out to the ring road, r 100 m): at once, then every 5.5 s (the chime and the speech take 4 s). When either leaves it, the one playing plays out and no other begins. *Rejected:* announcing on stepping onto the pad alone, and through the craft's whole settle–turn–lift window wherever the listener stood in the compound.
 - **Voices.** Two pooled emitters. A recording already playing is not restarted; a third announcement takes the voice that finishes first.
 - **Levels** `LEVEL.speech`: first pass, to be tuned by ear.
+
+## The terminal (`sounds/terminal.ts`, `synth/terminal.ts`, `loadNarration.ts`)
+
+- **One speaker:** the grille in the terminal's pedestal (`docs/terminal.md`), an emitter like any other (0.3 m, facing the deck, quieter and duller behind). Everything the terminal says comes from it.
+- **The narration** (T1–T6) is the user's recordings, the second kind of sound that ships as a recording. It is fetched and decoded after boot, in the background (boot does not wait), each scaled to a peak of 1, and its loudness envelope is kept for the screen. A recording starts at the OS's game time; if it was still loading, it starts late, from where it should be. It fades out in 60 ms when stopped or replaced.
+- **Interface tones**, built once: a key's tick (a haptic actuator's click on the panel's thump), a rising pair on opening, the pair falling going back, a low note on stopping, a dull knock where there is nowhere to go, a three-note swell on waking and its fall on sleeping.
+- **The star's song** (Observatory): Alpha Centauri A's p modes (degrees 0–2, orders 16–28, νmax 2400 µHz, Δν 105.5 µHz), sped up 10⁵ times (to 170–310 Hz). It is made as the star makes them: each mode is a damped resonator (a bandpass ~0.12 Hz wide, the 1.2 µHz linewidths sped up) driven by noise, the convection that excites them, on a low rumble of granulation. The comb's l = 0 and l = 2 pairs, 0.56 Hz apart, beat slowly. It is built when it starts and released when it stops.
+- **Levels** `LEVEL.terminal`: first pass, to be tuned by ear.
 
 ## Runtime
 

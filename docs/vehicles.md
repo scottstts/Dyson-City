@@ -43,7 +43,8 @@ The carriers and stubs are not part of the body's mesh. Each is its own swing ar
 
 ## Driving
 
-- **The car** stands on the Gate Court beside the estate's gateway, facing the field (`CAR_PARKING`). It cannot fit the carriage house's doors, so it is parked outside.
+- **The car** stands on the Stand in the Gate Court's north-west corner, nose to its ramp (`CAR_PARKING`, `docs/terminal.md`). It cannot fit the carriage house's doors, so it is parked outside.
+- **The ground under it** (`Car`'s `ground`: `terminal/layout.ts carGround`) is the pad, or the Stand's ramp and deck. Each frame the chassis sits on the plane through its wheels' contacts (height, pitch from the axles, roll from the sides), and each wheel takes its residual off that plane (the swing arms follow). Gravity's share along the plane (`gradeX`, `gradeY`) enters the physics, and the hold at rest holds against it (within the brakes' grip), so the car holds still half way up the ramp (`tests/terminal.test.ts`). The chase camera keys its height on that ground.
 - **Where it can go:** anywhere at pad level under the Dome. It is kept out of the estate by its own wall (`carWalls`: the terrace outline) and out of the West Gate's chamber by a line across the passage. The West Gate's airlock never sees a driver.
 - **Getting in and out.** E within 1.6 m gets in. E below 1.2 m/s gets out, on the first clear side (left, right, behind, ahead). Either way the view moves on an eased, raised arc over 1.1 s.
 - **Controls.** W accelerates; S brakes, and held at rest for 0.25 s selects reverse. A and D steer, Space is the handbrake, and the mouse orbits the camera. The pedals ramp (0.12 s press, 0.08 s release).

@@ -19,6 +19,8 @@
  *   ?vent                                                    lift the Cold Hold's largest relief stack at once (vapour and sound review)
  *   ?craft=<leg>[:s]                                         run the craft's visit forward to a leg (approach, hold, enter, inbound, hover, outbound, depart), s seconds in
  *   ?drive                                                   start in the car, behind it (vehicles review)
+ *   ?terminal[=<keys>]                                       start at the West Gate terminal, zoomed in and awake; keys (u d l r e, e.g. "rr" or "drre") are pressed after its boot
+ *   ?tat=<s>                                                 with ?terminal: once the keys are pressed, hold the recording playing at s seconds in (stills)
  */
 import type { DebugView, ToneMapper } from '../render/pipeline';
 
@@ -43,6 +45,10 @@ export interface DebugParams {
   vent: boolean;
   craft: string | null;
   drive: boolean;
+  /** Start at the terminal; the keys to press once it has booted (null: not at it). */
+  terminal: string | null;
+  /** With ?terminal: seconds into the recording to jump to once the keys are pressed. */
+  terminalAt: number | null;
 }
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare', 'veil'];
@@ -84,5 +90,7 @@ export function readDebugParams(search = window.location.search, hostname = wind
     vent: q.has('vent'),
     craft: q.get('craft'),
     drive: q.has('drive'),
+    terminal: q.has('terminal') ? (q.get('terminal') ?? '') : null,
+    terminalAt: q.get('tat') !== null && Number.isFinite(Number(q.get('tat'))) ? Number(q.get('tat')) : null,
   };
 }

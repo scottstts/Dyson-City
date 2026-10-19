@@ -44,7 +44,7 @@ The site plan ([`city_plan_site.png`](city_plan_site.png)) is drawn to scale, no
 
 | Zone | Where | What it is |
 |---|---|---|
-| **Gate Court** | Inside the West Gate, on the axis | A plain paved forecourt where the road begins; the estate's gateway opens off it to the north |
+| **Gate Court** | Inside the West Gate, on the axis | A plain paved forecourt where the road begins; the estate's gateway opens off it to the north; in its north-west corner the Stand, the car's round platform with the West Gate terminal (`docs/terminal.md`) |
 | **The Estate** | North-west, between the Gate Court and the drum | The house and its garden on a raised terrace, about 170 × 130 m, its back edge following the drum 30 m inside the glass. The house faces inward to the field; its back garden runs to the Dome's glass |
 | **The Field** | Everywhere else, inside the Cordon | One walled machine compound: the Cordon (an arcaded wall-gallery) round it, avenues on the Dome's rib lines dividing it into precincts, each zoned and paved in its own stone |
 | **Pad and Halo** | The centre, on the datum | The craft landing pad, ringed by the Halo |
@@ -88,7 +88,7 @@ Every room walkable and furnished:
 
 - **The garden is one raised bed.** The estate is a terrace of real soil, 1.2–1.8 m above the pad, held by a dressed stone retaining wall with a balustrade on its top, its gateway and steps toward the Gate Court. That makes deep soil for trees plausible, keeps every plant in a bed (nothing grows out of paving), and draws the sharp line between green and field.
 - **Inside the wall:** a gravel drive from the gateway to the porch, a mown and striped lawn, mature specimen trees, a small orchard, a kitchen garden, a lily pond (the Dome's air is 1 bar and humid), a glasshouse, clipped hedges, flower borders against the house, climbers on the walls.
-- **The carriage house** beside the drive (the car, too wide for its doors, stands on the Gate Court).
+- **The carriage house** beside the drive (the car, too wide for its doors, stands on the Stand in the Gate Court).
 - **Framed openings.** The perimeter is hedge and trees with gaps cut into them (claires-voies), so from the garden the machines appear as framed pictures, not a wall of gold.
 - **The back garden ends at the glass.** A path, a bench, then the Dome's drum glass, and beyond it the bare metal deck to the horizon with the sphere rising out of the haze: the cosiest place in the game looking out at the end of the world.
 
@@ -153,7 +153,7 @@ A science, technology and industry compound: the instruments and plants that a c
 
 - **Few roads, all wide** (~20 m), on the Dome's grid: the **Axis Road** from the Gate Court through the Cordon's main portal east to the Halo, the **Meridian** north and south from the Halo to the Cordon's gates, four **avenues** under the rib lines at x, z = ±192, a **ring road** under the Halo and a **perimeter road** inside the Cordon. Every hero stands in a precinct and is reached from the avenues; there are no spurs. The Gate Court opens onto the estate's gateway. The axis east of the Halo is the craft corridor, not a road; it leaves through the Cordon's open craft gate.
 - **Surface:** dark polished basalt slabs set flush into the limestone, edged with bronze inlay. No painted markings.
-- **The car** is parked on the Gate Court beside the estate's gateway (it cannot fit the carriage house's doors) and is driven by the player anywhere at pad level under the Dome, never onto the estate. Built in step 4: `docs/vehicles.md`.
+- **The car** is parked on the Stand in the Gate Court's north-west corner (it cannot fit the carriage house's doors) and is driven by the player anywhere at pad level under the Dome, down the Stand's ramp, never onto the estate. Built in step 4: `docs/vehicles.md`; the Stand: `docs/terminal.md`.
 
 ## 8. Moments the plan is designed for
 

@@ -202,6 +202,14 @@ add(`</g>`);
 // ── Roads (basalt, bronze edges), the court, the landing pad, trenches ───────────────────────
 add(`<rect x="${GATE_COURT.x0}" y="${GATE_COURT.z0}" width="${GATE_COURT.x1 - GATE_COURT.x0}" height="${GATE_COURT.z1 - GATE_COURT.z0}" fill="#efe9dc" stroke="${C.bronze}" stroke-width="0.8"/>`);
 add(`<rect x="${GATEWAY.x0}" y="${GATEWAY.z}" width="${GATEWAY.x1 - GATEWAY.x0}" height="${GATE_COURT.z0 - GATEWAY.z}" fill="#efe9dc" stroke="${C.bronze}" stroke-width="0.6"/>`);
+// The Stand in the court's north-west corner: its ramp, its stair, the deck, the terminal.
+{
+  const S = D.stand;
+  add(`<polygon points="${pts(S.ramp)}" fill="#cfc8bb" stroke="${C.bronze}" stroke-width="0.5"/>`);
+  add(`<polygon points="${pts(S.stair)}" fill="#cfc8bb" stroke="${C.bronze}" stroke-width="0.5"/>`);
+  add(`<polygon points="${pts(S.outline)}" fill="#3a3632" stroke="${C.bronze}" stroke-width="0.8"/>`);
+  add(`<circle cx="${S.terminal[0]}" cy="${S.terminal[1]}" r="1.2" fill="${C.bronze}"/>`);
+}
 add(`<g fill="${C.road}" stroke="${C.roadEdge}" stroke-width="0.9">`);
 for (const s of D.roads) {
   const dx = s.b[0] - s.a[0];

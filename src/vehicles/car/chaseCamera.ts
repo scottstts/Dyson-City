@@ -6,7 +6,7 @@
  *    (the car pulls away from it under power, closes on it under braking).
  *  - The mouse orbits it round the car. As soon as the mouse is still, it eases back behind.
  *  - Walls between the car and it pull it in (fast), and it lets out again slowly; it never goes
- *    below a head's height over the pad.
+ *    below a head's height over the ground under the car (the pad, or the Stand's deck and ramp).
  */
 import { MathUtils, Quaternion, Vector3, type Camera, Matrix4 } from 'three/webgpu';
 import { PAD_HEIGHT } from '../../ground/site';
@@ -71,8 +71,8 @@ export class ChaseCamera {
     this.reach = CHASE.distance;
   }
 
-  /** Mouse movement this frame (px), the car, and the walls the camera keeps out of. */
-  update(dt: number, look: [number, number], s: CarState, walls: readonly CollisionWorld[]): void {
+  /** Mouse movement this frame (px), the car, the walls the camera keeps out of, and the ground under the car. */
+  update(dt: number, look: [number, number], s: CarState, walls: readonly CollisionWorld[], groundY = PAD_HEIGHT): void {
     const [dx, dy] = look;
     const moved = dx !== 0 || dy !== 0;
     if (moved) {
@@ -103,7 +103,7 @@ export class ChaseCamera {
     const sp = Math.sin(this.orbitPitch);
     const bx = -Math.sin(yaw) * cp;
     const bz = -Math.cos(yaw) * cp;
-    this.target.set(s.x, PAD_HEIGHT + CHASE.pivotY, s.z);
+    this.target.set(s.x, groundY + CHASE.pivotY, s.z);
     // Walls between the car and the camera.
     let t = 1;
     for (const wl of walls) t = Math.min(t, wl.raycast(s.x, s.z, s.x + bx * want, s.z + bz * want, this.seen));
@@ -111,7 +111,7 @@ export class ChaseCamera {
     const tc = clear < this.reach ? CHASE.pullIn : CHASE.letOut;
     this.reach += (Math.min(want, clear) - this.reach) * (1 - Math.exp(-dt / tc));
     const d = this.reach;
-    this.position.set(s.x + bx * d, Math.max(PAD_HEIGHT + 0.7, this.target.y + sp * d), s.z + bz * d);
+    this.position.set(s.x + bx * d, Math.max(groundY + 0.7, this.target.y + sp * d), s.z + bz * d);
     // Look over the car, a little ahead of it.
     const ahead = this.ahead.copy(this.target);
     ahead.x += Math.sin(this.heading) * 1.5;
