@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { LOCK_GATE_SOUND, WEST_GATE_SOUND } from '../src/audio/sounds/gate';
-import { craftAudible } from '../src/audio/sounds/vehicles';
+import { domeAudible } from '../src/audio/acoustics';
 import { LOCK, toWorld } from '../src/city/eastLock/spec';
 import { slapShare } from '../src/audio/acoustics';
 import { REVERBS, synthesizeImpulse } from '../src/audio/reverb';
@@ -29,17 +29,20 @@ describe('the East Lock’s sounds', () => {
       expect(LOCK_GATE_SOUND.outer.leaf(s).at[0]).toBeGreaterThan(LOCK_GATE_SOUND.inner.leaf(s).at[0]);
     }
     expect(LOCK_GATE_SOUND.outer.bolts).toBeNull();
+    // Heard only under the Dome, like the craft; the West Gate is heard on the band.
+    expect(LOCK_GATE_SOUND.domeOnly).toBe(true);
+    expect(WEST_GATE_SOUND.domeOnly).toBeFalsy();
     expect(WEST_GATE_SOUND.outer.bolts).not.toBeNull();
   });
 });
 
 describe('the craft’s sound', () => {
   it('is heard only under the Dome, or in the gate’s chamber once the inner gate opens', () => {
-    expect(craftAudible({ zone: 'city', innerOpen: 0 })).toBe(true);
-    expect(craftAudible({ zone: 'house', innerOpen: 0 })).toBe(true);
-    expect(craftAudible({ zone: 'outside', innerOpen: 1 })).toBe(false);
-    expect(craftAudible({ zone: 'chamber', innerOpen: 0 })).toBe(false);
-    expect(craftAudible({ zone: 'chamber', innerOpen: 0.01 })).toBe(true);
+    expect(domeAudible({ zone: 'city', innerOpen: 0 })).toBe(true);
+    expect(domeAudible({ zone: 'house', innerOpen: 0 })).toBe(true);
+    expect(domeAudible({ zone: 'outside', innerOpen: 1 })).toBe(false);
+    expect(domeAudible({ zone: 'chamber', innerOpen: 0 })).toBe(false);
+    expect(domeAudible({ zone: 'chamber', innerOpen: 0.01 })).toBe(true);
   });
 });
 

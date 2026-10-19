@@ -8,12 +8,23 @@
  * through; a gate closes behind the player once they are clear of its sweep, and never sweeps
  * through them (a closing gate reverses if they step back into it).
  *
- * Pure logic (no rendering): the scene reads the gates' openness, bolts, pressure and mist.
+ * The gatehouse's loudspeakers announce each step and the airlock waits for them (docs/gate.md,
+ * "Announcements"): the outer gate opens to a player arriving from the band only after `enter`,
+ * the chamber fills for a player inside only after `pressurize` and vents only after
+ * `depressurize`; `exit` follows the outer gate shutting behind a player who left. Their lengths
+ * are set from the recordings (`announce`); an announcement without one holds nothing.
+ *
+ * Pure logic (no rendering): the scene reads the gates' openness, bolts, pressure and mist; the
+ * sound reads `announcement`.
  */
 import { GATE } from './spec';
 
-/** Seconds: bolts withdraw/shoot, a leaf travels, the chamber fills or vents. */
-export const TIMING = { bolts: 1.0, travel: 6.0, settle: 0.6, cycle: 5.0, idleClose: 4.0, passClose: 0.8 } as const;
+/** Seconds: bolts withdraw/shoot, a leaf travels, the chamber fills or vents, the pause after an announcement. */
+export const TIMING = { bolts: 1.0, travel: 6.0, settle: 0.6, cycle: 5.0, idleClose: 4.0, passClose: 0.8, announceGap: 0.5 } as const;
+
+/** The gatehouse's announcements. */
+export type AirlockCue = 'enter' | 'pressurize' | 'depressurize' | 'exit';
+type HeldCue = Exclude<AirlockCue, 'exit'>;
 /** Distance (m) within which an approaching player opens a gate. */
 export const APPROACH = 9;
 
@@ -124,6 +135,46 @@ export class Airlock {
   mist = 0;
   /** Review override: hold a state instead of following the player. */
   private held: 'closed' | 'outer' | 'inner' | null = null;
+  /** Each announcement's length (s); 0: there is none, and nothing waits for it. */
+  readonly announce: Record<AirlockCue, number> = { enter: 0, pressurize: 0, depressurize: 0, exit: 0 };
+  /** The announcement playing or last played, seconds since it began, and how many have begun. */
+  readonly announcement: { cue: AirlockCue | null; t: number; count: number } = { cue: null, t: 1e9, count: 0 };
+  /** Held announcements already made for this approach or cycle, and the one being waited for. */
+  private readonly announced: Record<HeldCue, boolean> = { enter: false, pressurize: false, depressurize: false };
+  private awaiting: HeldCue | null = null;
+  /** A player went out through the chamber; `exit` follows once the outer gate is shut behind them. */
+  private leaving = false;
+  private exitDue = false;
+
+  private get announcing(): boolean {
+    const a = this.announcement;
+    return a.cue !== null && a.t < this.announce[a.cue] + TIMING.announceGap;
+  }
+
+  private begin(cue: AirlockCue): void {
+    this.announcement.cue = cue;
+    this.announcement.t = 0;
+    this.announcement.count++;
+  }
+
+  /** Whether `cue` has been made (starting it once nothing else is playing). */
+  private ready(cue: HeldCue): boolean {
+    if (this.announced[cue] || this.announce[cue] <= 0) return true;
+    if (this.announcing) return false;
+    if (this.awaiting === cue) {
+      this.awaiting = null;
+      this.announced[cue] = true;
+      return true;
+    }
+    this.begin(cue);
+    this.awaiting = cue;
+    return false;
+  }
+
+  private forget(cue: HeldCue): void {
+    this.announced[cue] = false;
+    if (this.awaiting === cue) this.awaiting = null;
+  }
 
   hold(state: 'closed' | 'outer' | 'inner' | null): void {
     this.held = state;
@@ -155,6 +206,7 @@ export class Airlock {
 
   update(dt: number, p: PlayerPos): void {
     if (this.held) return;
+    this.announcement.t += dt;
     const inChamber = Airlock.inChamber(p);
     const outerSweep = Airlock.inSweep(p, GATE.outerLipX);
     const innerSweep = Airlock.inSweep(p, GATE.innerLipX);
@@ -191,15 +243,25 @@ export class Airlock {
     if (outerSweep && (this.outer.phase === 'closing' || this.outer.phase === 'bolting') && this.inner.isClosedAndBolted) this.outer.request(true);
     if (innerSweep && (this.inner.phase === 'closing' || this.inner.phase === 'bolting') && this.outer.isClosedAndBolted) this.inner.request(true);
 
-    // Cycle the chamber, then open the wanted gate.
+    // Cycle the chamber, then open the wanted gate, each step once its announcement is made: a
+    // shut outer gate opens to the band only after `enter`, and a player sealed in the chamber is
+    // vented or filled only after `depressurize` or `pressurize`.
     const sealed = this.outer.isClosedAndBolted && this.inner.isClosedAndBolted;
+    const fromBand = wantOuter && !inChamber;
+    if (!fromBand && this.outer.isClosedAndBolted) this.forget('enter');
+    if (!sealed) {
+      this.forget('pressurize');
+      this.forget('depressurize');
+    }
     const prev = this.pressure;
     if (wantOuter && this.inner.isClosedAndBolted) {
-      if (this.pressure > 0 && sealed) this.pressure = Math.max(0, this.pressure - dt / TIMING.cycle);
-      if (this.pressure === 0) this.outer.request(true);
+      const go = !this.outer.isClosedAndBolted || (fromBand ? this.ready('enter') : this.pressure === 0 || this.ready('depressurize'));
+      if (go && this.pressure > 0 && sealed) this.pressure = Math.max(0, this.pressure - dt / TIMING.cycle);
+      if (go && this.pressure === 0) this.outer.request(true);
     } else if (wantInner && this.outer.isClosedAndBolted) {
-      if (this.pressure < 1 && sealed) this.pressure = Math.min(1, this.pressure + dt / TIMING.cycle);
-      if (this.pressure === 1) this.inner.request(true);
+      const go = !this.inner.isClosedAndBolted || !inChamber || this.pressure === 1 || this.ready('pressurize');
+      if (go && this.pressure < 1 && sealed) this.pressure = Math.min(1, this.pressure + dt / TIMING.cycle);
+      if (go && this.pressure === 1) this.inner.request(true);
     }
 
     // Venting cools the humid air below its dew point: mist forms in proportion to the pressure
@@ -209,7 +271,19 @@ export class Airlock {
     const clear = this.outer.openness > 0.05 ? 1.6 : 6.0;
     this.mist *= Math.exp(-dt / clear);
 
+    const outerWasShut = this.outer.isClosedAndBolted;
     this.outer.update(dt);
     this.inner.update(dt);
+
+    // `exit` once the outer gate is shut and bolted behind a player who went out through it.
+    if (inChamber) this.leaving = this.heading === 'out';
+    if (this.leaving && !inChamber && !outerWasShut && this.outer.isClosedAndBolted) {
+      this.leaving = false;
+      this.exitDue = this.announce.exit > 0;
+    }
+    if (this.exitDue && !this.announcing) {
+      this.exitDue = false;
+      this.begin('exit');
+    }
   }
 }

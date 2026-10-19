@@ -28,7 +28,8 @@ import { GATE } from '../../city/gate/spec';
 import { boltPose, hoistPoses } from '../../city/gate/mechanism';
 import { LOCK, toWorld } from '../../city/eastLock/spec';
 import { lockHoistEnds } from '../../city/eastLock/lock';
-import type { Zone } from '../acoustics';
+import { domeAudible, type Zone } from '../acoustics';
+import type { ListenerState } from '../engine';
 import type { Vec3 } from '../../geometry/polyMesh';
 
 const BOLT_Z = [-4.5, 4.5];
@@ -53,6 +54,8 @@ export interface GateSoundSpec {
   gain: number;
   /** Reverb send of its emitters. */
   send: number;
+  /** A sound of the Dome only (acoustics.ts domeAudible): silent, reverberation and all, elsewhere. */
+  domeOnly?: boolean;
 }
 
 function westGate(trunnionX: number, lipX: number, machineZone: Zone, sides: [Zone, Zone]): GateSoundGeometry {
@@ -106,6 +109,9 @@ export const LOCK_GATE_SOUND: GateSoundSpec = {
   gain: 1.6,
   // Heard across the Dome: falling with distance, as the craft is.
   send: DOME_SEND,
+  // Like the craft, by the user's decision: its outer machinery stands on the band, but a listener
+  // outside the Dome hears none of it.
+  domeOnly: true,
 };
 /** The pump's speed on starting (fraction) and its spin-up time constant (s), as measured. */
 const SPIN_FROM = 0.62;
@@ -237,9 +243,13 @@ export class GateSounds {
   private readonly random = rng(0x6a7e);
   private readonly picker = new VariantPicker(this.random);
   private readonly gain: number;
+  private readonly domeOnly: boolean;
+  /** Every emitter's input, for the Dome-only cut. */
+  private readonly inputs: GainNode[] = [];
 
   constructor(engine: AudioEngine, outer: GateActuator, inner: GateActuator, spec: GateSoundSpec = WEST_GATE_SOUND) {
     this.gain = spec.gain;
+    this.domeOnly = spec.domeOnly ?? false;
     const b = engine.bank;
     this.start = engine.buffer(b.hydraulicStart);
     this.stops = b.hydraulicStop.map((x) => engine.buffer(x));
@@ -260,10 +270,17 @@ export class GateSounds {
       return { act, geo, maxSpeed: 1.5 / act.timing.travel, hoists, leaf, bolts, hydraulics: new Hydraulics(engine, hoists, this.random, spec.gain), roll: new Roll(engine, leaf, this.random, spec.gain), prevOpenness: act.openness };
     };
     this.rigs = { outer: rig('outer', outer, spec.outer), inner: rig('inner', inner, spec.inner) };
+    for (const g of Object.values(this.rigs)) for (const e of [...g.hoists, g.leaf, ...g.bolts]) this.inputs.push(e.input);
   }
 
   /** Per frame: emitters follow the moving parts; the hydraulics and the roll follow the leaf. */
-  update(dt: number, t: number): void {
+  update(dt: number, t: number, l?: Pick<ListenerState, 'zone' | 'innerOpen'>): void {
+    // Cut at the sources, so their reverberation goes with them; it fades in over a moment
+    // (entering through the West Gate's inner gate).
+    if (this.domeOnly && l) {
+      const on = domeAudible(l) ? 1 : 0;
+      for (const g of this.inputs) glide(g.gain, on, t, 0.1);
+    }
     for (const g of Object.values(this.rigs)) {
       const s = g.act.openness;
       g.hoists.forEach((h, i) => {

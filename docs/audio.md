@@ -19,9 +19,9 @@ These rules apply to all future sounds, not just the current ones.
   A synthesised buffer is the sound at its source, never pre-baked distance, reverb or panning.
 - **Spaces, not presets.** Reverberation belongs to the space a source radiates into (`outside`, `chamber`, `city`, `house`). It is heard through the same paths as the direct sound, so the chamber's ring leaks out of an open gate and dies behind a shut one.
 - **Levels are physical in proportion and compressed in range.** Real levels span 60 dB from a footstep to a landing leaf. `mix.ts` keeps their order and relative sense while fitting them on a game's scale. A limiter only protects the output; it is not a mixing tool.
-- **Resynthesised, not sampled.** No recording ships. Where a reference recording exists, it is measured and a model is fitted to it (see below), and the game resynthesises from the model. Every playback has new fine structure. Where none exists, a sound is built from its mechanism (the valves, the jet).
+- **Resynthesised, not sampled.** No recording ships, except the spoken announcements (below). Where a reference recording exists, it is measured and a model is fitted to it (see below), and the game resynthesises from the model. Every playback has new fine structure. Where none exists, a sound is built from its mechanism (the valves, the jet).
 - **The ear decides.** A clone that measures well but sounds wrong is wrong. Get new sounds into the game early and iterate on what the user hears, not on fit numbers. Hand-built modal synthesis of the first pass read as thin and cartoonish (footsteps like bamboo, a pump like an alarm, a leaf landing like a cup on a table); fitted models fixed that.
-- **The game logic knows nothing of sound.** Systems expose state (the airlock's phases, the player's foot events). `src/audio` watches that state and makes the sound.
+- **The game logic knows nothing of sound.** Systems expose state (the airlock's phases, the player's foot events). `src/audio` watches that state and makes the sound. The one exception is the airlock's announcements: the airlock waits them out, so it knows their lengths (below).
 
 ## Acoustics (`acoustics.ts`, `reverb.ts`)
 
@@ -131,6 +131,7 @@ These rules apply to all future sounds, not just the current ones.
 - **+4 dB** for leaves twice the radius.
 - **Heard across the Dome by distance,** like the craft: its emitters feed the city's reverberation at `DOME_SEND`. The West Gate keeps its full send (the chamber's balance, tuned by ear).
 - **Placed by position** (`'located'`): its chamber straddles the glass's line.
+- **Only under the Dome,** like the craft (`domeOnly`, `acoustics.ts domeAudible`): its outer machinery stands on the band, but a listener outside the Dome, or in the West Gate's chamber with the inner gate shut, hears none of it. It is cut at its emitters' inputs, so its reverberation goes too, and fades back in over 0.1 s. Before this, a listener on the band heard the lock's outer gate at full, through its `'located'` emitters' outside zone.
 
 ## The car (`sounds/vehicles.ts`, `synth/vehicle.ts`)
 
@@ -155,7 +156,7 @@ These rules apply to all future sounds, not just the current ones.
   - the city's reverberation. It is lifted 10 dB, and at full send it held the level from 400 m to the far side. The craft feeds it without the lift (`DOME_SEND` 0.3 in `mix.ts`).
 
   Now, by a wall, the roar falls steadily from 20 m to 1 km. At 1 km it is ~31 dB under its level at 30 m (`tests/vehicleSound.test.ts`).
-- **Only under the Dome** (the user's decision, over the physical leak through the glass and a shut leaf). A listener outside the Dome, or in the West Gate's chamber with the inner gate shut, hears nothing of it: the roar is cut at its source, so its reverberation goes too (`craftAudible`). Once the inner gate starts to open, the chamber hears it through the gap, the path opening with the leaf.
+- **Only under the Dome** (the user's decision, over the physical leak through the glass and a shut leaf; `acoustics.ts domeAudible`, shared with the East Lock). A listener outside the Dome, or in the West Gate's chamber with the inner gate shut, hears nothing of it: the roar is cut at its source, so its reverberation goes too. Once the inner gate starts to open, the chamber hears it through the gap, the path opening with the leaf.
 - **Level** `LEVEL.craft`: first pass.
 
 ## The field (`sounds/field.ts`)
@@ -199,13 +200,35 @@ These rules apply to all future sounds, not just the current ones.
 - **No kettle.** *Rejected* (by ear): a kettle simmering on the range.
 - **Levels** (`LEVEL.door`, `tick`): first-pass values, to be tuned by ear.
 
+## Announcements (`loadSpeech.ts`, `speechCues.ts`, `sounds/speech.ts`)
+
+- **The user's recordings, played as they are** (`public/speeches/`, fetched and decoded at boot, each scaled to a peak of 1). They are the one exception to resynthesis. Everything else is as for any sound: each is a loudspeaker in the world, played through an emitter, with delay, spreading, air, paths, medium, reverb and HRTF.
+- **Where each sounds from:**
+  - `enter-dome`, `exit`: the gate's PA, just west of the outer lip over the opening, facing the band (dull behind);
+  - `pressurization`, `depressurization`: the chamber's speaker, high on its middle (its reverb is the chamber's);
+  - `enter-compound`: the main portal's arch, at its spring height;
+  - `drive`: the car's cabin, moving with it;
+  - `enter-estate`, `aircraft-perimeter`: beside the listener and moving with them, 1.2 m off ahead and to the right where it began. It is not head-locked, so turning still places it.
+- **The airlock waits for its announcements** (`city/gate/airlock.ts`, lengths set at boot from the clips, plus a 0.5 s pause):
+  - a shut outer gate opens to a player arriving from the band only after `enter-dome` (venting first, silently, if the chamber was left at the city's pressure);
+  - a player sealed in the chamber is filled only after `pressurization`, vented only after `depressurization`;
+  - `exit` follows the outer gate shutting and bolting behind a player who went out through the chamber. Nothing waits for it.
+  - An announcement already made holds for the rest of its approach or cycle; one waits for another still playing.
+- **The others** are crossings (`speechCues.ts`), each re-armed only once the listener is 3 m back out:
+  - `enter-estate`: crossing the terrace's outer wall face inward (the silencer's line);
+  - `enter-compound`: crossing the main portal's line eastward, between its pylons;
+  - `drive`: taking the car;
+  - `aircraft-perimeter`: only while both the craft and the listener are over the pad's circle in plan (the dark pad and its white apron, out to the ring road, r 100 m): at once, then every 4.5 s. When either leaves it, the one playing plays out and no other begins. *Rejected:* announcing on stepping onto the pad alone, and through the craft's whole settle–turn–lift window wherever the listener stood in the compound.
+- **Voices.** Two pooled emitters. A recording already playing is not restarted; a third announcement takes the voice that finishes first.
+- **Levels** `LEVEL.speech`: first pass, to be tuned by ear.
+
 ## Runtime
 
 - **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it. The player's volume and mute (`docs/ui.md`) scale `LEVEL.master` through `GameAudio.setUserGain`.
 - **Per frame** (`Game.frame`, after the camera's matrix): the ears move to the camera, airlock events and queued foot events sound at time `t`, and every emitter's path is re-derived.
   - `glide` skips unchanged targets, so steady parameters add no automation.
   - Each zone's path to the listener (`transmission`) depends only on the listener's zone and the gates' and house doors' openness, so the engine derives it once per zone per frame (`AudioEngine.path`) and every emitter reads it; distance, directivity, delay and filtering stay per emitter.
-- **Cost.** 18 HRTF panners, four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
+- **Cost.** 20 HRTF panners (two for the announcements), four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
 
 ## Review
 
@@ -221,4 +244,5 @@ These rules apply to all future sounds, not just the current ones.
   - the house's shell and open doors, the slap off its walls, the clocks' tick and tock;
   - the door's split, the loops' seams, the lawn's level against stone;
   - the airlock's event order;
+- `tests/airlock.test.ts`: the announcements' order on a walk in and out, and nothing moving while a held one plays; `tests/speechCues.test.ts`: the crossings and the craft's window.
   - the controller's foot events.

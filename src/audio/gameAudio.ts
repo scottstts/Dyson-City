@@ -11,6 +11,9 @@ import { CarSounds, CraftSounds, type AudioCar, type AudioCraft } from './sounds
 import { VentSounds } from './sounds/vents';
 import { FieldSounds, type AudioField } from './sounds/field';
 import { HouseSounds, type AudioHouse } from './sounds/house';
+import { SpeechSounds } from './sounds/speech';
+import { SpeechCues } from './speechCues';
+import { AIRLOCK_SPEECH, type SpeechClips } from './loadSpeech';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
 import type { Airlock } from '../city/gate/airlock';
@@ -30,6 +33,8 @@ export interface AudioWorld {
   lock?: AirlockState;
   car?: AudioCar;
   craft?: AudioCraft;
+  /** The announcements' recordings (absent in tools without them: then none is made). */
+  speech?: SpeechClips;
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -56,6 +61,8 @@ export class GameAudio {
   private readonly lock: { state: AirlockState; watcher: AirlockWatcher; sounds: GateSounds } | null;
   private readonly car: CarSounds | null;
   private readonly craft: CraftSounds | null;
+  private readonly speech: { sounds: SpeechSounds; cues: SpeechCues; airlockCount: number } | null;
+  private readonly world: AudioWorld;
   private readonly pending: FootEvent[] = [];
   private active = false;
   /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
@@ -90,6 +97,10 @@ export class GameAudio {
     this.lock = lock ? { state: lock, watcher: new AirlockWatcher(lock), sounds: new GateSounds(this.engine, lock.outer, lock.inner, LOCK_GATE_SOUND) } : null;
     this.car = world.car ? new CarSounds(this.engine, world.car) : null;
     this.craft = world.craft ? new CraftSounds(this.engine, world.craft) : null;
+    this.world = world;
+    this.speech = world.speech
+      ? { sounds: new SpeechSounds(this.engine, world.speech, { car: world.car ?? null }), cues: new SpeechCues(), airlockCount: world.airlock.announcement.count }
+      : null;
   }
 
   /**
@@ -139,14 +150,28 @@ export class GameAudio {
     this.gate.update(dt, t);
     if (this.lock) {
       for (const g of this.lock.watcher.step(this.lock.state).gates) this.lock.sounds.play(g.gate, g.event, t);
-      this.lock.sounds.update(dt, t);
+      this.lock.sounds.update(dt, t, l);
     }
     this.car?.update(dt, t);
     this.craft?.update(t, l);
     this.vents.update(dt, t, this.airlock);
     this.field?.update(dt, t, l);
     this.house?.update(t, l);
+    if (this.speech) this.announce(dt, t, l);
     this.engine.update(l, t);
+  }
+
+  /** The announcements: the airlock's as it makes them, the others as the listener crosses into places. */
+  private announce(dt: number, t: number, l: ListenerState): void {
+    const sp = this.speech!;
+    const a = this.airlock.announcement;
+    if (a.count !== sp.airlockCount) {
+      sp.airlockCount = a.count;
+      if (a.cue) sp.sounds.play(AIRLOCK_SPEECH[a.cue], t, l);
+    }
+    const w = this.world;
+    for (const s of sp.cues.update(dt, { x: l.x, z: l.z, driven: w.car?.driven ?? false, craft: w.craft?.visible ? w.craft.position : null })) sp.sounds.play(s, t, l);
+    sp.sounds.update(t, l);
   }
 
   /**

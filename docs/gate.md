@@ -23,7 +23,7 @@ Code: `src/city/gate/` (`spec.ts` holds every dimension), walls in `src/city/wal
 
 ## Sound
 
-See `docs/audio.md`. The sound watches the airlock's phases and pressure; the airlock knows nothing of it. The hydraulics sound from the hoists, the landings from the leaf (into both spaces it divides), the bolts from the sill and the jets from the vents. A shut leaf passes only a low rumble.
+See `docs/audio.md`. The sound watches the airlock's phases and pressure; the airlock knows nothing of it, except its announcements (`docs/audio.md`, "Announcements"): it waits out `enter-dome` before opening to the band, and `pressurization` / `depressurization` before cycling a player in the chamber, and makes `exit` once the outer gate is shut behind a player who left. The hydraulics sound from the hoists, the landings from the leaf (into both spaces it divides), the bolts from the sill and the jets from the vents. A shut leaf passes only a low rumble.
 
 ## Light in the chamber (`lighting.ts`)
 

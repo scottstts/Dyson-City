@@ -16,6 +16,11 @@ const terrace = polygon(TERRACE_OUTLINE);
 const [X0, Z0, X1, Z1] = ESTATE_BOUNDS;
 const M = FADE.outside;
 
+/** Signed distance (m) in plan to the terrace's outer wall face: negative within the estate. */
+export function estateDistance(x: number, z: number): number {
+  return terrace.sdf(x, z);
+}
+
 /** How much of the field's sound reaches a listener at (x, z): 1 outside the estate, 0 well within it. */
 export function fieldGain(x: number, z: number): number {
   if (x < X0 - M || x > X1 + M || z < Z0 - M || z > Z1 + M) return 1;

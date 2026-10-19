@@ -28,6 +28,7 @@ import { DOME_SEND, LEVEL } from '../mix';
 import { playInto, VariantPicker } from './oneShot';
 import { PAD_HEIGHT } from '../../ground/site';
 import type { ListenerState } from '../engine';
+import { domeAudible } from '../acoustics';
 
 /** What the sound needs from the car. */
 export interface AudioCar {
@@ -43,15 +44,12 @@ export interface AudioCar {
 export interface AudioCraft {
   readonly visible: boolean;
   readonly burn: number;
+  /** The hull's place (world). */
+  readonly position: { readonly x: number; readonly y: number; readonly z: number };
   /** The main nozzle (world) and the exhaust's direction (world, unit). */
   nozzle(out: [number, number, number], axis: [number, number, number]): void;
 }
 
-/** Whether the craft is heard where the listener is: under the Dome (the house included), or in the West Gate's chamber through an inner gate that is not shut. */
-export function craftAudible(l: Pick<ListenerState, 'zone' | 'innerOpen'>): boolean {
-  if (l.zone === 'city' || l.zone === 'house') return true;
-  return l.zone === 'chamber' && l.innerOpen > 0;
-}
 
 /** The car's top speed (m/s), for the drive's pitch. */
 const TOP = 38.9;
@@ -211,7 +209,7 @@ export class CraftSounds {
   update(t: number, l: Pick<ListenerState, 'zone' | 'innerOpen'>): void {
     const c = this.craft;
     // Cut at the source, so its reverberation goes with it.
-    if (!c.visible || !craftAudible(l)) {
+    if (!c.visible || !domeAudible(l)) {
       if (this.roar.src) {
         glide(this.roar.gain.gain, 0, t, 0.1);
         this.roar.stop(t + 0.5);

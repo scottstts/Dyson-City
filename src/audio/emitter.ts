@@ -69,9 +69,9 @@ export class Emitter {
   private readonly panner: PannerNode;
   /** Per zone: the reverb send, and the slap send where the zone has a slap. */
   private readonly sends: { zone: Zone; gain: GainNode; slap: GainNode | null }[];
-  private readonly sendLevel: number;
+  private sendLevel: number;
   private readonly sendScale: ((zone: Zone) => number) | undefined;
-  private readonly directivity: Directivity | undefined;
+  private directivity: Directivity | undefined;
   private readonly engine: AudioEngine;
   private first = true;
   /** The zone a 'located' source is in this frame (reused). */
@@ -132,6 +132,17 @@ export class Emitter {
     this.directivity.axis[0] = x;
     this.directivity.axis[1] = y;
     this.directivity.axis[2] = z;
+  }
+
+  /**
+   * Re-voices a pooled emitter for another source (sounds/speech.ts): its send, its directivity
+   * (none: omnidirectional), and a jump to its new place on the next update rather than a glide
+   * (gliding the delay across the gap would sweep the pitch).
+   */
+  revoice(send: number, directivity?: Directivity): void {
+    this.sendLevel = send;
+    this.directivity = directivity ? { ...directivity, axis: [...directivity.axis] } : undefined;
+    this.first = true;
   }
 
   /** Per frame: re-derives every path term for the listener. */

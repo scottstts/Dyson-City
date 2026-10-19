@@ -94,6 +94,9 @@ export class Craft {
     get burn() {
       return this.craft.flight.burn;
     },
+    get position() {
+      return this.craft.flight.position;
+    },
     nozzle(out: [number, number, number], axis: [number, number, number]) {
       const g = this.craft.group;
       // The main nozzle's exit, and the exhaust's way (the ship's +z).

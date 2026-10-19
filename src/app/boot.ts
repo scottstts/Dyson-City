@@ -13,6 +13,7 @@ import { audioWorld } from './audioWorld';
 import { Game } from './game';
 import { GameAudio } from '../audio/gameAudio';
 import { loadAudioBank } from '../audio/loadBank';
+import { airlockAnnouncements, loadSpeech } from '../audio/loadSpeech';
 import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 
@@ -47,10 +48,11 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   const handle = await createRenderer(host, { profile: debug.profile });
 
   stage('atmosphere', entry, 0.2);
-  // The sound is synthesised in a worker alongside (docs/audio.md); its context sets the rate.
+  // The sound is synthesised in a worker alongside (docs/audio.md); its context sets the rate. The
+  // announcements are the one recording that ships: fetched and decoded alongside.
   const audioContext = GameAudio.context();
   // The house's exterior is fetched and compiled alongside (house/assets.ts).
-  const [atmosphere, noise, audioBank, houseAssets] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadHouseAssets()]);
+  const [atmosphere, noise, audioBank, speech, houseAssets] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadSpeech(audioContext), loadHouseAssets()]);
   setNoiseVolumes(noise);
 
   stage('environment', entry, 0.4);
@@ -62,7 +64,9 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   await world.house.loadInteriors();
 
   stage('compile', entry, 0.6);
-  const audio = new GameAudio(audioContext, audioWorld(world), audioBank);
+  // The airlock waits out its announcements (city/gate/airlock.ts).
+  Object.assign(world.city.gate.airlock.announce, airlockAnnouncements(speech));
+  const audio = new GameAudio(audioContext, audioWorld(world, speech), audioBank);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host);
   // Every pipeline the game will draw with, compiled through the real passes (game.ts warmAll).
   game.warmAll();

@@ -46,6 +46,12 @@ export const LEVEL = {
   car: { drive: 0.16, roll: 0.07, scrub: 0.05, impact: 0.7, deploy: 0.035, latch: 0.12 },
   /** The craft's engines at full burn, RMS, at 8 m (their size). */
   craft: 0.55,
+  /**
+   * The announcements, peak, at each loudspeaker's size (sounds/speech.ts): the gate's PA (2 m),
+   * the chamber's speaker (1.5 m), the portal's (2 m), the car's cabin (1 m) and the speaker
+   * beside the listener (0.5 m, 1.2 m off).
+   */
+  speech: { gate: 2.2, chamber: 2.0, portal: 2.4, car: 1.1, near: 0.55 },
 } as const;
 
 /**

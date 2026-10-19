@@ -32,6 +32,16 @@ export function zoneAt(x: number, z: number): Zone {
   return Math.hypot(x, z) < SILL.rIn ? 'city' : 'outside';
 }
 
+/**
+ * Whether a sound of the Dome only (the craft, the East Lock) is heard where the listener is:
+ * under the Dome (the house included), or in the West Gate's chamber through an inner gate that is
+ * not shut. By the user's decision, over the physical leak through the glass and a shut leaf.
+ */
+export function domeAudible(l: { zone: Zone; innerOpen: number }): boolean {
+  if (l.zone === 'city' || l.zone === 'house') return true;
+  return l.zone === 'chamber' && l.innerOpen > 0;
+}
+
 /** A path's effect on sound: broadband gain and a low-pass cutoff (Hz). */
 export interface Path {
   gain: number;
