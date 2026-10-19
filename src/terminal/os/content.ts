@@ -45,6 +45,8 @@ export const SECTIONS: readonly Section[] = [
     items: [
       { id: 'hayes', title: 'Clara Hayes', sub: 'President, Centauri Accord', kind: 'message', clip: 'T4' },
       { id: 'sam', title: 'Sam', sub: 'Personal', kind: 'message', clip: 'T5' },
+      { id: 'ward', title: 'General Daniel Ward', sub: 'Accord Frontier Command', kind: 'message', clip: 'T7' },
+      { id: 'maya', title: 'Maya', sub: 'Personal', kind: 'message', clip: 'T8' },
     ],
   },
   { id: 'control', title: 'Control', sub: 'Operational status', items: [], page: { id: 'status', title: 'Compound status', sub: 'All precincts', kind: 'status', clip: 'T3' } },
@@ -58,6 +60,8 @@ export const BOOT_CLIP: ClipId = 'T1';
 export const SENDERS: Record<string, { image: string; face: [number, number]; transit: string; route: string }> = {
   hayes: { image: 'profiles/Clara-Hayes.jpeg', face: [0.52, 0.24], transit: '4 y 4 mo', route: 'Assembly Hall, Geneva · Sol' },
   sam: { image: 'profiles/Sam.jpeg', face: [0.48, 0.3], transit: '4 y 4 mo', route: 'Personal relay · Sol' },
+  ward: { image: 'profiles/Ward.jpeg', face: [0.49, 0.29], transit: '4 y 4 mo', route: 'Frontier Command · Sol' },
+  maya: { image: 'profiles/Maya.jpeg', face: [0.5, 0.29], transit: '4 y 4 mo', route: 'Personal relay · Sol' },
 };
 
 /** The Shell's particulars (Archive). */

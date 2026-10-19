@@ -1,6 +1,6 @@
 # The Stand and the West Gate terminal
 
-Code: `src/terminal/` (`layout.ts` holds every dimension; `build/` the geometry; `os/` the terminal's OS and screen; `use.ts` using it). Sound: `docs/audio.md`, "The terminal". Script and recordings: `docs/terminal-narration.md`, `public/speeches/T1–T6.mp3`, portraits in `public/profiles/`.
+Code: `src/terminal/` (`layout.ts` holds every dimension; `build/` the geometry; `os/` the terminal's OS and screen; `use.ts` using it). Sound: `docs/audio.md`, "The terminal". Script and recordings: `docs/terminal-narration.md`, `public/speeches/T1–T8.mp3`, portraits in `public/profiles/`.
 
 ## The Stand
 
@@ -76,7 +76,7 @@ Code: `src/terminal/` (`layout.ts` holds every dimension; `build/` the geometry;
   - level 2, an open entry or a one-page section: Enter stops or replays, ↑↓ move a page's rows, ← closes.
 - **Sections:**
   - Archive: Origin (T2), The Shell (particulars, and a to-scale section of the sphere about the eye), The Compound (the plan);
-  - Comms: Clara Hayes (T4), Sam (T5), with portraits, the recording's real loudness envelope and the transcript appearing as it is spoken;
+  - Comms: Clara Hayes (T4), Sam (T5), General Daniel Ward (T7), Maya (T8), with portraits, the recording's real loudness envelope and the transcript appearing as it is spoken;
   - Control (T3): the live plan and status rows;
   - Observatory (T6, then the star's song): the p-mode spectrum, the signal and the readouts.
 - **Boot:** a full boot with T1 on the session's first wake; a half-second wake after.

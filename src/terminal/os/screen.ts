@@ -34,6 +34,8 @@ const SPEAKER: Record<ClipId, string> = {
   T4: 'CLARA HAYES',
   T5: 'SAM',
   T6: 'RECKONER',
+  T7: 'GENERAL WARD',
+  T8: 'MAYA',
 };
 
 const CRAFT_STATUS: Record<string, string> = {

@@ -185,7 +185,8 @@ function fromTranscript(entries, gaps, duration) {
       start = n;
     });
   });
-  return cues.map((c) => ({ t0: +c.t0.toFixed(2), t1: +c.t1.toFixed(2), text: c.text }));
+  // Ends round down, so a line never runs past the recording.
+  return cues.map((c) => ({ t0: +c.t0.toFixed(2), t1: Math.floor(Math.min(c.t1, duration) * 100) / 100, text: c.text }));
 }
 
 const all = scripts();

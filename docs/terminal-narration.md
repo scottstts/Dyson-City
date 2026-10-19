@@ -1,6 +1,6 @@
 # West Gate Terminal: narration
 
-The script as recorded: `public/speeches/T1–T6.mp3` (clip ID = filename). The subtitles follow the recordings' timestamped transcripts (`tools/terminal-transcripts.json`), which word some lines differently (numerals, "Hey, it's Sam."). The terminal itself: `docs/terminal.md`.
+The script as recorded: `public/speeches/T1–T8.mp3` (clip ID = filename). The subtitles follow the recordings' timestamped transcripts (`tools/terminal-transcripts.json`), which word some lines differently (numerals, "Hey, it's Sam."). The terminal itself: `docs/terminal.md`.
 
 ## Voices
 
@@ -10,6 +10,8 @@ The script as recorded: `public/speeches/T1–T6.mp3` (clip ID = filename). The 
 | **TERMINAL** | The Reckoner, speaking as the system | Calm, clipped, precise, slightly dry. Operational, not chatty. |
 | **PRESIDENT** | President Clara Hayes, Centauri Accord | Formal and measured, with real warmth under it. |
 | **SAM** | Your friend back on Earth | Casual, affectionate, a little awkward talking to a recorder. |
+| **GENERAL** | General Daniel Ward, Accord Frontier Command | Low, economical, used to being obeyed; courteous, not warm. Speaks in short orders. |
+| **MAYA** | Your girlfriend back on Earth | Easy, intimate, unscripted: talking into her phone at home, late, in a quiet room (clean, no background noise). Little laughs, trailing off, then sincere. |
 
 Pronunciation: Alpha Centauri *AL-fa sen-TOR-ee*.
 
@@ -47,3 +49,16 @@ Pronunciation: Alpha Centauri *AL-fa sen-TOR-ee*.
 **T6 · Observatory · Resonator feed** · TERMINAL · ~20 s, then the synthesised star-song (live audio, not TTS)
 > Resonator feed live. The star is quiet: surface activity within normal range, and no flares forecast.
 > Playing the star's oscillations, sped up a hundred thousand times.
+
+**T7 · Comms · From General Ward** · GENERAL · ~26 s
+> Guardian. General Daniel Ward, Accord Frontier Command. I'll keep this short.
+> The Resonator hears the star before it flares. We need everything it hears. Every flare, every warning sign, and every quiet day in between.
+> The ships we send past the frontier won't have a Veil to hide behind. Your records are how we learn to build them.
+> Watch the star for us, Guardian. Ward out.
+
+**T8 · Comms · From Maya** · MAYA · ~27 s
+> Hi, it's me. Um, I'm curled up on the sofa with your blanket, so… don't judge.
+> I had that dream again, where you just walk in and drop your keys on the counter like nothing happened. Very rude of you, by the way.
+> Sam says the cat sleeps on your side of the bed now. Traitor.
+> Okay. I miss you. That's it, that's the whole message.
+> Look up at your star for me. Love you. Bye.

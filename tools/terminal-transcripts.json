@@ -63,5 +63,31 @@
     [1.7,2.95,"The star is quiet."],
     [3.35,7.35,"Surface activity within normal range, and no flares forecast."],
     [7.8,11.7,"Playing the star's oscillations, sped up a hundred thousand times."]
+  ],
+  "T7": [
+    [0.08,0.85,"Guardian."],
+    [1.05,3.95,"General Daniel Ward, Accord Frontier Command."],
+    [4.15,5.4,"I'll keep this short."],
+    [5.75,8.75,"The Resonator hears the star before it flares."],
+    [9.1,15.8,"We need everything it hears: every flare, every warning sign, and every quiet day in between."],
+    [16.15,20.1,"The ships we send past the frontier won't have a Veil to hide behind."],
+    [20.35,22.75,"Your records are how we learn to build them."],
+    [23.05,24.7,"Watch the star for us, Guardian."],
+    [24.95,25.9,"Ward out."]
+  ],
+  "T8": [
+    [0.1,1.35,"Hi, it's me."],
+    [1.75,5.5,"Um, I'm curled up on the sofa with your blanket, so… don't judge."],
+    [6.1,11.8,"I had that dream again, where you just walk in and drop your keys on the counter like nothing happened."],
+    [12.15,13.95,"Very rude of you, by the way."],
+    [14.3,17.05,"Sam says the cat sleeps on your side of the bed now."],
+    [17.35,18.3,"Traitor."],
+    [19,19.55,"Okay."],
+    [19.8,20.65,"I miss you."],
+    [21.1,21.65,"That's it."],
+    [21.8,23.25,"That's the whole message."],
+    [23.65,25,"Look up at your star for me."],
+    [25.15,25.75,"Love you."],
+    [25.9,26.5,"Bye."]
   ]
 }
