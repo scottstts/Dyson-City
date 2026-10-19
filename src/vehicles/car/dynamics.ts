@@ -27,15 +27,17 @@ import { GRAVITY } from '../../world/constants';
 import { CAR } from './model';
 
 export const CAR_PHYSICS = {
-  /** Mass (kg), yaw inertia (kg m²), centre of mass height (m). */
+  /** Mass (kg), yaw inertia (kg m²: ~0.9 m·a·b for the 4.3 m wheelbase), centre of mass height (m). */
   mass: 1350,
-  inertia: 3000,
+  inertia: 5600,
   cgHeight: 0.62,
   /** Centre of mass to the front and rear axles (m). */
   a: CAR.frontZ,
   b: -CAR.rearZ,
   /** Peak tyre-road friction: performance tyres on dry polished basalt and limestone. */
   mu: 1.2,
+  /** The rear tyres' grip over the front's (wider rears): the car settles into mild understeer. */
+  rearGrip: 1.1,
   /** Load sensitivity: grip falls by this share per unit of load over the static load. */
   loadSensitivity: 0.1,
   /** Magic-formula shape (B, C, E): peak near 9.5° of slip. */
@@ -45,18 +47,30 @@ export const CAR_PHYSICS = {
   power: 300_000,
   topSpeed: 38.9,
   reverseSpeed: 9,
-  /** Front share of drive torque and of braking. */
+  /** Front share of drive torque. Braking follows the axles' loads (EBD). */
   driveFront: 0.45,
-  brakeFront: 0.6,
+  /** Full brake pedal's deceleration demand (m/s²); anti-lock holds each axle under its limit. */
+  brakeDecel: 11.5,
+  /**
+   * Combined slip: braking or drive at the limit may take at most this share of an axle's grip
+   * while it is cornering (anti-lock and traction control keep the slip ratio short of the peak,
+   * so a cornering tyre always keeps side grip).
+   */
+  sideReserve: 0.45,
   /** Deceleration from regeneration with the throttle lifted (m/s²). */
-  regen: 1.1,
+  regen: 1.6,
   /** Aerodynamic drag area (m²) and rolling resistance. */
   dragArea: 0.75,
   rolling: 0.011,
-  /** Steering: lock at rest (rad), the speed (m/s) where it has halved, its slew rate (rad/s). */
+  /**
+   * Steering: lock at rest (rad), the speed (m/s) where it has halved, and the time (s) the wheel
+   * takes from centre to lock, at rest and at top speed (a key press winds the wheel on, it does
+   * not snap to lock: fine corrections at speed). It returns to centre faster (self-aligning).
+   */
   steerLock: (28 * Math.PI) / 180,
   steerHalfSpeed: 18,
-  steerRate: 3.6,
+  steerTime: [0.14, 0.32] as const,
+  steerReturn: 0.55,
   /**
    * Rear-wheel steering: the rears counter-steer this share of the front angle at low speed (a
    * tighter turn: the turning radius falls from ~8 m to ~5.5 m), fading out between the two speeds
@@ -66,10 +80,31 @@ export const CAR_PHYSICS = {
   rearFade: [8, 24] as const,
   rearLock: (11 * Math.PI) / 180,
   /** The front's steering is held within this multiple of the tyres' peak slip. */
-  slipWindow: 1.3,
-  /** Stability control: body slip (rad) where it starts acting, its yaw-rate gain. */
-  escSlip: 0.12,
-  escGain: 2.6,
+  slipWindow: 1.0,
+  /**
+   * Stability control, as a modern one works: its yaw-rate reference is the steering's neutral rate,
+   * held to what the grip can turn (escRate · μg / u). It acts when the yaw rate runs past that, or
+   * once the body's slip passes escSlip (rad), with this gain and at most escMoment of μ·W·half-track
+   * (it brakes single wheels, so it is bounded by the tyres' grip like everything else).
+   */
+  escSlip: 0.1,
+  escRate: 1.05,
+  escGain: 8,
+  escMoment: 0.35,
+  /**
+   * Torque vectoring: the four hub motors drive the outside wheels harder than the inside ones
+   * when the car turns less than the steering asks (power understeer), toward the same reference
+   * as the stability control: a yaw-rate gain, and at most this share of μ·W·half-track. Off under
+   * braking and with the handbrake.
+   */
+  tvGain: 6,
+  tvMoment: 0.3,
+  /**
+   * Cornering traction management: the drive is held back by this share of itself at the full
+   * cornering limit (by the square of the lateral acceleration's share of μg), so W held through a
+   * corner keeps the car on its line instead of speeding it up off it.
+   */
+  cornerTrim: 0.8,
 } as const;
 
 const DT = 1 / 240;
@@ -213,7 +248,7 @@ interface Axle {
  * Forces of one axle: its wheel heading δ, the body-frame velocity at the axle, its normal load,
  * the longitudinal force wanted along the wheel, and whether it is locked (handbrake).
  */
-function axleForces(delta: number, u: number, vAxle: number, fz: number, wantFx: number, locked: boolean, axleMass: number, dt: number): Axle {
+function axleForces(delta: number, u: number, vAxle: number, fz: number, wantFx: number, locked: boolean, axleMass: number, grip: number, dt: number): Axle {
   const P = CAR_PHYSICS;
   const cd = Math.cos(delta);
   const sd = Math.sin(delta);
@@ -221,7 +256,7 @@ function axleForces(delta: number, u: number, vAxle: number, fz: number, wantFx:
   const vxw = u * cd + vAxle * sd;
   const vyw = -u * sd + vAxle * cd;
   const fz0 = (P.mass * GRAVITY) / 2;
-  const mu = P.mu * (1 - P.loadSensitivity * (fz / fz0 - 1));
+  const mu = grip * P.mu * (1 - P.loadSensitivity * (fz / fz0 - 1));
   const cap = mu * Math.max(fz, 0);
   let fxw: number;
   let fyw: number;
@@ -233,10 +268,14 @@ function axleForces(delta: number, u: number, vAxle: number, fz: number, wantFx:
     fxw = (-k * vxw) / sv;
     fyw = (-k * vyw) / sv;
   } else {
-    fxw = Math.max(-cap, Math.min(cap, wantFx));
+    // The side force the slip asks for; the drive or brake takes what is left of the friction
+    // ellipse, never less than its reserve, and the side force is then held inside the ellipse.
     const alpha = Math.atan2(vyw, Math.max(Math.abs(vxw), SLIP_FLOOR));
+    const sideWant = -cap * magic(alpha);
+    const longCap = Math.max(cap * (1 - P.sideReserve), Math.sqrt(Math.max(0, cap * cap - sideWant * sideWant)));
+    fxw = Math.max(-longCap, Math.min(longCap, wantFx));
     const side = Math.sqrt(Math.max(0, cap * cap - fxw * fxw));
-    fyw = Math.max(-side, Math.min(side, -cap * magic(alpha)));
+    fyw = Math.max(-side, Math.min(side, sideWant));
   }
   // Never more than stops the axle's sideways creep in one step (no jitter at rest).
   const still = (axleMass * Math.abs(vyw)) / dt;
@@ -271,7 +310,8 @@ function stepOnce(s: CarState, input: DriveInput): void {
   const drivePedal = s.gear > 0 ? input.throttle : input.brake;
   const brakePedal = s.gear > 0 ? input.brake : input.throttle;
 
-  // Steering: speed-sensitive lock, slewed, held inside the front tyres' useful slip.
+  // Steering: speed-sensitive lock, wound on over a time that grows with speed, held inside the
+  // front tyres' useful slip.
   const lock = steerLock(speed);
   let target = input.steer * lock;
   if (Math.abs(s.u) > 4 && !input.handbrake) {
@@ -281,7 +321,10 @@ function stepOnce(s: CarState, input: DriveInput): void {
     target = Math.max(travel - window, Math.min(travel + window, target));
   }
   const ds = target - s.steer;
-  const maxDs = P.steerRate * DT;
+  const [t0, t1] = P.steerTime;
+  const windOn = t0 + (t1 - t0) * Math.min(1, speed / P.topSpeed);
+  const centring = Math.abs(target) < Math.abs(s.steer) && Math.sign(ds) !== Math.sign(s.steer) ? P.steerReturn : 1;
+  const maxDs = ((Math.max(lock, 0.05) / windOn) * DT) / centring;
   s.steer += Math.max(-maxDs, Math.min(maxDs, ds));
   const [f0, f1] = P.rearFade;
   const fade = 1 - Math.min(1, Math.max(0, (speed - f0) / (f1 - f0)));
@@ -296,33 +339,49 @@ function stepOnce(s: CarState, input: DriveInput): void {
   const dir = s.gear;
   const limit = dir > 0 ? P.topSpeed : P.reverseSpeed;
   let drive = drivePedal * motorForce(s.u * dir, limit) * dir;
-  // Body slip: the stability control trims the drive when the car is sliding.
+  // Stability control: engaged by body slip, or by a yaw rate past what the grip can turn; it trims
+  // the drive when the car is sliding.
   const beta = Math.abs(s.u) > 3 ? Math.atan2(s.v, Math.abs(s.u)) : 0;
-  const esc = !input.handbrake && Math.abs(beta) > P.escSlip ? Math.min(1, (Math.abs(beta) - P.escSlip) / 0.15) : 0;
-  drive *= 1 - 0.7 * esc;
+  const rKin = (s.u * (Math.tan(s.steer) - Math.tan(s.rearSteer))) / L;
+  const rGrip = (P.escRate * P.mu * GRAVITY) / Math.max(Math.abs(s.u), 3);
+  const rRef = Math.max(-rGrip, Math.min(rGrip, rKin));
+  const bySlip = Math.abs(beta) > P.escSlip ? Math.min(1, (Math.abs(beta) - P.escSlip) / 0.15) : 0;
+  const byRate = Math.abs(s.u) > 3 && Math.abs(s.r) > rGrip ? Math.min(1, (Math.abs(s.r) - rGrip) / (0.15 * rGrip)) : 0;
+  const esc = input.handbrake ? 0 : Math.max(bySlip, byRate);
+  drive *= 1 - 0.7 * bySlip;
+  const lateral = Math.min(1, Math.abs(s.ay) / (P.mu * GRAVITY));
+  drive *= 1 - P.cornerTrim * lateral * lateral;
   let brake = 0;
   const rolling = Math.abs(s.u) > 0.05 ? Math.sign(s.u) : 0;
-  if (brakePedal > 0) brake = brakePedal * m * GRAVITY * 1.2;
+  if (brakePedal > 0) brake = brakePedal * m * P.brakeDecel;
   else if (drivePedal < 0.02) brake = m * P.regen;
-  // Brakes oppose the motion; at rest they hold (up to what stops it in one step).
+  // Brakes oppose the motion, split by the axles' loads; at rest they hold (up to what stops it in
+  // one step).
   const brakeF = -rolling * brake;
+  const brakeFront = fzF / Math.max(fzF + fzR, 1);
   const hold = Math.abs(s.u) <= 0.05 && drivePedal < 0.02 ? -(s.u * m) / DT : 0;
-  const fxF = drive * P.driveFront + brakeF * P.brakeFront + hold * 0.5;
-  const fxR = drive * (1 - P.driveFront) + brakeF * (1 - P.brakeFront) + hold * 0.5;
+  const fxF = drive * P.driveFront + brakeF * brakeFront + hold * 0.5;
+  const fxR = drive * (1 - P.driveFront) + brakeF * (1 - brakeFront) + hold * 0.5;
   const locked = input.handbrake && Math.abs(s.u) > 0.5;
 
-  const front = axleForces(s.steer, s.u, s.v + P.a * s.r, fzF, fxF, false, (m * P.b) / L, DT);
-  const rear = axleForces(s.rearSteer, s.u, s.v - P.b * s.r, fzR, fxR, locked, (m * P.a) / L, DT);
+  const front = axleForces(s.steer, s.u, s.v + P.a * s.r, fzF, fxF, false, (m * P.b) / L, 1, DT);
+  const rear = axleForces(s.rearSteer, s.u, s.v - P.b * s.r, fzR, fxR, locked, (m * P.a) / L, P.rearGrip, DT);
 
   // Resistances.
   const drag = -0.5 * AIR_DENSITY * P.dragArea * s.u * Math.abs(s.u) - P.rolling * W * Math.tanh(s.u / 0.5);
   const Fx = front.fx + rear.fx + drag;
   const Fy = front.fy + rear.fy;
   let Mz = P.a * front.fy - P.b * rear.fy;
-  // Stability control: pulls the yaw rate toward the steering's neutral rate while sliding.
+  // Stability control: pulls the yaw rate toward its reference.
   if (esc > 0) {
-    const rRef = (s.u * (Math.tan(s.steer) - Math.tan(s.rearSteer))) / L;
-    Mz += -P.escGain * esc * (s.r - rRef) * P.inertia;
+    const most = P.escMoment * P.mu * W * CAR.halfTrack;
+    Mz += Math.max(-most, Math.min(most, -P.escGain * esc * (s.r - rRef) * P.inertia));
+  }
+  // Torque vectoring: only toward the reference, never past it (the stability control's side).
+  const short = rRef - s.r;
+  if (!input.handbrake && brakePedal < 0.05 && Math.abs(s.u) > 2 && rRef !== 0 && Math.sign(short) === Math.sign(rRef)) {
+    const most = P.tvMoment * P.mu * W * CAR.halfTrack;
+    Mz += Math.max(-most, Math.min(most, P.tvGain * short * P.inertia));
   }
 
   const du = Fx / m + s.v * s.r;

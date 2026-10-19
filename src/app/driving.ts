@@ -27,7 +27,7 @@ export const EXIT_SPEED = 1.2;
 /** The view's move between the eye and the chase camera (s). */
 export const TRANSITION = 1.1;
 /** Pedal travel time (s, full press) and release. */
-const PEDAL = { press: 0.22, release: 0.12 } as const;
+const PEDAL = { press: 0.12, release: 0.08 } as const;
 
 type Mode = 'walking' | 'entering' | 'driving' | 'leaving';
 

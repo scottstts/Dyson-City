@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CarState, stepCar, type DriveInput } from '../src/vehicles/car/dynamics';
+import { CarState, steerLock, stepCar, type DriveInput } from '../src/vehicles/car/dynamics';
 import { CarCollider, CAR_FOOTPRINT } from '../src/vehicles/car/collision';
 import { CollisionWorld } from '../src/player/collision';
 import { boxShade } from '../src/vehicles/shade';
@@ -71,6 +71,67 @@ describe('car dynamics', () => {
     let yawed = 0;
     run(h, input({ steer: 0.6, handbrake: true }), 1.2, 1 / 60, () => (yawed = Math.max(yawed, Math.abs(Math.atan2(h.v, h.u)))));
     expect(yawed).toBeGreaterThan(0.2);
+  });
+
+  it('stays composed: braking or lifting off in a corner does not spin it, and turn-in settles', () => {
+    for (const v of [15, 25, 35]) {
+      // Cornering hard under power, then full braking (or a lift) with the steering held.
+      const b = new CarState();
+      b.u = v;
+      let slip = 0;
+      run(b, input({ steer: 1, throttle: 0.4 }), 2);
+      run(b, input({ steer: 1, brake: 1 }), 1.5, 1 / 60, () => (slip = Math.max(slip, Math.abs(Math.atan2(b.v, Math.abs(b.u) + 0.01)))));
+      expect(slip, `brake at ${v}`).toBeLessThan(0.21);
+      const l = new CarState();
+      l.u = v;
+      slip = 0;
+      run(l, input({ steer: 1, throttle: 1 }), 2);
+      run(l, input({ steer: 1 }), 1.5, 1 / 60, () => (slip = Math.max(slip, Math.abs(Math.atan2(l.v, Math.abs(l.u) + 0.01)))));
+      expect(slip, `lift at ${v}`).toBeLessThan(0.15);
+    }
+    // A full-lock key press at speed: the yaw rate settles near what the grip can turn, without a
+    // large overshoot, and the cornering stays within the tyres (stability control brakes wheels;
+    // it cannot add grip).
+    for (const v of [20, 30]) {
+      const s = new CarState();
+      s.u = v;
+      const rates: number[] = [];
+      let ay = 0;
+      run(s, input({ steer: 1, throttle: 0.25 }), 1.2, 1 / 60, () => {
+        rates.push(Math.abs(s.r * s.u));
+        ay = Math.max(ay, Math.abs(s.ay));
+      });
+      const settled = rates[rates.length - 1];
+      expect(Math.max(...rates) / settled, `overshoot at ${v}`).toBeLessThan(1.3);
+      expect(ay / 9.81).toBeLessThan(1.32);
+    }
+  });
+
+  it('turns under power: W held through a corner keeps it on its line', () => {
+    // The commonest keyboard input. Without cornering traction management the car sped from 15 to
+    // 27 m/s round the corner (a circle three times as wide); without torque vectoring the front's
+    // drive pushed it wide.
+    const s = new CarState();
+    s.u = 15;
+    let ay = 0;
+    run(s, input({ throttle: 1, steer: 1 }), 2, 1 / 60, (t) => {
+      if (t > 0.7) ay = Math.max(ay, Math.abs(s.r * s.u));
+    });
+    expect(s.u).toBeLessThan(20);
+    expect(ay / 9.81).toBeGreaterThan(1.15);
+    const t = new CarState();
+    t.u = 10;
+    run(t, input({ throttle: 1, steer: 1 }), 0.8);
+    expect(t.yaw).toBeGreaterThan((34 * Math.PI) / 180);
+  });
+
+  it('winds the steering on rather than snapping to lock', () => {
+    const s = new CarState();
+    s.u = 30;
+    run(s, input({ steer: 1 }), 0.1);
+    const lock = steerLock(s.speed);
+    expect(s.steer).toBeGreaterThan(0.2 * lock);
+    expect(s.steer).toBeLessThan(0.6 * lock);
   });
 
   it('turns tightly at low speed (four-wheel steering)', () => {

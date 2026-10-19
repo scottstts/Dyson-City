@@ -8,7 +8,7 @@
 import { describe, expect, it } from 'vitest';
 import { Euler, Matrix4, Quaternion, Vector3 } from 'three';
 import { CraftAirlock } from '../src/city/eastLock/airlock';
-import { CraftFlight, CRAFT_NOSE, CRAFT_TAIL, CRAFT_UNDER, FLIGHT, type FlightPhase } from '../src/vehicles/craft/flight';
+import { CraftFlight, CRAFT_NOSE, CRAFT_TAIL, CRAFT_UNDER, FLIGHT, LEGS, SETTLE, type FlightPhase } from '../src/vehicles/craft/flight';
 import { buildCraftModel, CRAFT_SCALE } from '../src/vehicles/craft/model';
 import { buildFieldZones } from '../src/field/field';
 import { buildLockStructure } from '../src/city/eastLock/structure';
@@ -19,6 +19,7 @@ import { PAD_HEIGHT } from '../src/ground/site';
 import type { PolyMesh } from '../src/geometry/polyMesh';
 
 const DT = 1 / 30;
+const wrap = (a: number) => a - 2 * Math.PI * Math.round(a / (2 * Math.PI));
 const nobody = () => -Infinity;
 
 interface Sample {
@@ -101,14 +102,63 @@ describe('the craft’s visits', () => {
   it('hovers with its ventral foil clear of the pad, and higher over the car', () => {
     const hover = run.filter((s) => s.phase === 'hover');
     expect(hover.length).toBeGreaterThan(0);
+    // Never under the hover height; at it once the settle is done and until the lift starts.
+    const t0 = hover[0].t;
     for (const s of hover) {
       const clear = s.pos.y - CRAFT_UNDER - PAD_HEIGHT;
       expect(clear).toBeGreaterThan(FLIGHT.hoverClear - 0.15);
-      expect(clear).toBeLessThan(FLIGHT.hoverClear + 0.15);
+      const t = s.t - t0;
+      if (t > SETTLE.time - SETTLE.lead + 0.3 && t < LEGS.hover - SETTLE.liftLead) expect(clear).toBeLessThan(FLIGHT.hoverClear + 0.15);
     }
     const carTop = PAD_HEIGHT + 1.79;
     const over = fly(120, (x, z, r) => (Math.hypot(x - 4, z - 2) < r + 2 ? carTop : -Infinity)).filter((s) => s.phase === 'hover');
     for (const s of over.slice(Math.round(2 / DT))) expect(s.pos.y - CRAFT_UNDER).toBeGreaterThan(carTop + FLIGHT.hoverClearOver - 0.3);
+  });
+
+  it('moves smoothly: no jump in place or attitude from leg to leg', () => {
+    // Second differences over the visit inside the Dome (and the legs either side): a pose jump of
+    // a few centimetres in one frame shows as hundreds of m/s².
+    const near = run.filter((s) => s.phase === 'wait-in' || s.phase === 'inbound' || s.phase === 'hover' || s.phase === 'outbound' || s.phase === 'wait-out');
+    let worstA = 0;
+    let worstPad = 0;
+    let worstW = 0;
+    let where = '';
+    for (let i = 1; i + 1 < near.length; i++) {
+      const [a, b, c] = [near[i - 1], near[i], near[i + 1]];
+      if (c.t - a.t > 2.5 * DT) continue;
+      const acc = Math.hypot(a.pos.x - 2 * b.pos.x + c.pos.x, a.pos.y - 2 * b.pos.y + c.pos.y, a.pos.z - 2 * b.pos.z + c.pos.z) / (DT * DT);
+      const ang = Math.max(Math.abs(a.pitch - 2 * b.pitch + c.pitch), Math.abs(a.roll - 2 * b.roll + c.roll), Math.abs(wrap(c.yaw - b.yaw) - wrap(b.yaw - a.yaw))) / (DT * DT);
+      if (acc > worstA) {
+        worstA = acc;
+        where = `${b.phase} t ${b.t.toFixed(2)}`;
+      }
+      if (a.phase === 'hover' && c.phase === 'hover') worstPad = Math.max(worstPad, acc);
+      worstW = Math.max(worstW, ang);
+    }
+    // Along the corridor the path's own braking and its spline's curvature steps reach ~2–3 g; a
+    // pose jump of a few centimetres in one frame shows as hundreds of m/s². In the hover the craft
+    // settles, drifts and lifts gently.
+    expect(worstA, where).toBeLessThan(60);
+    expect(worstPad).toBeLessThan(4);
+    expect(worstW).toBeLessThan(1.5);
+  });
+
+  it('keeps the whole hull clear of the pad while it settles, pivots and lifts', () => {
+    const pos = buildCraftModel(0.1).geometry.getAttribute('position');
+    const pts: Vector3[] = [];
+    for (let i = 0; i < pos.count; i += 3) pts.push(new Vector3().fromBufferAttribute(pos, i));
+    const m = new Matrix4();
+    const q = new Quaternion();
+    const e = new Euler();
+    const p = new Vector3();
+    const s4 = new Vector3(CRAFT_SCALE, CRAFT_SCALE, CRAFT_SCALE);
+    let lowest = Infinity;
+    for (const s of run) {
+      if (s.phase !== 'hover' && !(s.phase === 'inbound' && s.pos.x < 40) && !(s.phase === 'outbound' && s.pos.x < 40)) continue;
+      m.compose(s.pos, q.setFromEuler(e.set(s.pitch, s.yaw, s.roll, 'YXZ')), s4);
+      for (const c of pts) lowest = Math.min(lowest, p.copy(c).applyMatrix4(m).y - PAD_HEIGHT);
+    }
+    expect(lowest).toBeGreaterThan(1.0);
   });
 
   it('spends about 30 s under the Dome, and burns hard leaving', () => {

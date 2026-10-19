@@ -25,14 +25,14 @@ export const CHASE = {
   pitchMin: -0.05,
   pitchMax: 1.1,
   /** Heading spring's natural frequency (rad/s). */
-  follow: 4.2,
+  follow: 6.5,
   /** Mouse radians per pixel. */
   look: 0.0032,
   /** Stillness (s) before it returns behind, and its time constant (s). */
   idle: 0.25,
   recentre: 0.45,
   /** Lag (m) per m/s² of acceleration, and its time constant (s). */
-  lag: 0.07,
+  lag: 0.05,
   lagTc: 0.35,
   /** Closest it is pulled in to (m), and its in/out time constants (s). */
   minDistance: 2.6,
