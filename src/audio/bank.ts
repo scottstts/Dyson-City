@@ -10,7 +10,7 @@ import { REVERBS, synthesizeImpulse } from './reverb';
 import { ZONES, type Zone } from './acoustics';
 import { filter, noise, peak, rng } from './dsp';
 import { addPrint, printLength, synthTexture, type SpectralPrint } from './synth/spectral';
-import { FOOT_GAITS, FOOT_SURFACES, footSource, synthFootstep, type FootGait } from './synth/footstep';
+import { FOOT_GAITS, FOOT_SURFACES, footSource, ROBOT_STEP_VARIANTS, ROBOT_SURFACES, synthFootstep, synthRobotStep, type FootGait, type RobotFoot } from './synth/footstep';
 import { FOOTSTEP_GRASS } from './models/footstepsGrass';
 import { FOOTSTEP_GRAVEL } from './models/footstepsGravel';
 import { FOOTSTEP_WOOD } from './models/footstepsWood';
@@ -34,10 +34,12 @@ import { FIELD_VENT } from './models/fieldVent';
 import type { TextureModel } from './synth/spectral';
 import { VEHICLE_CAR } from './models/vehicleCar';
 import { VEHICLE_CRAFT } from './models/vehicleCraft';
+import { DRONE_ROTOR } from './models/droneRotor';
 import { synthImpact } from './synth/vehicle';
 import type { GroundSurface } from '../city/walk';
 
 export type FootKey = `${GroundSurface}:${FootGait}`;
+export type RobotStepKey = `${RobotFoot}:${GroundSurface}`;
 
 export interface AudioBank {
   sampleRate: number;
@@ -68,6 +70,9 @@ export interface AudioBank {
   car: Float32Array;
   craft: Float32Array;
   impact: Float32Array[];
+  /** The crew (docs/audio.md, "The crew"): a drone's rotors (loop, RMS 1); the walkers' steps, on the player's steps' scale. */
+  drone: Float32Array;
+  robotSteps: Record<RobotStepKey, Float32Array[]>;
 }
 
 export interface DoorSounds {
@@ -232,11 +237,21 @@ export function buildAudioBank(sr: number): AudioBank {
   const lawn = against(GRASS_DB, 'grass:walk');
   const gravel = against(GRAVEL_DB, 'gravel:walk');
   const timber = against(WOOD_DB, 'wood:walk');
+  const scaleOf = (s: GroundSurface) => {
+    const src = footSource(s);
+    return (src === FOOTSTEP_GRASS ? lawn : src === FOOTSTEP_GRAVEL ? gravel : src === FOOTSTEP_WOOD ? timber : 1) / ref;
+  };
   for (const [key, list] of Object.entries(footsteps)) {
-    const src = footSource(key.split(':')[0] as GroundSurface);
-    const s = (src === FOOTSTEP_GRASS ? lawn : src === FOOTSTEP_GRAVEL ? gravel : src === FOOTSTEP_WOOD ? timber : 1) / ref;
+    const s = scaleOf(key.split(':')[0] as GroundSurface);
     list.forEach((x, i) => (list[i] = trimTail(scaled(x, s), sr)));
   }
+  // The crew's walkers: the same recordings made metal, on the same scale as the player's.
+  const robotSteps = {} as Record<RobotStepKey, Float32Array[]>;
+  for (const foot of Object.keys(ROBOT_SURFACES) as RobotFoot[])
+    for (const s of ROBOT_SURFACES[foot]) {
+      const first = seed % footSource(s).length;
+      robotSteps[`${foot}:${s}`] = Array.from({ length: ROBOT_STEP_VARIANTS }, (_, v) => trimTail(scaled(synthRobotStep(foot, s, first + v, sr, seed++ * 7919), scaleOf(s)), sr));
+    }
 
   const hydraulicRun = synthTexture(HYDRAULIC_RUN, 18, sr, rng(101));
   const run = rms(hydraulicRun);
@@ -258,8 +273,9 @@ export function buildAudioBank(sr: number): AudioBank {
     latch: [501, 502, 503].map((s) => scaled(renderPrint(VAULT_LATCH[0], sr, s, 0.1), 1 / roll)),
     valveOpen: synthValve('open', sr, 601),
     valveClose: synthValve('close', sr, 602),
+    // 2^18 samples (~5.5 s): their tonal lines are ~3 Hz wide, and a short loop repeats audibly.
     field: Object.fromEntries((Object.keys(FIELD_MODELS) as FieldLoop[]).map((k, i) => {
-      const x = synthTexture(FIELD_MODELS[k], 10, sr, rng(701 + i));
+      const x = synthTexture(FIELD_MODELS[k], 18, sr, rng(701 + i));
       return [k, scaled(x, 1 / rms(x))];
     })) as Record<FieldLoop, Float32Array>,
     door: doorSounds(sr),
@@ -268,11 +284,14 @@ export function buildAudioBank(sr: number): AudioBank {
     car: atRms(synthTexture(VEHICLE_CAR, 19, sr, rng(1101))),
     craft: atRms(synthTexture(VEHICLE_CRAFT, 18, sr, rng(1201))),
     impact: [1301, 1302, 1303].map((seed) => synthImpact(sr, seed)),
+    // (2^19 samples, ~11 s: its blade-pass lines are a few hertz wide.)
+    drone: atRms(synthTexture(DRONE_ROTOR, 19, sr, rng(1401))),
+    robotSteps,
   };
 }
 
 /** The bank's sample buffers, for a transfer list. */
 export function bankBuffers(b: AudioBank): ArrayBuffer[] {
-  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.car, b.craft, ...b.impact];
+  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.car, b.craft, ...b.impact, b.drone, ...Object.values(b.robotSteps).flat()];
   return arrays.map((a) => a.buffer as ArrayBuffer);
 }

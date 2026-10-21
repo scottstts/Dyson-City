@@ -76,8 +76,9 @@ function mark(occ: Uint8Array, i: number, j: number): void {
 }
 
 /** Adds the occupancy grid's boundary to the walls (edges merged along rows and columns). */
-export function addFieldWalls(walls: CollisionWorld, meshes: readonly Mesh[]): number {
-  const occ = occupancy(meshes);
+export function addFieldWalls(walls: CollisionWorld, meshes: readonly Mesh[] | Uint8Array): number {
+  // (The world rasterises once and hands the same grid to the crew's routes.)
+  const occ = meshes instanceof Uint8Array ? meshes : occupancy(meshes);
   const at = (i: number, j: number) => (i >= 0 && j >= 0 && i < N && j < N ? occ[j * N + i] : 0);
   const X = (i: number) => ORIGIN + i * CELL;
   let n = 0;

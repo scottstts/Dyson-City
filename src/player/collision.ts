@@ -79,10 +79,19 @@ export class CollisionWorld {
 
   /**
    * Visits each enabled segment whose grid cells overlap a plan box once (the car's collision:
-   * vehicles/car/collision.ts). `seen` is the caller's scratch set, cleared here.
+   * vehicles/car/collision.ts). `seen` is the caller's scratch set, cleared here. With `dynamic`,
+   * the moving outlines near the box too (robots: the car meets them; the chase camera does not).
    */
-  forEachNear(x0: number, z0: number, x1: number, z1: number, seen: Set<object>, fn: (ax: number, az: number, bx: number, bz: number) => void): void {
+  forEachNear(x0: number, z0: number, x1: number, z1: number, seen: Set<object>, fn: (ax: number, az: number, bx: number, bz: number) => void, dynamic = false): void {
     seen.clear();
+    if (dynamic) {
+      for (const list of this.dynamic.values()) {
+        for (const d of list) {
+          if (Math.max(d.ax, d.bx) < x0 || Math.min(d.ax, d.bx) > x1 || Math.max(d.az, d.bz) < z0 || Math.min(d.az, d.bz) > z1) continue;
+          fn(d.ax, d.az, d.bx, d.bz);
+        }
+      }
+    }
     for (let i = Math.floor(x0 / CELL); i <= Math.floor(x1 / CELL); i++) {
       for (let j = Math.floor(z0 / CELL); j <= Math.floor(z1 / CELL); j++) {
         const list = this.grid.get(`${i},${j}`);
@@ -127,11 +136,18 @@ export class CollisionWorld {
     }
     let list = this.dynamic.get(tag);
     if (!list) this.dynamic.set(tag, (list = []));
-    list.length = 0;
+    // Moved every frame: its segments are rewritten in place.
+    list.length = Math.min(list.length, pts.length);
     for (let i = 0; i < pts.length; i++) {
       const a = pts[i];
       const b = pts[(i + 1) % pts.length];
-      list.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], tag });
+      const s = list[i];
+      if (s) {
+        s.ax = a[0];
+        s.az = a[1];
+        s.bx = b[0];
+        s.bz = b[1];
+      } else list.push({ ax: a[0], az: a[1], bx: b[0], bz: b[1], tag });
     }
   }
 

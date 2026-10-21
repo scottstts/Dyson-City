@@ -70,7 +70,7 @@ The carriers and stubs are not part of the body's mesh. Each is its own swing ar
     Past ~15 m/s, any steering puts the car at its grip limit (~1.2 g). A tighter turn at speed means lifting or braking, as in a real car; the assists only stop the car from wasting grip.
   - Stability control works as a modern one does: its yaw reference is the steering's neutral rate held to what the grip can turn (1.05 μg/u); it acts on yaw past that or body slip past ~6°, its moment bounded by the tyres (it brakes single wheels). Off while the handbrake is held.
   - A locked rear slides on kinetic friction along its slip velocity, so the handbrake swings the tail.
-- **Walls.** The footprint is an oriented box against the plan wall segments, resolved per physics step with an impulse (restitution 0.18, friction 0.35). The box's width follows the wheels' deployment. The parked car is a wall to the walker (`CollisionWorld.setDynamic`).
+- **Walls.** The footprint is an oriented box against the plan wall segments, resolved per physics step with an impulse (restitution 0.18, friction 0.35). The box's width follows the wheels' deployment. The parked car is a wall to the walker (`CollisionWorld.setDynamic`). The crew's ground robots near the player are dynamic outlines too, and the car meets them (`forEachNear(…, dynamic)`); a robot holds for the car ahead of it (`docs/crew.md`).
 - **The body** is a sprung mass (1.5 Hz, ζ 0.5) about an axis 0.35 m up: it pitches under braking and power and rolls in corners, the arms following it. The lamps wake when the car is driven, and the tail lamps brighten under braking.
 
 ### Camera

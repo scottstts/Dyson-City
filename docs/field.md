@@ -133,7 +133,8 @@ The user's reference (a soaring metallic city) is borrowed for its language, not
 
 ## Walls and ground
 
-- `walk.ts` slices the field at body height (0.05–1.9 m) into a 0.5 m occupancy grid and turns its boundary into wall segments (~11 k).
+- `walk.ts` slices the field at body height (0.05–1.9 m) into a 0.5 m occupancy grid and turns its boundary into wall segments (~11 k). The world rasterises it once; the same grid plans the crew's routes (`docs/crew.md`).
+- The crew works the compound off the roads: Hands, Riggers, Drays, Linewalkers on the square main's supply line, and drones over it. Their cradles, pads and sockets are fixtures in its lanes and lots.
 - Roads are basalt underfoot (footsteps).
 - Podiums and plinths are walls, not walkable.
 

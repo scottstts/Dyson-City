@@ -329,6 +329,20 @@ export class CraftFlight {
     this.attitude(dt);
   }
 
+  /**
+   * Seconds until the craft is next inside the Dome (0 while it is): the legs still to fly before it
+   * comes in through the lock, its waits at the gates counted as none (so never more than the truth).
+   */
+  untilInside(): number {
+    const p = this.phase;
+    if (p === 'inbound' || p === 'hover' || p === 'outbound' || p === 'wait-out') return 0;
+    const ahead: readonly FlightPhase[] = ['depart', 'gap', 'approach', 'hold', 'enter', 'wait-in'];
+    const leg = (q: FlightPhase) => (q in LEGS ? LEGS[q as keyof typeof LEGS] : 0);
+    let t = Math.max(0, leg(p) - this.t);
+    for (let k = ahead.indexOf(p) + 1; k < ahead.length; k++) t += leg(ahead[k]);
+    return t;
+  }
+
   /** Review: runs the visit (and the lock with it) forward until it reaches `phase`, plus `extra` seconds. */
   fastForward(phase: FlightPhase, lock: LockControl & { update(dt: number): void }, under: (x: number, z: number, r: number) => number, extra = 1): void {
     const dt = 1 / 30;

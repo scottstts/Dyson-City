@@ -77,7 +77,7 @@ export class CarCollider {
         s.r += (rz * Jx - rx * Jz) / I;
         if (j > this.contact.impulse) this.contact.impulse = j;
         scrape = Math.max(scrape, Math.abs(vt));
-      });
+      }, true);
     }
     this.contact.scrape = Math.max(this.contact.scrape, scrape);
   }

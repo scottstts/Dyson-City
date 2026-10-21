@@ -157,3 +157,78 @@ function addSurface(out: Float32Array, surface: GroundSurface, gait: FootGait, s
   }
 }
 
+
+/**
+ * The crew's walkers (docs/crew.md, "Sound"): the player's recorded steps, made metal. A robot's
+ * foot is a cast shell on a hard rubber sole, planted nearly flat by an ankle actuator: the boot's
+ * heel-to-ball roll is compressed, its leather scuff taken off, its weight a little heavier; and as
+ * it lands the shell and the leg ring (a few inharmonic modes, short: the sole damps them) over a
+ * low knock from the actuator's gear lash. On turf and gravel the ground takes most of the ring.
+ */
+export type RobotFoot = 'hand' | 'rigger';
+/** The floors each walker meets: the Hands the compound's stone, the decks, the estate's lawns and walks; the Riggers only the compound's. */
+export const ROBOT_SURFACES: Record<RobotFoot, readonly GroundSurface[]> = { hand: ['stone', 'deck', 'grass', 'gravel'], rigger: ['stone'] };
+/** Variants per walker and floor. */
+export const ROBOT_STEP_VARIANTS = 5;
+
+/** The floor a robot's step is voiced on: its own, or the nearest it has (every hard floor is stone). */
+export function robotSurface(foot: RobotFoot, s: GroundSurface): GroundSurface {
+  const own = ROBOT_SURFACES[foot];
+  if (own.includes(s)) return s;
+  return s === 'rug' && own.includes('grass') ? 'grass' : 'stone';
+}
+
+interface RobotShape {
+  /** The print's roll, compressed. */
+  stretch: number;
+  /** Per-band gain (dB) on the walking step. */
+  gain: number[];
+  /** The shell's ring: mode count, band (Hz), T60 (s), amplitude against the heel's peak. */
+  modes: number;
+  band: [number, number];
+  t60: [number, number];
+  ring: [number, number];
+  /** The actuator's lash: a low knock's band (Hz) and amplitude. */
+  knock: [number, number];
+  lash: number;
+}
+
+const ROBOT: Record<RobotFoot, RobotShape> = {
+  // A ~90 kg biped on cast feet.
+  hand: { stretch: 0.62, gain: tilt((f) => 2 * (1 - ramp(f, 120, 400)) - 5 * ramp(f, 2500, 8000)), modes: 7, band: [1400, 5200], t60: [0.07, 0.2], ring: [0.1, 0.22], knock: [220, 420], lash: 0.16 },
+  // A quarter of a much heavier frame on each broad pad: deeper, longer.
+  rigger: { stretch: 0.55, gain: tilt((f) => 5 * (1 - ramp(f, 100, 400)) - 3 * ramp(f, 2000, 8000)), modes: 9, band: [650, 3200], t60: [0.1, 0.3], ring: [0.12, 0.24], knock: [110, 200], lash: 0.22 },
+};
+
+/** How much of the shell's ring a floor lets through (turf and gravel take most of it). */
+const RING_ON: Partial<Record<GroundSurface, number>> = { grass: 0.3, gravel: 0.55 };
+
+/** One robot footfall: mono samples at `sr`, on its recording's scale (as the player's steps). */
+export function synthRobotStep(foot: RobotFoot, surface: GroundSurface, variant: number, sr: number, seed: number): Float32Array {
+  const r = rng(seed);
+  const shape = ROBOT[foot];
+  const src = footSource(surface);
+  const out = new Float32Array(Math.ceil(footstepLength('walk', surface) * sr));
+  const print = src[variant % src.length];
+  const wobble = between(r, -1.5, 1.5);
+  const phase = r() * 6.28;
+  const gain = new Array<number>(BAND_COUNT);
+  for (let b = 0; b < BAND_COUNT; b++) gain[b] = GAITS.walk.gain[b] + SURFACES[surface][b] + shape.gain[b] + wobble * Math.sin(b * 0.6 + phase);
+  addPrint(out, print, sr, r, { gain, stretch: shape.stretch * between(r, 0.95, 1.05) });
+  addSurface(out, surface, 'walk', sr, r);
+  // The strike: the heel's peak in the first 120 ms.
+  let at = 0;
+  let force = 0;
+  for (let i = 0; i < Math.min(out.length, Math.round(0.12 * sr)); i++) {
+    const a = Math.abs(out[i]);
+    if (a > force) {
+      force = a;
+      at = i;
+    }
+  }
+  const t0 = Math.max(0, at / sr - 0.002);
+  const damp = RING_ON[surface] ?? 1;
+  for (let i = 0; i < shape.modes; i++) addMode(out, sr, t0, logBetween(r, shape.band[0], shape.band[1]), logBetween(r, shape.t60[0], shape.t60[1]), force * damp * between(r, shape.ring[0], shape.ring[1]), r() * 6.28);
+  addMode(out, sr, t0 + between(r, 0.004, 0.009), logBetween(r, shape.knock[0], shape.knock[1]), between(r, 0.03, 0.06), force * Math.sqrt(damp) * shape.lash, r() * 6.28);
+  return out;
+}

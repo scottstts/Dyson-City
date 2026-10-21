@@ -27,6 +27,9 @@ import { READING_ADAPTATION, TerminalUse } from '../terminal/use';
 import { terminalLive } from '../terminal/live';
 import type { NarrationClips } from '../audio/loadNarration';
 import type { TerminalKey } from '../terminal/os/os';
+import { CrewFrameSource } from '../crew/frame';
+import { crewReview } from '../crew/review';
+import { FIELD_Y } from '../field/layout';
 
 /** Where the West Gate's airlock is told the walker is while they drive: far from both its gates. */
 const NOBODY = new Vector3(0, 0, 0);
@@ -71,6 +74,7 @@ export class Game {
   private reviewJumped = false;
   /** Review (?tat): the OS's clock, held. */
   private reviewHold: number | null = null;
+  private readonly crewFrame: CrewFrameSource;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement, narration: NarrationClips) {
     this.narration = narration;
@@ -82,6 +86,7 @@ export class Game {
     const { width, height } = handle.viewport();
     this.camera = new PerspectiveCamera(debug.fov ?? EYE_FOV, width / height, 0.05, 40_000);
     this.camera.name = 'PlayerCamera';
+    this.crewFrame = new CrewFrameSource(this.camera.position);
     handle.onViewport((size) => {
       this.camera.aspect = size.width / size.height;
       this.camera.updateProjectionMatrix();
@@ -125,6 +130,10 @@ export class Game {
       world.vehicles.fastForward(phase as FlightPhase, extra ? Number(extra) : undefined);
     }
     if (debug.drive) this.driving.startInCar();
+    if (debug.crew) {
+      const s = crewReview(world.crew, debug.crew, world.vehicles.craft.flight.untilInside(), FIELD_Y);
+      if (s) this.player.spawn(s);
+    }
     if (debug.terminal !== null) {
       this.player.spawn(this.terminal.standSpot());
       this.terminal.startAt(this.gameTime);
@@ -292,6 +301,8 @@ export class Game {
     this.world.city.update(dt, driving.inCar ? NOBODY : this.player.feet);
     // Review time (?time) holds the craft where ?craft put it, as it holds the star.
     this.world.vehicles.update(this.debug.time === null ? dt : 0, this.gameTime, driving.inCar ? null : this.player.feet);
+    // The crew after them (they hold for the walker and the car); review time holds them too.
+    this.world.crew.update(this.debug.time === null ? dt : 0, this.crewFrame.at(driving.inCar ? null : this.player.feet, this.world.vehicles));
     this.camera.updateMatrixWorld();
     this.world.house.update(dt, this.camera, this.player.feet, use && !usedByCar && !usedByTerminal && !driving.inCar && !terminal.active);
     const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);

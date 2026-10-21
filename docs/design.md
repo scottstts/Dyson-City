@@ -246,7 +246,7 @@ Implementation notes live in the system docs (`docs/world.md`, `docs/sky.md`, `d
 
 ## 13. Out of scope
 
-- NPCs, dialogue, quests, inventory, combat.
+- NPCs, dialogue, quests, inventory, combat. (The crew's robots are machines at work, not NPCs: `docs/crew.md`.)
 - Time of day, weather, seasons.
 - Leaving the habitable band. The far structure is only seen, never walked.
 - Building on the band outside the Dome: no roads, outbuildings or transit there.

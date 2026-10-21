@@ -69,7 +69,8 @@ These rules apply to all future sounds, not just the current ones.
   Check a fit against its recording by ear and by measure before shipping it: render the game's own synth path (the bank's variant, with its gait and floor shaping) and compare third-octave spectra of the steps, normalised to the 250 Hz–2 kHz mean. The grass fit failed that by 35 dB below 160 Hz.
 
   Use `texture` with `--from`/`--to` for steady sounds. Recordings are 16-bit WAV (convert with ffmpeg). Paths are arguments only; nothing in the code refers to a recording.
-- **Bank** (`bank.ts`): everything is synthesised once in a worker during the atmosphere stage, ~1 s. Sounds from one recording share one scale, so they keep the balance they were recorded with.
+- **Bank** (`bank.ts`): everything is synthesised once in a worker during the atmosphere stage, ~3.4 s, ~47 MB. Sounds from one recording share one scale, so they keep the balance they were recorded with.
+- **Texture loops are seconds long.** `synthTexture`'s length is log2 of the sample count, not seconds: the field's machines (2^18, ~5.5 s), the hydraulics, the car and the drone (2^18–2^19). Their tonal lines are ~3 Hz wide; a loop must resolve them and must not repeat audibly. The field's loops were once 2^10 samples, 21 ms: every machine buzzed at 47 Hz. The bank test now requires every texture loop to be over 4 s long.
 
 ## Footsteps (`synth/footstep.ts`, `sounds/footsteps.ts`)
 
@@ -82,7 +83,7 @@ These rules apply to all future sounds, not just the current ones.
   - The recording passes its microphone: its steps span 17 dB, mostly distance, which the emitter already gives. In the bank each step keeps a quarter of its departure from the walk's mean.
   - Stone, grass, gravel and the house's hard floors are the recordings themselves; the porches' boards and the rugs and runners are built on the timber, the outdoor hard floors on the marble.
 - **No cycle.** A walk has every step its recording holds (twenty on the timber), a run up to six, the rarer gaits three. Each floor and gait has its own picker, which keeps the last half of its variants out. *Rejected:* three variants per floor with one picker, which only avoided an immediate repeat: walking across a room the steps fell into an audible cycle (the user's complaint: the sampled sound procedural synthesis should avoid).
-- **Memory.** Each step is cut where it has decayed 70 dB under its peak. The fixed lengths (room for the slowest gait's ring) were 40 % silence, kept twice (the bank and its AudioBuffers). The bank's footsteps are ~17 MB; the bank builds in ~2.8 s in its worker.
+- **Memory.** Each step is cut where it has decayed 70 dB under its peak. The fixed lengths (room for the slowest gait's ring) were 40 % silence, kept twice (the bank and its AudioBuffers). The bank's footsteps are ~17 MB.
 - **Gaits reshape it:**
   - run: the roll compressed to 0.68, +5 dB;
   - land: 0.55, +7 dB, +5 dB more below 250 Hz, with a second foot ~25 ms later;
@@ -184,6 +185,34 @@ These rules apply to all future sounds, not just the current ones.
 - **The estate's silencer** (`estate/silencer.ts`): a device in the estate takes every machine and relief stack away for a listener within its walls (the terrace's outer wall face in plan, the gateway's ramp and the house included). It fades with the listener's place, not in a step: full 4 m outside the wall face, gone 10 m inside, eased (smoothstep), and smoothed over 0.3 s. *Rejected:* a hard cut at the wall face, which switched the field off between two footsteps. The field's emitters all feed one bus after their paths, so the fade acts at the ears, not after each machine's propagation delay. Behind it the voices, levels, spreading and wander run unchanged.
 - **The Stand's silencer** (`terminal/silencer.ts`): the same device on the Stand by the West Gate (`docs/terminal.md`), for the player up on it, on foot or in the car (by the car's ground, not the chase camera). The Stand is too small for a fade across a wall in plan, so it fades with height: full at the foot of the ramp or the stair, gone at the deck, eased, then followed over 0.45 s so the short stair never cuts it between footsteps. Its gain multiplies the estate's.
 
+## The crew (`sounds/crew.ts`, `docs/crew.md`)
+
+- **Every voice is a clone or the bank's own synthesis**, by the user's sources:
+  - **Drones:** the user's drone recording, cloned as a texture (`models/droneRotor.ts`, fitted to its steady hover at 78–94 s). The clone matches within ±1 dB per third-octave from 25 Hz to 13 kHz, −3 dB at 100 Hz. Its blade-pass lines near 215–230 Hz are a few hertz wide, so the loop is 2^19 samples (~11 s), like the car's.
+    - Rotor speed follows thrust: pitch with its square root, level and brightness with the thrust.
+    - A Ferry's bigger rotors run lower (0.52–0.70 of the recording) and louder than a Spotter's (0.80–1.08).
+    - Resting on a cradle or pad, a drone is silent.
+  - **Wheeled machines** reuse the car's drive clone (the user's choice):
+    - a Dray's hub motors (smaller than the car's, so higher: 0.9–1.65), energised and idling while it stands, over its tyres' roll on the stone;
+    - a Linewalker's drive, smaller still, with a hollow roll from its rollers on the pipe;
+    - the estate's mower, with its reel's chatter (band noise at 2.8 kHz, modulated at 22 Hz);
+    - the hedge trimmer, with its blades' strokes (modulated at 45 Hz).
+  - **Actuators:**
+    - a Rigger's boom and a Dray's probe reuse the hydraulic power unit's clone, pitched up, as the car's wheel actuators do;
+    - the probe seats with the vault latch's clone.
+  - **Walkers' feet** are the player's recorded steps made metal (`synth/footstep.ts` `synthRobotStep`); the user wanted them "a bit more metallic".
+    - The boot's heel-to-ball roll is compressed, its scuff taken off, its weight raised.
+    - As the foot lands its cast shell rings: a few inharmonic modes, 1.4–5.2 kHz for a Hand and 0.65–3.2 kHz for a Rigger's pad, short because the sole damps them. Under it is a low knock from the ankle actuator's gear lash.
+    - Turf and gravel take most of the ring.
+    - Voiced on what is underfoot as the player's are: stone, the decks, grass and gravel for the Hands; stone for the Riggers.
+    - **Metal is tonality.** The boot recording's roll already puts plenty of energy above 1 kHz after the strike; what makes metal is that the tail rings in a few narrow lines. The tests measure the tail's spectral flatness, not its high-band energy.
+- **As the field's machines:**
+  - A pool of HRTF voices goes to the loudest loops where the listener stands, with hysteresis: 4 voices for the field's crew, 2 for the estate's.
+  - Loops feed no reverb (two dozen robots in the city's diffuse field would be a hum without a source).
+  - Steps are short-lived: 3 + 2 one-shot emitters, voiced within 40 m. They feed the space's reverb as the player's steps do.
+- **The estate's silencer** takes the field's crew away for a listener within the estate's walls, with the field's machines. The estate's three Hands, the mower and the trimmer are on its side and are not silenced.
+- **Levels** `LEVEL.crew`: first pass, to be tuned by ear.
+
 ## The estate
 
 - **No tree sound.** The estate's quiet is the Dome's still air, the clock through the open door and the footsteps. *Rejected* (by ear): leaves rustling from the nearest crowns, cloned from a recording of a broadleaf crown in a breeze.
@@ -241,7 +270,7 @@ These rules apply to all future sounds, not just the current ones.
 - **Per frame** (`Game.frame`, after the camera's matrix): the ears move to the camera, airlock events and queued foot events sound at time `t`, and every emitter's path is re-derived.
   - `glide` skips unchanged targets, so steady parameters add no automation.
   - Each zone's path to the listener (`transmission`) depends only on the listener's zone and the gates' and house doors' openness, so the engine derives it once per zone per frame (`AudioEngine.path`) and every emitter reads it; distance, directivity, delay and filtering stay per emitter.
-- **Cost.** 20 HRTF panners (two for the announcements), four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
+- **Cost.** 31 HRTF panners (two for the announcements, eleven for the crew), four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
 
 ## Review
 
@@ -259,3 +288,4 @@ These rules apply to all future sounds, not just the current ones.
   - the airlock's event order;
 - `tests/airlock.test.ts`: the announcements' order on a walk in and out, and nothing moving while a held one plays; `tests/speechCues.test.ts`: the crossings and the pad's rule; `tests/chime.test.ts`: the chime's two bars, its clickless start and decay, which announcements it opens and the airlock's wait including it.
   - the controller's foot events.
+- `tests/crewSound.test.ts`: the walkers' steps ring as metal, deeper for the Rigger and damped on turf; the drone's loop is seamless with its blade-pass line.

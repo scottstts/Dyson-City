@@ -150,6 +150,11 @@ export class WalkMesh {
     }
   }
 
+  /** The static wall triangles (world space, 9 floats each): the crew's estate grid rasterises them. */
+  get wallTriangles(): readonly number[] {
+    return this.walls.tri;
+  }
+
   /** Replaces a dynamic triangle set (world space, 9 floats per triangle; empty to remove). */
   setDynamic(name: string, tris: Float32Array | null): void {
     if (!tris || !tris.length) {

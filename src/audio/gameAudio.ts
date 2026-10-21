@@ -14,6 +14,7 @@ import { HouseSounds, type AudioHouse } from './sounds/house';
 import { SpeechSounds } from './sounds/speech';
 import { SpeechCues } from './speechCues';
 import { TerminalSounds, type AudioTerminal } from './sounds/terminal';
+import { CrewSounds, type AudioCrew } from './sounds/crew';
 import { AIRLOCK_SPEECH, type SpeechClips } from './loadSpeech';
 import { LEVEL } from './mix';
 import type { AudioBank } from './bank';
@@ -38,6 +39,8 @@ export interface AudioWorld {
   speech?: SpeechClips;
   /** The West Gate terminal (absent in tools without it). */
   terminal?: AudioTerminal;
+  /** The crew's robots (absent in tools without them); `gain` is the field's silencer by the listener's place. */
+  crew?: { state: AudioCrew; gain(x: number, z: number): number };
 }
 
 /** The ears: a camera's world matrix (column-major, as three.js stores it). */
@@ -67,6 +70,7 @@ export class GameAudio {
   private readonly speech: { sounds: SpeechSounds; cues: SpeechCues; airlockCount: number } | null;
   private readonly world: AudioWorld;
   private readonly terminal: TerminalSounds | null;
+  private readonly crew: CrewSounds | null;
   private readonly pending: FootEvent[] = [];
   private active = false;
   /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
@@ -103,6 +107,8 @@ export class GameAudio {
     this.craft = world.craft ? new CraftSounds(this.engine, world.craft) : null;
     this.world = world;
     this.terminal = world.terminal ? new TerminalSounds(this.engine, world.terminal) : null;
+    const crew = world.crew;
+    this.crew = crew ? new CrewSounds(this.engine, crew.state, (x, z, y) => world.surface(x, z, y), (x, z) => crew.gain(x, z)) : null;
     this.speech = world.speech
       ? { sounds: new SpeechSounds(this.engine, world.speech, { car: world.car ?? null }), cues: new SpeechCues(), airlockCount: world.airlock.announcement.count }
       : null;
@@ -161,6 +167,7 @@ export class GameAudio {
     this.craft?.update(t, l);
     this.vents.update(dt, t, this.airlock);
     this.field?.update(dt, t, l);
+    this.crew?.update(t, l);
     this.house?.update(t, l);
     if (this.speech) this.announce(dt, t, l);
     this.terminal?.update(t, l);

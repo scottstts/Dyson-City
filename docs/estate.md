@@ -52,9 +52,13 @@ Code: `src/estate/`. The plan's intent is `docs/city_plan.md` §4; the house its
   - a face samples visibility a little ahead along its normal, so a hedge's side is not shaded by its own footprint;
   - a face on top of its own occluder sees the whole cap, but only for occluders of real height (≥ 0.4 m). Counting kerbs, ground inside any kerb's 1 m texel was freed, and paths showed texel blocks.
 
+## The crew
+
+Three Hands keep the garden (`docs/crew.md`): one mows the lawn's stripes, one trims the yew hedges, one tends the kitchen garden and the orchard. They walk the walk mesh's open ground; no drone flies over the estate.
+
 ## Sound
 
-Footsteps by surface (grass, gravel, stone) and the house's sounds (the trees are silent): `docs/audio.md`, "The estate" and "The house".
+Footsteps by surface (grass, gravel, stone) and the house's sounds (the trees are silent): `docs/audio.md`, "The estate" and "The house". The garden's Hands, their mower and trimmer are heard on the estate's side of its silencer: "The crew".
 
 ## Review
 

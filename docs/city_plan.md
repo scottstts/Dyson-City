@@ -15,7 +15,7 @@ Beyond the garden wall there is nothing green at all. A wide, dark road runs str
 - **Two truths, side by side.** The house must be as real as a house can be: specific, crafted, worn by use. The machines must be as real as machines can be: every part bolted, plumbed, braced and serviced. If either side slips into the generic or the decorative, the dream turns into a theme park.
 - **Contrast, not mixing.** Green, water, wood, softness and warm lamplight exist only inside the estate's wall. Outside it there is no vegetation and no water: stone, gold, ceramic, steel. The wall is a sharp line, not a gradient.
 - **The physics of this place does the surreal work.** Eternal noon from a 90° star overhead, soft shadowless light, gold mirrors that throw the world back at itself. Nothing is invented to look strange: it is strange because the place is.
-- **Emptiness.** No people. The house is waiting for someone; the machines run themselves; the craft come and go on their own.
+- **Emptiness.** No people. The house is waiting for someone; the machines run themselves, tended by robots that never notice you (the crew, `docs/crew.md`: never on the roads, only inside the Dome); the craft come and go on their own.
 
 ### Rejected
 

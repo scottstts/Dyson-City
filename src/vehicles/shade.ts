@@ -73,10 +73,11 @@ export interface VehicleShade {
   node(): F;
 }
 
-export function createVehicleShade(): VehicleShade {
+/** The shade of up to `count` boxes (the vehicles' four; the crew's robots use it too, crew/crew.ts). */
+export function createVehicleShade(count: number = SHADE_BOXES): VehicleShade {
   // Per box: (x, z, sin ψ, cos ψ) and (a, b, h, opacity).
-  const pose = uniformArray(Array.from({ length: SHADE_BOXES }, () => new Vector4()), 'vec4');
-  const size = uniformArray(Array.from({ length: SHADE_BOXES }, () => new Vector4(1, 1, 1, 0)), 'vec4');
+  const pose = uniformArray(Array.from({ length: count }, () => new Vector4()), 'vec4');
+  const size = uniformArray(Array.from({ length: count }, () => new Vector4(1, 1, 1, 0)), 'vec4');
   const P = pose.array as Vector4[];
   const S = size.array as Vector4[];
   const at = (arr: unknown, i: Node<'int'>) => (arr as { element(i: Node<'int'>): Node<'vec4'> }).element(i);
@@ -88,7 +89,7 @@ export function createVehicleShade(): VehicleShade {
   };
   const shade = Fn(() => {
     const open = float(1).toVar();
-    Loop(SHADE_BOXES, ({ i }: { i: Node<'int'> }) => {
+    Loop(count, ({ i }: { i: Node<'int'> }) => {
       const p = at(pose, int(i));
       const z = at(size, int(i));
       const d = positionWorld.xz.sub(vec2(p.x, p.y));
@@ -112,7 +113,7 @@ export function createVehicleShade(): VehicleShade {
   });
   return {
     set(boxes) {
-      for (let i = 0; i < SHADE_BOXES; i++) {
+      for (let i = 0; i < count; i++) {
         const b = boxes[i];
         if (!b) {
           S[i].w = 0;

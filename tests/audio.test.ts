@@ -241,9 +241,23 @@ describe('cloned sounds', () => {
     for (let i = 0; i < shut.length; i++) if (Math.abs(shut[i]) > Math.abs(shut[at])) at = i;
     expect(Math.abs(at / SR - bank.door.strike)).toBeLessThan(0.06);
     expect(peak(bank.door.open[0])).toBeLessThan(0.5);
-    // The vehicles' loops are seamless at RMS 1.
-    for (const loop of [bank.car, bank.craft]) {
+    // The crew's walkers: every floor each meets, all its variants, finite and decayed; a Hand's step
+    // on stone near the player's (the same recording, made metal).
+    for (const [key, list] of Object.entries(bank.robotSteps)) {
+      expect(list.length, key).toBe(5);
+      for (const x of list) {
+        expect(finite(x)).toBe(true);
+        expect(Math.abs(x[x.length - 1])).toBeLessThan(1e-2 * peak(x));
+      }
+    }
+    const handStone = bank.robotSteps['hand:stone'].reduce((m, x) => m + peak(x), 0) / 5;
+    expect(20 * Math.log10(handStone)).toBeGreaterThan(-6);
+    expect(20 * Math.log10(handStone)).toBeLessThan(6);
+    // The vehicles', the drone's and the field machines' loops are seamless at RMS 1, and seconds
+    // long: their tonal lines are a few hertz wide (a 21 ms field loop once buzzed at 47 Hz).
+    for (const loop of [bank.car, bank.craft, bank.drone, ...Object.values(bank.field)]) {
       expect(finite(loop)).toBe(true);
+      expect(loop.length / SR).toBeGreaterThan(4);
       let ms = 0;
       let step = 0;
       for (let i = 0; i < loop.length; i++) {

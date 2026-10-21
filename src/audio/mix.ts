@@ -62,6 +62,14 @@ export const LEVEL = {
    * peak, its interface tones' peak, and the star's song's RMS. First pass, to be tuned by ear.
    */
   terminal: { voice: 0.6, ui: 0.16, song: 0.22 },
+  /**
+   * The crew (sounds/crew.ts), each at its source's size there: a walking Hand's step and a
+   * Rigger's pad (peak, at the foot, on the player's steps' scale); a Spotter's and a Ferry's rotors
+   * at full thrust; a Dray's drive at full load and its tyres at top speed, its probe's actuator and
+   * its latch (peak); a Linewalker's drive and rollers; a Rigger's boom actuators; the mower's motor
+   * and reel, the trimmer's motor and blades (RMS). First pass, to be tuned by ear.
+   */
+  crew: { hand: 0.8, rigger: 1.0, spotter: 0.12, ferry: 0.2, dray: 0.07, drayRoll: 0.035, probe: 0.03, latch: 0.12, linewalker: 0.03, lineRoll: 0.02, boom: 0.035, mower: 0.05, reel: 0.04, trimmer: 0.06, blades: 0.05 },
 } as const;
 
 /**

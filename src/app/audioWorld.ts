@@ -26,6 +26,7 @@ export function audioWorld(world: World, speech?: SpeechClips, narration?: Narra
     car: world.vehicles.car,
     craft: world.vehicles.craft.audio,
     speech,
+    crew: { state: world.crew.sound, gain: (x, z) => fieldGain(x, z) * stand.fieldGain },
     terminal: narration ? { os: stand.os, clips: narration, speaker: speakerPosition(), axis: screenPose().normal, time: () => stand.os.now } : undefined,
   };
 }
