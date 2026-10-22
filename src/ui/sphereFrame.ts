@@ -7,7 +7,8 @@
  * stands off the gores: band ring outermost, hub collars where the spines end on it, spines and
  * latitude rings, polar collars. Each sector carries a gore of riveted plates; the two sectors
  * either side of the front spine are cut low, leaving wide windows onto the star, and every gore
- * stands clear of its spines, leaving a narrow slot.
+ * stands clear of its spines, leaving a narrow slot. As in the world (docs/design.md), only the
+ * band turns: it runs through the hub collars of the fixed frame.
  */
 
 export type V3 = [number, number, number];
@@ -52,6 +53,16 @@ export const FRAME = {
 } as const;
 
 export const SPINES = [0, 60, 120, 180, 240, 300] as const;
+
+/**
+ * The belt (the band, with the hub collars it runs through) as a sprite of the band's turn:
+ * `frames` frames over one `period` (degrees, where the band's pattern repeats) in a `cols`×`rows`
+ * grid, row-major. Each cell is `pitch` glyph units wide, centred on the drawing (wider than it, so
+ * no cell's light reaches the next), and spans `top`–`bottom` units from the centre, y down: the
+ * belt's visible extent with a margin.
+ */
+export const BELT = { period: 60, frames: 120, cols: 12, rows: 10, pitch: 295, top: -24, bottom: 48 } as const;
+
 /** Sectors (by their first spine) whose gores are cut low: either side of the front spine. */
 const CUT_SECTORS = new Set([0, 300]);
 

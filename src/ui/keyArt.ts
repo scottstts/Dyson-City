@@ -1,5 +1,5 @@
 /**
- * Key art behind the loading screen: the game's own renders (tools/render.mjs at 2560×1440,
- * encoded to public/keyart/<name>.jpg), one chosen per visit, under a dark tint.
+ * Key art behind the loading screen: stills of the game (3344×1882 lossy WebP,
+ * public/keyart/<name>.webp), one chosen per visit, under a dark tint.
  */
-export const KEY_ART = ['deck', 'drum', 'inside', 'reveal', 'approach'] as const;
+export const KEY_ART = ['entrance', 'house', 'pad'] as const;

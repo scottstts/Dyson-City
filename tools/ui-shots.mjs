@@ -52,7 +52,7 @@ try {
   await page.evaluate(() => {
     const art = document.querySelector('.entry-art');
     art.style.transition = 'none';
-    art.style.animationPlayState = 'paused';
+    for (const still of art.children) still.style.animationPlayState = 'paused';
     const g = document.querySelector('.glyph');
     g.style.transition = 'none';
     g.style.opacity = '0.6';
@@ -63,7 +63,8 @@ try {
     const r = g.getBoundingClientRect();
     return { x: Math.round(r.left), y: Math.round(r.top), opacity: getComputedStyle(g).opacity };
   });
-  const clip = { x: box.x + 2, y: box.y + 2, width: 48, height: 48 };
+  // The box's corner, outside the sphere and its bloom's brightest part.
+  const clip = { x: box.x + 1, y: box.y + 1, width: 10, height: 10 };
   const shown = await page.screenshot({ clip });
   await page.evaluate(() => (document.querySelector('.glyph').style.visibility = 'hidden'));
   const hidden = await page.screenshot({ clip });
@@ -71,7 +72,8 @@ try {
     const g = document.querySelector('.glyph');
     const art = document.querySelector('.entry-art');
     for (const p of ['visibility', 'transition', 'opacity']) g.style.removeProperty(p);
-    for (const p of ['transition', 'animation-play-state']) art.style.removeProperty(p);
+    art.style.removeProperty('transition');
+    for (const still of art.children) still.style.removeProperty('animation-play-state');
   });
   const diff = await page.evaluate(
     async ([a, b]) => {
@@ -95,7 +97,7 @@ try {
   if (diff > 1.5) throw new Error('the glyph shows a box over the key art');
   await page.waitForTimeout(2000);
   await shot('loading-early');
-  await page.waitForFunction(() => document.querySelectorAll('.glyph-coolant path.is-lit').length >= 8 || window.__dyson?.ready, null, { timeout: 300_000 });
+  await page.waitForFunction(() => document.querySelectorAll('.glyph-coolant path.is-lit').length >= 3 || window.__dyson?.ready, null, { timeout: 300_000 });
   await shot('loading-mid');
   await page.waitForFunction(() => window.__dyson?.ready === true || document.querySelector('.entry.is-error'), null, { timeout: 300_000 });
   if (await page.evaluate(() => !!document.querySelector('.entry.is-error'))) {

@@ -1,16 +1,18 @@
 /**
  * Offline illustration of the loading glyph's sphere (src/ui/sphereFrame.ts), ray traced per pixel
- * with stratified supersampling. Run through tools/sphere-art.mjs, which splits rows across worker
- * threads and encodes the layers.
+ * with stratified supersampling. Run through tools/sphere-art.mjs, which splits the work across
+ * worker threads and encodes the layers.
  *
- * Three layers, so the page can bring the star up with loading without re-rendering:
- *  - `front`: the outside of the frame and gores;
- *  - `back`: what the openings show (the star, the lit inner face of the far shell, the cavity's
- *    glow), under `front`;
+ * Two parts, so the band can turn: the sphere with the belt (the band and the hub collars it runs
+ * through) left out, and the belt alone at each of its sprite's turns. Each has layers so the page can bring the star up with
+ * loading without re-rendering:
+ *  - `front`: the outside;
+ *  - `back` (the fixed part only): what the openings show (the star, the lit inner face of the far
+ *    shell, the cavity's glow), under `front`;
  *  - `glow`: the light the star throws on the outside (spill on edges facing an opening, the
  *    gores' coolant seams, the hub lenses), added (plus-lighter) over `front`. It is the
  *    difference tone mapping makes with and without it, so front + glow is exact at full heat.
- * All are straight-alpha and transparent past the sphere (renderRows).
+ * All are straight-alpha and transparent past what they hold (renderRows).
  */
 import { FRAME, HALF, SHELL, SPINES, UNIT, fromHub, fromSpine, fromView, goreLow, sectorOf, toView, wrapLon, type V3 } from '../src/ui/sphereFrame.ts';
 
@@ -138,9 +140,15 @@ function plating(lat: number, lon: number, lo: number, hi: number, w0: number, w
   s.shade *= 0.9 + 0.2 * fbm(lon * 0.9, a * 0.9, hemi * 3.1, 3);
 }
 
-/** The structure on shell `shell` at a model-space unit direction, or null where it is open. */
-export function surfaceAt(shell: keyof typeof SHELL, lat: number, lonIn: number): Surface | null {
-  const lon = wrapLon(lonIn);
+/** The belt: the band and the hub collars (with their lenses) it runs through. */
+const BELT_SHELLS = ['collar', 'hub', 'band'] as const;
+
+/**
+ * The structure on shell `shell` at a model-space unit direction, or null where it is open; the
+ * band turned by `spin` degrees (only the band turns).
+ */
+export function surfaceAt(shell: keyof typeof SHELL, lat: number, lonIn: number, spin = 0): Surface | null {
+  const lon = wrapLon(shell === 'band' ? lonIn - spin : lonIn);
   const a = Math.abs(lat);
   const hemi = lat >= 0 ? 1 : -1;
   const s: Surface = { mat: 'gore', ge: 0, gn: 0, shade: 1, rough: 0.4, spill: 0, emit: 0 };
@@ -207,7 +215,9 @@ export function surfaceAt(shell: keyof typeof SHELL, lat: number, lonIn: number)
     if (rib < 0.14) s.shade *= 0.35;
     else if (rib < 0.4) s.ge += 0.35;
     else if (rib > 3.75) s.ge -= 0.35;
-    s.shade *= 0.85 + 0.3 * fbm(lon * 0.6, lat * 0.6, 5.2, 3);
+    // Grain on a circle that closes every 60°, so the turning band's sprite loops seamlessly.
+    const g = (lon * 6 * DEG) % (2 * Math.PI);
+    s.shade *= 0.85 + 0.3 * fbm(5.73 * Math.cos(g), 5.73 * Math.sin(g), lat * 0.6 + 5.2, 3);
     s.rough = 0.3;
     s.spill = smooth(0.85, 1, Math.abs(u)) * 0.7;
     return s;
@@ -415,7 +425,10 @@ function display(x: number): number {
 
 // Tracing -------------------------------------------------------------------
 
-const FRONT_ORDER = ['collar', 'hub', 'band', 'frame', 'gore'] as const;
+/** What a render holds: the sphere with the belt left out, or the belt alone. */
+export type Part = 'fixed' | 'belt';
+
+const FRONT_ORDER: Record<Part, readonly (keyof typeof SHELL)[]> = { fixed: ['frame', 'gore'], belt: BELT_SHELLS };
 const BACK_ORDER = ['gore', 'frame', 'band', 'hub', 'collar'] as const;
 
 interface Sample {
@@ -432,16 +445,18 @@ function latLon(pv: V3, r: number): [number, number, V3] {
   return [lat, lon, pm];
 }
 
-function trace(x: number, y: number): Sample {
+function trace(x: number, y: number, part: Part, spin: number): Sample {
   const b2 = x * x + y * y;
-  for (const shell of FRONT_ORDER) {
+  for (const shell of FRONT_ORDER[part]) {
     const r = SHELL[shell];
     if (b2 >= r * r) continue;
     const pv: V3 = [x, y, Math.sqrt(r * r - b2)];
     const [lat, lon, pm] = latLon(pv, r);
-    const s = surfaceAt(shell, lat, lon);
+    const s = surfaceAt(shell, lat, lon, spin);
     if (s) return { front: exterior(s, normalOf(pm, lat, lon, s.ge, s.gn, false)), back: [0, 0, 0] };
   }
+  // The belt alone is only ever its outside; past it lies the fixed render.
+  if (part === 'belt') return { front: null, back: [0, 0, 0] };
   const b = Math.sqrt(b2);
   if (b2 >= 1) return { front: null, back: [0, 0, 0] };
   const glow = cavityGlow(b);
@@ -449,6 +464,7 @@ function trace(x: number, y: number): Sample {
     const st = star(x, y);
     return { front: null, back: [st[0] + glow[0] * 0.15, st[1] + glow[1] * 0.15, st[2] + glow[2] * 0.15] };
   }
+  // The far shell's inner face, the belt at rest: its pattern is lost in the cavity's glow.
   for (const shell of BACK_ORDER) {
     const r = SHELL[shell];
     if (b2 >= r * r) continue;
@@ -463,22 +479,37 @@ function trace(x: number, y: number): Sample {
   return { front: null, back: glow };
 }
 
+/** An image's frame on the drawing: pixel (0, 0)'s top-left corner at (x0, y0) radii, y up; radii per pixel. */
+export interface View {
+  readonly width: number;
+  readonly x0: number;
+  readonly y0: number;
+  readonly sx: number;
+  readonly sy: number;
+}
+
+/** The whole drawing as a `size`² image. */
+export function squareView(size: number): View {
+  const s = (2 * HALF) / UNIT / size;
+  return { width: size, x0: -HALF / UNIT, y0: HALF / UNIT, sx: s, sy: s };
+}
+
 /**
- * Renders rows [y0, y1) of a `size`² image with `ss`² stratified samples per pixel. Returns, per
- * pixel, three straight-alpha RGBA layers, display-referred in 0–1:
+ * Renders rows [y0, y1) of a view with `ss`² stratified samples per pixel, the band turned by
+ * `spin`. Returns, per pixel, three straight-alpha RGBA layers, display-referred in 0–1:
  *  - front: the outside's colour, alpha its coverage;
  *  - back: what the openings show, alpha the coverage of the shell's inner disc (the cavity is
- *    opaque: the star and the far shell hide what lies behind the sphere);
+ *    opaque: the star and the far shell hide what lies behind the sphere); empty for the belt;
  *  - glow: the light added on the outside, alpha the outside's coverage (it falls nowhere else),
  *    so colour × alpha is exactly what tone mapping adds.
- * Every layer is fully transparent past the sphere.
+ * Every layer is fully transparent past the sphere (and, for the belt, past the belt).
  */
-export function renderRows(size: number, y0: number, y1: number, ss: number): { front: Float32Array; back: Float32Array; glow: Float32Array } {
+export function renderRows(view: View, y0: number, y1: number, ss: number, part: Part, spin = 0): { front: Float32Array; back: Float32Array; glow: Float32Array } {
   const rows = y1 - y0;
+  const size = view.width;
   const front = new Float32Array(rows * size * 4);
   const back = new Float32Array(rows * size * 4);
   const glow = new Float32Array(rows * size * 4);
-  const scale = (2 * HALF) / UNIT / size;
   const n = ss * ss;
   for (let py = y0; py < y1; py++) {
     for (let px = 0; px < size; px++) {
@@ -491,11 +522,11 @@ export function renderRows(size: number, y0: number, y1: number, ss: number): { 
       for (let j = 0; j < ss; j++) {
         for (let i = 0; i < ss; i++) {
           const jx = hash(px, py, j * ss + i) * 0.8 + 0.1;
-          const x = -HALF / UNIT + (px + (i + jx) / ss) * scale;
-          const y = HALF / UNIT - (py + (j + 0.5) / ss) * scale;
-          const inDisc = x * x + y * y < 1;
+          const x = view.x0 + (px + (i + jx) / ss) * view.sx;
+          const y = view.y0 - (py + (j + 0.5) / ss) * view.sy;
+          const inDisc = part === 'fixed' && x * x + y * y < 1;
           if (inDisc) disc++;
-          const s = trace(x, y);
+          const s = trace(x, y, part, spin);
           if (s.front) {
             cover++;
             for (let c = 0; c < 3; c++) {

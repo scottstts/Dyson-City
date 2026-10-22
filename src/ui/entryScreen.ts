@@ -1,48 +1,52 @@
 import type { FatalDiagnostics } from '../core/fatal';
 import { SphereGlyph } from './sphereGlyph';
-import { chatterOrder, type ChatterLine } from './chatter';
+import { chatterOrder } from './chatter';
 import { KEY_ART } from './keyArt';
 
-/** How long each overheard line stays up while loading. */
-const CHATTER_HOLD_MS = 6500;
-/** Its fade (matches .entry-chatter's transition). */
+/** A new overheard line every 5 s while loading, the stills' cadence. */
+const CHATTER_TURN_MS = 5000;
+/** Each line's fade in and out. */
 const CHATTER_FADE_MS = 600;
 
 /**
- * The entry screen. Loading is the sphere's frame lighting member by member round its star over a
- * slowly drifting still of the city, with an overheard line low in the corner; ready is the live
- * world behind it and a word to step in. The
+ * The entry screen. Loading is the city's stills in turn, each slowly closing in, and low in the
+ * corner the sphere, its frame lighting member by member round its star as its band
+ * turns, beside an overheard line; ready is the live world behind it, the name and a word to step in. The
  * same surface reports platform-gate refusals and boot/runtime failures (the frame goes dark).
  */
 export class EntryScreen {
   readonly root: HTMLDivElement;
   private readonly glyph = new SphereGlyph();
-  private readonly chatter: HTMLDivElement;
-  private readonly chatterFrom: HTMLDivElement;
-  private readonly chatterText: HTMLDivElement;
   private readonly enter: HTMLButtonElement;
   private readonly keys: HTMLDivElement;
   private readonly message: HTMLDivElement;
-  private readonly lines = chatterOrder();
-  private lineIndex = 0;
-  private chatterTimer = 0;
+  /** The overheard lines' turns, one opacity animation each. */
+  private readonly chatter: Animation[] = [];
   private onEnter: (() => void) | null = null;
 
   constructor(host: HTMLElement) {
     this.root = el('div', 'entry');
+    // The stills take turns (style.css .entry-still), starting from a different one each visit; the
+    // cycle starts once the first is decoded, and a still that is not yet in shows the tinted ground.
     const art = el('div', 'entry-art');
-    const still = new Image();
-    still.decoding = 'async';
-    still.src = `${import.meta.env.BASE_URL}keyart/${KEY_ART[Math.floor(Math.random() * KEY_ART.length)]}.jpg`;
-    void still
-      .decode()
-      .then(() => {
-        art.style.backgroundImage = `url("${still.src}")`;
-        art.classList.add('is-shown');
-      })
-      .catch(() => {
-        // No still: the tinted ground alone.
-      });
+    const first = Math.floor(Math.random() * KEY_ART.length);
+    KEY_ART.forEach((_, i) => {
+      const name = KEY_ART[(first + i) % KEY_ART.length];
+      const layer = el('div', 'entry-still');
+      art.appendChild(layer);
+      const still = new Image();
+      still.decoding = 'async';
+      still.src = `${import.meta.env.BASE_URL}keyart/${name}.webp`;
+      void still
+        .decode()
+        .then(() => {
+          layer.style.backgroundImage = `url("${still.src}")`;
+          if (i === 0) art.classList.add('is-shown');
+        })
+        .catch(() => {
+          // No still: the tinted ground in its turn.
+        });
+    });
     const tint = el('div', 'entry-tint');
     const centre = el('div', 'entry-centre');
     const mark = el('div', 'entry-mark');
@@ -51,12 +55,31 @@ export class EntryScreen {
     this.enter.type = 'button';
     this.enter.textContent = 'Enter';
     this.enter.tabIndex = -1;
-    centre.append(this.glyph.root, mark, this.enter);
+    centre.append(mark, this.enter);
 
-    this.chatter = el('div', 'entry-chatter');
-    this.chatterFrom = el('div', 'entry-chatter-from');
-    this.chatterText = el('div', 'entry-chatter-text');
-    this.chatter.append(this.chatterFrom, this.chatterText);
+    // The sphere leads the overheard line, low in the corner.
+    const corner = el('div', 'entry-corner');
+    const chatter = el('div', 'entry-chatter');
+    // Every line is in place, stacked, and takes its turn by opacity alone: a compositor animation
+    // keeps the 5 s cadence while boot blocks the main thread, where timers would fire late.
+    const lines = chatterOrder();
+    const cycle = lines.length * CHATTER_TURN_MS;
+    const turn: Keyframe[] = [
+      { offset: 0, opacity: 0 },
+      { offset: CHATTER_FADE_MS / cycle, opacity: 1 },
+      { offset: (CHATTER_TURN_MS - CHATTER_FADE_MS) / cycle, opacity: 1 },
+      { offset: CHATTER_TURN_MS / cycle, opacity: 0 },
+      { offset: 1, opacity: 0 },
+    ];
+    lines.forEach((line, i) => {
+      const node = el('div', 'entry-chatter-line');
+      node.append(textBlock('entry-chatter-from', line.from), textBlock('entry-chatter-text', line.text));
+      chatter.appendChild(node);
+      // The first line is up from the start.
+      if (typeof node.animate === 'function') this.chatter.push(node.animate(turn, { duration: cycle, iterations: Infinity, delay: i * CHATTER_TURN_MS - CHATTER_FADE_MS, fill: 'both' }));
+      else if (i === 0) node.style.opacity = '1';
+    });
+    corner.append(this.glyph.root, chatter);
 
     this.keys = el('div', 'entry-keys');
     this.keys.append(keyGroup(['W', 'A', 'S', 'D'], 'walk'), keyGroup(['⇧'], 'run'), keyGroup(['E'], 'use'), keyGroup(['esc'], 'pause'));
@@ -64,14 +87,12 @@ export class EntryScreen {
     this.message = el('div', 'entry-message');
     this.message.hidden = true;
 
-    this.root.append(art, tint, centre, this.chatter, this.keys, this.message);
+    this.root.append(art, tint, centre, corner, this.keys, this.message);
     // Ready, the whole screen is the way in.
     this.root.addEventListener('click', () => {
       if (this.root.classList.contains('is-ready')) this.onEnter?.();
     });
     host.appendChild(this.root);
-    this.showLine(this.lines[0]);
-    this.chatterTimer = window.setTimeout(() => this.nextLine(), CHATTER_HOLD_MS);
   }
 
   setProgress(fraction: number): void {
@@ -81,13 +102,15 @@ export class EntryScreen {
   showReady(onEnter: () => void): void {
     this.onEnter = onEnter;
     this.glyph.setLit(1);
-    this.stopChatter();
+    // The line holds as the corner fades.
+    for (const a of this.chatter) a.pause();
     this.enter.tabIndex = 0;
     this.root.classList.add('is-ready');
   }
 
   hide(): void {
     this.stopChatter();
+    this.glyph.stop();
     this.root.classList.add('is-hidden');
   }
 
@@ -115,6 +138,7 @@ export class EntryScreen {
 
   private fail(): void {
     this.stopChatter();
+    this.glyph.stop();
     this.onEnter = null;
     this.message.hidden = false;
     this.root.classList.remove('is-ready');
@@ -122,24 +146,8 @@ export class EntryScreen {
     this.show();
   }
 
-  private showLine(line: ChatterLine): void {
-    this.chatterFrom.textContent = line.from;
-    this.chatterText.textContent = line.text;
-  }
-
-  private nextLine(): void {
-    this.chatter.classList.add('is-fading');
-    this.chatterTimer = window.setTimeout(() => {
-      this.lineIndex = (this.lineIndex + 1) % this.lines.length;
-      this.showLine(this.lines[this.lineIndex]);
-      this.chatter.classList.remove('is-fading');
-      this.chatterTimer = window.setTimeout(() => this.nextLine(), CHATTER_HOLD_MS);
-    }, CHATTER_FADE_MS);
-  }
-
   private stopChatter(): void {
-    window.clearTimeout(this.chatterTimer);
-    this.chatterTimer = 0;
+    for (const a of this.chatter) a.cancel();
   }
 }
 

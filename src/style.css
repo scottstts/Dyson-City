@@ -85,6 +85,12 @@ button {
   pointer-events: none;
 }
 
+/* Out of view by now (ready faded them), so they stop rather than animate behind the game. */
+.entry.is-hidden .entry-still,
+.entry.is-hidden .glyph-bloom {
+  animation: none;
+}
+
 .entry.is-ready {
   cursor: pointer;
   /* The world shows through; only the edges and the floor darken for the type. */
@@ -119,14 +125,15 @@ button {
   opacity: 1;
 }
 
+/* The name appears only once the world is ready. */
 .entry-mark {
-  margin-top: 30px;
-  font-size: 13px;
-  font-weight: 300;
-  letter-spacing: 0.9em;
-  text-indent: 0.9em;
-  color: var(--ink-dim);
-  transition: font-size 1.2s ease, color 1.2s ease, margin 1.2s ease, letter-spacing 1.2s ease, text-indent 1.2s ease;
+  font-size: 30px;
+  font-weight: 200;
+  letter-spacing: 1.1em;
+  text-indent: 1.1em;
+  color: var(--ink);
+  opacity: 0;
+  transition: opacity 1.2s ease;
 }
 
 .entry-enter {
@@ -175,12 +182,7 @@ button {
 }
 
 .entry.is-ready .entry-mark {
-  margin-top: 0;
-  font-size: 30px;
-  font-weight: 200;
-  letter-spacing: 1.1em;
-  text-indent: 1.1em;
-  color: var(--ink);
+  opacity: 1;
 }
 
 .entry.is-ready .entry-enter {
@@ -198,29 +200,107 @@ button {
   }
 }
 
-/* Key art: a still of the city, drifting slowly under a dark tint. */
+/* Key art: the stills of the city take turns, 5 s each, each closing in slowly the whole time it
+   shows. The incoming one fades in over the one it replaces (held opaque underneath), except the
+   wrap, where the top layer fades out over the first. One 15 s cycle; the zoom runs across each
+   still's 6.2 s on screen. Everything is opacity and transform, so it keeps time while boot blocks
+   the main thread. */
 
 .entry-art {
   position: absolute;
   inset: 0;
   z-index: -2;
-  background: center / cover no-repeat;
+  overflow: hidden;
   opacity: 0;
-  transform: scale(1.06);
   transition: opacity 2.4s ease;
-  animation: entry-drift 70s ease-in-out infinite alternate;
 }
 
 .entry-art.is-shown {
   opacity: 1;
 }
 
-@keyframes entry-drift {
-  from {
-    transform: scale(1.06) translate3d(-0.6%, 0.4%, 0);
+.entry-still {
+  position: absolute;
+  inset: 0;
+  background: center / cover no-repeat;
+  animation: 15s linear infinite both;
+}
+
+.entry-art:not(.is-shown) .entry-still {
+  animation-play-state: paused;
+}
+
+.entry-still:nth-child(1) {
+  animation-name: entry-still-1;
+}
+
+.entry-still:nth-child(2) {
+  animation-name: entry-still-2;
+}
+
+.entry-still:nth-child(3) {
+  animation-name: entry-still-3;
+}
+
+@keyframes entry-still-1 {
+  0% {
+    opacity: 1;
+    transform: scale(1.0116);
   }
-  to {
-    transform: scale(1.14) translate3d(0.8%, -0.5%, 0);
+  33.333% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  33.334% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  91.999% {
+    opacity: 0;
+  }
+  92% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1.0116);
+  }
+}
+
+@keyframes entry-still-2 {
+  0%,
+  25.333% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  33.333% {
+    opacity: 1;
+  }
+  66.667% {
+    opacity: 1;
+    transform: scale(1.06);
+  }
+  66.668%,
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes entry-still-3 {
+  0%,
+  58.667% {
+    opacity: 0;
+    transform: scale(1);
+  }
+  66.667%,
+  92% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.06);
   }
 }
 
@@ -238,20 +318,22 @@ button {
   opacity: 0;
 }
 
-/* The loading glyph: the sphere lights round its star. */
+/* The loading glyph: the sphere lights round its star, its belt turning, leading the corner line. */
 
 .glyph {
   /* Its own compositing group, always: the added layers blend within it the same whether or not
      it is fading, and the group lays over the key art like any image. */
   isolation: isolate;
-  --size: min(58vmin, 540px);
+  /* The art is drawn at three times this (tools/sphere-art.mjs --size). */
+  --size: 68px;
+  flex: none;
   /* Lit fraction of the frame (SphereGlyph.setLit). */
   --heat: 0;
   position: relative;
   width: var(--size);
   height: var(--size);
   opacity: 0;
-  transition: transform 1.4s cubic-bezier(0.5, 0, 0.2, 1), opacity 1.2s ease, margin 1.2s ease;
+  transition: opacity 1.2s ease;
 }
 
 .glyph.is-drawn {
@@ -259,7 +341,8 @@ button {
 }
 
 .glyph > img,
-.glyph > svg {
+.glyph > svg,
+.glyph-belt-sheet > * {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -295,11 +378,13 @@ button {
 
 /* The light the star throws on the outside is added to it. */
 .glyph-back,
-.glyph-glow {
+.glyph-glow,
+.glyph-belt-glow {
   transition: opacity 1.2s ease;
 }
 
-.glyph-glow {
+.glyph-glow,
+.glyph-belt-glow {
   mix-blend-mode: plus-lighter;
 }
 
@@ -307,12 +392,30 @@ button {
   opacity: calc(0.14 + 0.86 * var(--heat));
 }
 
-.glyph-glow {
+.glyph-glow,
+.glyph-belt-glow {
   opacity: var(--heat);
 }
 
+/* The belt: one cell of its sprite sheet in view (SphereGlyph places both and steps the sheet). Its
+   glow adds onto its own outside: the stepped sheet is its own group. The window clips nothing
+   drawn: the sprite's cells hold the belt with a margin, and the coolant lines are drawn above. */
+.glyph-belt {
+  position: absolute;
+  overflow: hidden;
+}
+
+.glyph-belt-sheet {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+/* Coolant lines: a drawn width whatever the glyph's scale, glowing as a whole (CSS px, so the glow
+   holds its size too); unlit lines are transparent and cast none. */
 .glyph-coolant {
   overflow: visible;
+  filter: drop-shadow(0 0 1px rgba(255, 170, 70, 0.95)) drop-shadow(0 0 2.5px rgba(255, 120, 30, 0.6));
 }
 
 .glyph-coolant path {
@@ -320,80 +423,71 @@ button {
   stroke: rgb(255, 196, 120);
   stroke-linecap: round;
   stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
   opacity: 0;
   transition: opacity 0.9s ease;
 }
 
 .glyph-coolant path.is-lit {
   opacity: 1;
-  filter: drop-shadow(0 0 1.2px rgba(255, 170, 70, 0.95)) drop-shadow(0 0 3.5px rgba(255, 120, 30, 0.6));
-}
-
-/* Ready, the star flares and the sphere dissolves into the world; the name settles where it was. */
-.entry.is-ready .glyph {
-  transform: scale(1.3);
-  opacity: 0;
-  margin-bottom: calc(-1 * var(--size));
 }
 
 .entry.is-error .glyph-back,
 .entry.is-error .glyph-glow,
 .entry.is-error .glyph-bloom,
-.entry.is-error .glyph-coolant {
+.entry.is-error .glyph-coolant,
+.entry.is-error .glyph-belt-glow {
   opacity: 0;
   animation: none;
 }
 
-/* Overheard lines, low in the corner while loading. */
+/* The sphere and an overheard line, low in the corner while loading. Ready, both give way to the
+   live world. */
 
-.entry-chatter {
+.entry-corner {
   position: absolute;
-  left: 40px;
-  bottom: 36px;
-  max-width: min(440px, calc(100vw - 80px));
+  /* The glyph's box runs past the sphere; this sets the sphere's own edge on the 40px margin. */
+  left: 35px;
+  bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: opacity 1.2s ease;
+}
+
+.entry.is-ready .entry-corner {
+  opacity: 0;
+}
+
+/* The lines share one cell; each takes its turn by opacity (EntryScreen). */
+.entry-chatter {
+  display: grid;
+  max-width: min(520px, calc(100vw - 150px));
   transition: opacity 0.6s ease;
 }
 
-.entry-chatter.is-fading,
-.entry.is-ready .entry-chatter,
+.entry-chatter-line {
+  grid-area: 1 / 1;
+  align-self: center;
+  opacity: 0;
+}
+
 .entry.is-error .entry-chatter {
   opacity: 0;
 }
 
 .entry-chatter-from {
-  display: flex;
-  align-items: center;
-  gap: 10px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
   color: var(--coolant);
-  opacity: 0.8;
-}
-
-.entry-chatter-from::before {
-  content: '';
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--coolant);
-  box-shadow: 0 0 6px var(--coolant-glow);
-  animation: chatter-live 1.6s steps(2, jump-none) infinite;
-}
-
-@keyframes chatter-live {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0.25;
-  }
+  opacity: 0.85;
 }
 
 .entry-chatter-text {
-  margin-top: 8px;
-  font-size: 15px;
+  margin-top: 7px;
+  font-size: 18px;
   font-weight: 300;
   line-height: 1.45;
   color: var(--ink-dim);

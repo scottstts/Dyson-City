@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { DEFAULT_AUDIO_PREFS, loadAudioPrefs, prefsGain, saveAudioPrefs } from '../src/ui/audioPrefs';
 import { CHATTER, chatterOrder } from '../src/ui/chatter';
-import { fromView, members } from '../src/ui/sphereFrame';
+import { BELT, fromView, members } from '../src/ui/sphereFrame';
 import { KEY_ART } from '../src/ui/keyArt';
 import { surfaceAt } from '../tools/sphereArt';
 import fs from 'node:fs';
@@ -97,7 +97,7 @@ describe('loading chatter', () => {
 describe('loading glyph', () => {
   const shellOf = (name: string) => (name === 'band' ? 'band' : name.startsWith('collar') ? 'collar' : 'frame');
 
-  it('draws every coolant line on the structure the illustration renders under it', () => {
+  it('draws every coolant line on the structure the illustration renders under it, the band at any turn', () => {
     for (const m of members()) {
       const shell = shellOf(m.name);
       for (const run of m.runs) {
@@ -106,8 +106,23 @@ describe('loading glyph', () => {
           const r = Math.hypot(q[0], q[1], q[2]);
           const lat = (Math.asin(q[1] / r) * 180) / Math.PI;
           const lon = (Math.atan2(q[0], q[2]) * 180) / Math.PI;
-          expect(surfaceAt(shell, lat, lon), `${m.name} at ${lat.toFixed(2)}, ${lon.toFixed(2)}`).not.toBeNull();
+          for (const k of [0, 17, 61, BELT.frames - 1]) {
+            const spin = (k * BELT.period) / BELT.frames;
+            expect(surfaceAt(shell, lat, lon, spin), `${m.name} at ${lat.toFixed(2)}, ${lon.toFixed(2)}, band turned ${spin}°`).not.toBeNull();
+          }
         }
+      }
+    }
+  });
+
+  it('turns the band through one period that closes on itself, in a full sprite grid', () => {
+    expect(BELT.cols * BELT.rows).toBe(BELT.frames);
+    for (let lon = -180; lon < 180; lon += 0.7) {
+      for (const lat of [-5.3, -4.4, -1.1, 0, 2.6, 4.9]) {
+        const at = surfaceAt('band', lat, lon, 0);
+        const turned = surfaceAt('band', lat, lon, BELT.period);
+        expect(turned === null, `band at ${lat}, ${lon}`).toBe(at === null);
+        if (at && turned) for (const k of ['ge', 'gn', 'shade', 'rough', 'spill', 'emit'] as const) expect(turned[k], `band ${k} at ${lat}, ${lon}`).toBeCloseTo(at[k], 9);
       }
     }
   });
@@ -118,7 +133,8 @@ describe('loading glyph', () => {
   });
 
   it('ships the illustration and key art within budget', () => {
-    for (const layer of ['front', 'back', 'glow']) expect(fs.readFileSync(`public/glyph/${layer}.webp`).length).toBeLessThan(200 * 1024);
-    for (const name of KEY_ART) expect(fs.readFileSync(`public/keyart/${name}.jpg`).length).toBeLessThan(500 * 1024);
+    for (const layer of ['front', 'back', 'glow']) expect(fs.readFileSync(`public/glyph/${layer}.webp`).length).toBeLessThan(32 * 1024);
+    for (const layer of ['belt', 'belt-glow']) expect(fs.readFileSync(`public/glyph/${layer}.webp`).length).toBeLessThan(256 * 1024);
+    for (const name of KEY_ART) expect(fs.readFileSync(`public/keyart/${name}.webp`).length).toBeLessThan(1536 * 1024);
   });
 });
