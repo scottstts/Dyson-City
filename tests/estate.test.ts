@@ -21,8 +21,19 @@ describe('the estate', () => {
   it('lays out every ground class, inside the terrace', () => {
     for (const c of GROUND_ORDER) if (c !== 'void') expect(geo.regions[c].length, c).toBeGreaterThan(0);
     for (const c of GROUND_ORDER) {
-      for (const r of geo.regions[c]) for (const [x, z] of r.outer) expect(terraceInterior.sdf(x, z), `${c} at ${x},${z}`).toBeLessThan(0.15);
+      for (const r of geo.regions[c]) {
+        for (const [x, z] of r.outer) {
+          // The ramp alone runs out through the gateway, to the pad at the wall line.
+          const onRamp = c === 'ramp' && x >= GATEWAY.ramp.x0 - 0.15 && x <= GATEWAY.ramp.x1 + 0.15 && z <= GATEWAY.ramp.z0 + 0.15;
+          if (!onRamp) expect(terraceInterior.sdf(x, z), `${c} at ${x},${z}`).toBeLessThan(0.15);
+        }
+      }
     }
+  });
+
+  it('runs the ramp to the pad at the wall line (its foot was once taken by the flights)', () => {
+    const zs = geo.regions.ramp.flatMap((r) => r.outer.map((p) => p[1]));
+    expect(Math.max(...zs)).toBeGreaterThan(GATEWAY.ramp.z0 - 0.15);
   });
 
   it('captures its reflection probe in open air, clear of the house and of everything standing near', () => {

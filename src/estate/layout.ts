@@ -231,8 +231,12 @@ export function groundShapes(): Record<GroundClass, Shape> {
   const pool = box(POOL.x, POOL.z, POOL.hx, POOL.hz, 0, POOL.hz);
   const rampBox = box((W.ramp.x0 + W.ramp.x1) / 2, (W.ramp.z0 + W.ramp.z1) / 2, (W.ramp.x1 - W.ramp.x0) / 2, (W.ramp.z0 - W.ramp.z1) / 2);
   // The flights to their heads (the top tread runs 0.6 m past the last riser, to the cheeks' ends).
+  // One box per flight, either side of the ramp and its cutting walls: a box across the whole gateway
+  // took the ramp's foot (void outranks ramp), and the ramp began 4.6 m in, 0.37 m over the pad.
   const flightLen = W.steps.count * W.steps.tread + 0.6;
-  const stepsBox = box((W.x0 + W.x1) / 2, W.z - flightLen / 2 + 0.3, (W.x1 - W.x0) / 2, flightLen / 2 + 0.3);
+  const stepsBox = union(
+    ...[[W.x0, W.ramp.x0 - W.cut], [W.ramp.x1 + W.cut, W.x1]].map(([a, b]) => box((a + b) / 2, W.z - flightLen / 2 + 0.3, (b - a) / 2, flightLen / 2 + 0.3)),
+  );
   // The flights' cheek walls (gateway.ts) stand on the lawn's edge.
   const cheekLen = W.steps.count * W.steps.tread + 0.6;
   const cheeks = [W.x0 - 0.225, W.x1 + 0.225].map((x) => box(x, W.z - cheekLen / 2, 0.225, cheekLen / 2));

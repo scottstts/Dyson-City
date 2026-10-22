@@ -88,8 +88,15 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
     denoiser and the margin fill mixed their noise with their neighbours (camouflage blotches along
     every cornice, skirting and wainscot panel). Their light varies over metres: the probes carry it.
   - **Portals** in every exterior opening (the rooms' daylight comes through them).
-  - **Daylight and lamps baked apart** and summed (3,072 and 2,048 samples): together, the sky took
-    nearly every light sample and the lamps' light came out black or speckled.
+  - **Daylight and lamps baked apart** and summed: together, the sky took nearly every light sample and
+    the lamps' light came out black or speckled.
+  - **Samples per floor** (`BAKE_SAMPLES`, the base pass; refinement below adds samples only where
+    noise remains): daylight 4,096 and lamps 2,048 on the ground and first floors; 32,768 and 4,096 on
+    the top floor. Its halls and attic rooms are lit almost only by daylight bounced off a small sunlit
+    patch under a dormer, the hardest path to sample: at 3,072 the denoiser left dark blotches along
+    whole walls and ceilings. *Rejected:* raising every floor's base to clear its worst faces (6 hours,
+    mostly on walls already clean); path guiding (CPU only), which gained less than its ~5× slowdown
+    against the GPU; a lower indirect clamp, which would darken the very bounce that lights those rooms.
   - **Every sample counts:** adaptive sampling off (it stopped bakes at its threshold whatever the
     sample count) and the light sampling threshold 0 (at 0.01 it culled the lamps, whose light on
     this scale is ~0.001–0.01).
@@ -105,16 +112,51 @@ Rebuild everything with `run.build_all()` (see *Workflow*). Everything lives und
     *Rejected:* 768 samples, no portals, OIDN unguided over Cycles' extended margins: crackled blotches.
   - **QA:** `bake/qa.json`: the bake is two half-sample bakes with independent seeds; the final is the
     denoised mean of both, and each half denoised alone bounds its residual noise (8 × 8 texel blocks).
+    Limits: block p99 0.10, mean 0.03. A bake over them is not shipped (the blotched top floor was
+    p99 0.165).
+  - **Refinement where the noise is:** the halves' denoised difference, per texel over 8 × 8 blocks,
+    is a map of the residual noise. Faces still over 0.03 on average, or with a tenth of their texels
+    over it (noise gathers in a face's dim corner), are baked again alone (every other face's lightmap
+    UVs collapsed to a point, so the bake costs only their texels) with a fixed budget per round (16,384
+    daylight, 4,096 lamp samples) and merged into the raw passes by sample count; up to three rounds. A
+    face a round failed to cut by a quarter drops out (the denoiser has it). Even at 32,768 daylight
+    samples a few faces stayed grainy: walls facing a small sunlit patch head-on down a long hall (the
+    top hall's end walls, the box room's stack). *Rejected:* a multiple of the floor's base per round
+    (4 × 32,768 on the top floor: an hour a round, the same corners re-picked every time); the
+    materials' bump as the cause (the stack baked flat came out as grainy, and the denoiser's normal
+    guide with or without it, the same).
+  - **Residual smoothing:** what refinement leaves (dim corners a few hundred thousand samples still
+    leave grainy: a wall facing a sunlit patch down a long hall, the box room's stack) is measured, not
+    guessed: where the halves' noise map is over 0.03, the denoised light is blended toward its 9 × 9
+    texel mean (~15 cm) within the same UV island and over valid texels, fully at twice the bar. Clean
+    texels are untouched; QA measures the smoothed halves (what ships). `refine_lightmaps(rounds=0)`
+    rewrites the lightmaps this way from the raw passes.
+  - **Cycles' bake sampling (measured):** `sample_offset` is ignored in a bake (offsets 0, 2,048 and
+    10⁶ give identical results), and a different `seed` decorrelates only about half of a texel's
+    noise. So 2,048-sample chunks merged across seeds converge more slowly than one bake of their sum,
+    the two halves share part of their noise (QA and the noise map read it low), and a seed-independent
+    texel-scale speckle (~15–20 % at a texel, white-noise-like, in the light itself: not the bump, the
+    denoiser's guide, the curtains, the material or the sampling pattern) survives the denoiser in a few
+    places (the kitchen's pier beside the pantry door). It was in the earlier bakes at the same level.
+  - **Checkpoints, stop and resume:** every pass bakes in 2,048-sample chunks; after each, the raw
+    passes, per-texel sample counts (float32: refined faces pass half-float's 65,504), the round's faces
+    and the progress go to `bake/raw/LM_<floor>.*` with the charts the bake runs on, and a progress line
+    is logged. Create `bake/STOP` and the bake stops after its current chunk (`BakeStopped`, GPU
+    released); delete it and re-run the same call to resume. `kill -STOP` / `kill -CONT` on the Blender
+    process pauses without releasing its GPU memory. `bake.refine_lightmaps` adds rounds to a finished
+    bake.
 - Everything else (furniture, doors, windows, small parts) is lit from the probe grid: `bake/probes.bin`,
-  SH L2 radiance at 1 m spacing and three heights per floor inside rooms (256 samples); positions in `bake/bake.json`.
+  SH L2 radiance at 1 m spacing and three heights per floor inside rooms (768 samples); positions in `bake/bake.json`.
 - Reflection captures: `bake/refl_<room>.exr` from each room's middle at 1.6 m, with the room box for
   parallax correction (`bake.json`).
 - Window glass is a thin pane for light: shadow and diffuse rays pass through it as a transparent filter
   of its tint (camera and glossy rays see real glass). Cycles only carries light through refracting glass
   as caustics, so without this every window-lit room renders black. The glTF export maps glass to the
   transmission extension instead of this node graph.
-- 146 of the 2,196 probes sit inside furniture; `bake.json` marks them `valid: false` (skip them and
-  renormalise the interpolation weights).
+- Probes inside furniture, and in the sealed pocket under a stair behind its spandrel (`probe_sealed`),
+  are `valid: false` in `bake.json` (skip them and renormalise the interpolation weights). The pocket's
+  probes sit 5 cm from the spandrel's room face; valid, they lit it as the pocket (a black panel along
+  the landing and the hall).
 - Sheers are drawn back in the day rooms and the rooms that look out over the field (parlour, dining,
   library, music, morning, study, chart room, landing, gable room, turret room); bedrooms, the dressing
   room, attic service rooms and the kitchen valance keep them drawn. The bake follows the curtains.
@@ -126,6 +168,10 @@ are generated by `build/textures.py` (wallpapers, rugs, tiles, parquet, stained 
 baked later. Walls and chimney breasts are re-projected (metre box projection) in `finalize`, because
 booleans hand the cutters' UVs to the faces they create and wallpaper scale would vary wall to wall.
 Structure walls carry area-weighted custom normals (long boolean slivers otherwise shade unevenly).
+Every other smooth mesh gets them too, in `finalize` (each corner the area-weighted mean of its smooth
+fan): with plain averaging a shallow chamfer tilted a large flat face's few corners and the tilt spread
+over the face (the doors' raised fields, 27° bevels under the 35° crease angle, shaded like pillows).
+Lightmapped objects are left out: their light is baked with their own normals.
 
 ## Export: `assets/house.pack` (`build/export.py`, `run.export_all()`)
 
@@ -283,16 +329,25 @@ conversion factors are needed.
 - Part interpenetration inside one kit, tested on the raw pieces before the union merges them; thin
   shells (plates, quilts) use a thickness-relative depth. Allowed material joints are listed in
   `KIT_JOINTS` (hardware let into timber, upholstery over frames, contents inside glass).
+- Pendants: every canopy seated on the ceiling or on its rose's flat boss, centred (rays up from the
+  canopy's top at its centre and 6.5 cm round it).
 - Materials: links from disabled sockets (a Mix node's float output feeding a colour renders white),
   placeholder materials, meshes without UVs, room-facing floors/ceilings with a reveal finish.
 
 Workbench renders (`snap.render`) show form; EEVEE renders (`snap.render_eevee`) are needed to judge
-materials — several material bugs were invisible in solid view.
+materials — several material bugs were invisible in solid view. The bake is judged with
+`bakeview` (`prepare()` then `shot(path, loc, at)` on a freshly loaded file, never saved): white
+albedo under the baked light exactly as the engine reads it, lightmaps on UV1 and probe light per
+vertex by `src/house/probeGrid.ts`'s interpolation.
 
 ## Placement rules learned the hard way
 
 - Columns never stand in a door or step opening; porch brackets take the local edge direction, never
   across corners, columns or gaps.
+- Cladding butts the trim exactly (`siding.trim_cutter`): a window's outline steps with its apron,
+  sill horns, casing and back band, a door's is its casing and back band. One box the casing's width
+  plus 2 cm, down to 0.2 m under the sill, bared the sheathing in a slot beside every casing and an L
+  beside every apron; the bare sheathing (an exterior face of a lightmapped wall) read black in the game.
 - Curtains: the pole and drape stack need ~0.25 m clear beside the glass (walls *and* furniture, found by
   ray casts); otherwise the window gets a sheer on a short pole. Holdbacks sit at 1.15 m, above dado rails,
   with the arm round the outside of the gathered drape. Lace over the kitchen sink is a valance.
@@ -300,6 +355,10 @@ materials — several material bugs were invisible in solid view.
 - Quilts tuck in at the foot (a hanging fold would pass through the footboard); scatter cushions lean on
   the back at its rake.
 - Under the gable's side slopes only low furniture fits; lamps go on the ridge side.
+- A pendant owns its rose: in the grand rooms (`interior.ROSE_ROOMS`) `rooms.pendant` hangs a rose
+  centred on it and seats the canopy on its boss; elsewhere the canopy sits on the ceiling. Roses were
+  once placed at each room's polygon centroid apart from the pendants: they missed the pendants, and
+  every other canopy hung 8.5 cm under a rose that was not there.
 
 ## Workflow
 
@@ -319,4 +378,14 @@ The build code works in both (`core.in_scene` switches scenes with or without a 
 `--factory-startup` keeps user add-ons out of it: one (a texture library's background thread)
 crashed a headless start. `run.build_all()` wipes the scene,
 runs every builder in order, rebuilds all material graphs, audits and saves. `run.bake_all()` then bakes
-the light (about 3–4 hours, headless: see below), and `run.export_all()` writes the bundle.
+the light (about 4 hours, headless), and `run.export_all()` writes the bundle.
+A rented NVIDIA GPU bakes about 3× faster than this Mac (an RTX 5090 baked the first floor in 21 minutes
+against ~1.5 hours). `setup_world` picks OptiX off a Mac; mirror the repo on the machine at this same
+absolute path (the .blend's images and the bake's paths resolve unchanged), install Linux Blender of the
+same version, upload `house.blend`, `build/`, `run.py`, `textures/`, `bake/house_env.*` and any
+`bake/raw/` checkpoints, and run the same scripts; a bake stopped here with `bake/STOP` resumes there
+from its checkpoint. Bring back `house.blend`, `bake/LM_*.exr`, `bake/qa.json` and `bake/raw/`. Samples
+from the two machines agree (the box room stack: 0.7190 / 0.5254 / 0.3230 here, 0.7191 / 0.5253 /
+0.3229 there).
+`run.refresh_trim()` re-cuts the cladding and re-weights the normals on a baked file without disturbing
+the bake (it never touches a lightmapped object; `finalize.build` would, re-projecting the walls' UVs).

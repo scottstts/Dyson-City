@@ -13,7 +13,8 @@
  * Glass is a thin pane (a window, a jar, a lantern): no refraction offset. It is drawn in two
  * passes over the same geometry: a multiply by its transmittance (per channel, so tinted and
  * stained glass colour what is behind) and an add of its Fresnel reflection. Both write the pane's
- * normal with no contact AO, and its velocity.
+ * normal with no contact AO, and its velocity. Beyond the interior range (the floors not drawn) a
+ * window's pane shows its room from the room's capture (`BakedLight.interiorView`).
  */
 import { AddEquation, CustomBlending, DoubleSide, FrontSide, MeshBasicNodeMaterial, MeshPhysicalNodeMaterial, NormalBlending, OneFactor, SrcColorFactor, ZeroFactor, type Material, type Node, type Texture } from 'three/webgpu';
 import { attribute, float, vec2, vec3, vec4, uv, texture, normalMap, normalWorld, mrt, velocity, uniformArray, positionWorld, cameraPosition, normalize, dot, pow, clamp, mix, max, reflect, pmremTexture } from 'three/tsl';
@@ -269,7 +270,13 @@ function glass(ctx: MaterialContext, s: Surface, kind: LightKind, name: string, 
   multiply.blendDst = SrcColorFactor;
   multiply.blendSrcAlpha = ZeroFactor;
   multiply.blendDstAlpha = OneFactor;
-  multiply.outputNode = vec4(T, 1);
+  // A pane in the house's own openings (a window's: `mixed`; an outer door leaf's: lit outdoors, with
+  // SH from the bake; never a lantern's) over a house drawn without its floors would show the empty
+  // shell (the sky through the house): there it passes nothing behind it and shows its room's capture
+  // instead (added with its reflection below).
+  const opening = kind === 'mixed' || (kind === 'exterior' && sh !== null);
+  const shown: F = opening ? (ctx.baked.interiorsDrawn as unknown as F) : float(1);
+  multiply.outputNode = vec4(T.mul(shown), 1);
   // Under custom blending three replaces the other attachments rather than blending them, so both
   // passes write the pane's own normal (with no contact AO for what is behind) and velocity: a
   // constant there zeroed the normals behind every pane and GTAO blacked out what the glass showed.
@@ -291,7 +298,8 @@ function glass(ctx: MaterialContext, s: Surface, kind: LightKind, name: string, 
   const indoorWeight: F = kind === 'mixed' ? (attribute('indoor', 'float') as unknown as F) : kind === 'exterior' ? float(0) : float(1);
   const reflected0 = mix(outdoorEnv.mul(F), indoorEnv, indoorWeight);
   // A lit lantern's glass glows with the flame behind it.
-  const reflected = glow ? reflected0.add(glow) : reflected0;
+  const lit = glow ? reflected0.add(glow) : reflected0;
+  const reflected = opening ? lit.add(T.mul(ctx.baked.interiorView()).mul(float(1).sub(shown))) : lit;
   const add = new MeshBasicNodeMaterial();
   add.name = `${name}.reflect`;
   add.lights = false;

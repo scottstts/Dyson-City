@@ -5,8 +5,9 @@
  * warm-up compiles every pipeline they draw with: nothing of the house compiles in play.
  *
  * Light: the exterior is lit like everything outdoors; indoors everything is baked (bakedLight.ts).
- * Interiors are only drawn near the house (from further off their windows show the outdoors'
- * reflections over rooms ~7 stops darker). Walking: the house's collision proxies become 3D walls
+ * Interiors are only drawn near the house; from further off its windows and outer doors show their
+ * rooms from the rooms' captures (BakedLight.interiorView), so they look the same either side of the
+ * range. Walking: the house's collision proxies become 3D walls
  * and floors (player/walkMesh.ts); the leaves are moving walls (doors.ts).
  */
 import { BufferAttribute, BufferGeometry, Group, Matrix4, Mesh, Vector3, type Material, type MeshPhysicalNodeMaterial, type Object3D, type Camera, type Texture } from 'three/webgpu';
@@ -263,6 +264,7 @@ export class House {
   update(dt: number, camera: Camera, feet: Vector3, use: boolean): void {
     const near = camera.position.distanceTo(this.centre) < INTERIOR_RANGE;
     for (const [name, p] of this.parts) if (name !== 'exterior') p.group.visible = near;
+    this.baked.interiorsDrawn.value = near ? 1 : 0;
     this.doors.update(dt, camera, feet, use);
   }
 }

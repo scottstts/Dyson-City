@@ -1,6 +1,8 @@
-"""Last pass over every house mesh: dissolve degenerate (zero-area) faces and edges left by booleans."""
+"""Last pass over every house mesh: dissolve degenerate (zero-area) faces and edges left by booleans,
+give every mesh a UV map, and shade with area-weighted normals."""
 import bpy
 import bmesh
+import numpy as np
 
 
 def _fix_fins(bm):
@@ -49,10 +51,21 @@ def _drop_slivers(bm):
         bmesh.ops.delete(bm, geom=dead, context="FACES")
 
 
+def _house_meshes():
+    return [o for o in bpy.data.objects
+            if o.type == "MESH" and any(c.get("path", "").startswith("House") for c in o.users_collection)]
+
+
 def build():
-    for o in bpy.data.objects:
-        if o.type != "MESH" or not any(c.get("path", "").startswith("House") for c in o.users_collection):
-            continue
+    objs = _house_meshes()
+    clean(objs)
+    uv_fill(objs)
+    structure_normals()
+    weight_normals(objs)
+
+
+def clean(objs):
+    for o in objs:
         bm = bmesh.new()
         bm.from_mesh(o.data)
         _fix_fins(bm)
@@ -72,13 +85,13 @@ def build():
         _drop_slivers(bm)
         bm.to_mesh(o.data)
         bm.free()
-    # meshes that came out of boolean chains without a UV map get the same metre-scale box projection
-    # the builders use (wallpaper, boards and bakes all need one)
-    import numpy as np
+
+
+def uv_fill(objs):
+    """Meshes that came out of boolean chains without a UV map get the same metre-scale box projection
+    the builders use (wallpaper, boards and bakes all need one)."""
     from . import core as _core
-    for o in bpy.data.objects:
-        if o.type != "MESH" or not any(c.get("path", "").startswith("House") for c in o.users_collection):
-            continue
+    for o in objs:
         # walls and breasts are re-projected even when they have a map: booleans hand the cutters'
         # UVs (other scales) to the faces they create, so wallpaper repeats would vary wall to wall
         reproject = o.name.startswith("Structure_") or (o.name.startswith("Fireplace_") and o.name.endswith("_Breast"))
@@ -93,8 +106,11 @@ def build():
         uvs = _core.box_uv(V, F)
         layer = me.uv_layers.new(name="UVMap")
         layer.data.foreach_set("uv", np.asarray([c for f in uvs for c in f], dtype=np.float32).ravel())
-    # boolean-cut walls carry long sliver triangles: area-weighted custom normals keep the curved
-    # turret walls and the flat walls beside them evenly shaded (glTF exports custom normals)
+
+
+def structure_normals():
+    """Boolean-cut walls carry long sliver triangles: area-weighted custom normals keep the curved
+    turret walls and the flat walls beside them evenly shaded (glTF exports custom normals)."""
     from . import core
     for o in bpy.data.objects:
         if o.type == "MESH" and o.name.startswith(("Structure_", "Foundation")):
@@ -102,3 +118,78 @@ def build():
             m.mode = "FACE_AREA"
             m.keep_sharp = True
             core.apply_mods(o)
+
+
+def weight_normals(objs):
+    """Every other smooth-shaded mesh: each corner's normal the area-weighted mean of the faces in its
+    smooth fan (split at the sharp edges `core.smooth_by_angle` marked). A plain mean let a shallow
+    chamfer tilt a large flat face's few corners and the tilt spread over the whole face: the doors'
+    raised fields, whose 27° bevels sit under the 35° crease angle, shaded like pillows. The lightmapped
+    objects are left alone: their light was baked with their normals."""
+    from .bake import is_lightmapped
+    done = set()
+    for o in objs:
+        me = o.data
+        if me.name in done or me.has_custom_normals or is_lightmapped(o) or not any(p.use_smooth for p in me.polygons):
+            continue
+        done.add(me.name)
+        area_weighted_normals(me)
+
+
+def area_weighted_normals(me):
+    nl = len(me.loops)
+    if not nl:
+        return
+    lv = np.empty(nl, np.int64)
+    me.loops.foreach_get("vertex_index", lv)
+    le = np.empty(nl, np.int64)
+    me.loops.foreach_get("edge_index", le)
+    np_ = len(me.polygons)
+    start = np.empty(np_, np.int64)
+    me.polygons.foreach_get("loop_start", start)
+    total = np.empty(np_, np.int64)
+    me.polygons.foreach_get("loop_total", total)
+    fn = np.empty(np_ * 3)
+    me.polygons.foreach_get("normal", fn)
+    fn = fn.reshape(-1, 3)
+    area = np.empty(np_)
+    me.polygons.foreach_get("area", area)
+    smooth = np.empty(np_, bool)
+    me.polygons.foreach_get("use_smooth", smooth)
+    sharp = np.zeros(len(me.edges), bool)
+    if "sharp_edge" in me.attributes:
+        me.attributes["sharp_edge"].data.foreach_get("value", sharp)
+    face = np.repeat(np.arange(np_), total)
+    nxt = np.arange(nl) + 1
+    ends = start + total
+    nxt[ends - 1] = start
+    # union-find over corners: two faces across a smooth edge share the fans at both its ends
+    parent = np.arange(nl)
+
+    def find(i):
+        while parent[i] != i:
+            parent[i] = parent[parent[i]]
+            i = parent[i]
+        return i
+    by_edge = {}
+    for c in range(nl):
+        by_edge.setdefault(int(le[c]), []).append(c)
+    for e, ls in by_edge.items():
+        if len(ls) != 2 or sharp[e]:
+            continue
+        a, b = ls
+        if not (smooth[face[a]] and smooth[face[b]]):
+            continue
+        for ca in (a, nxt[a]):
+            for cb in (b, nxt[b]):
+                if lv[ca] == lv[cb]:
+                    ra, rb = find(ca), find(cb)
+                    if ra != rb:
+                        parent[ra] = rb
+    root = np.array([find(i) for i in range(nl)])
+    acc = np.zeros((nl, 3))
+    np.add.at(acc, root, fn[face] * area[face][:, None])
+    n = acc[root]
+    ln = np.linalg.norm(n, axis=1, keepdims=True)
+    n = np.where(ln > 1e-12, n / np.maximum(ln, 1e-12), fn[face])
+    me.normals_split_custom_set(n.tolist())

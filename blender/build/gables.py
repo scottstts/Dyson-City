@@ -200,29 +200,36 @@ def finial(h=0.9, r=0.07):
 
 # ---------------------------------------------------------------- the front cross gable
 
-def build_front_gable():
-    col = f"{COL}/Front"
-    core.clear(col)
+def _front_gable_frame():
     x0, y0, x1, y1 = P.C
     cx = (x0 + x1) / 2
     half = (x1 - x0) / 2
     M = face_matrix(cx, y0, -math.pi / 2)
-    z_e, z_r = P.CORNICE_TOP, P.GABLE_RIDGE
-    pitch = math.atan2(z_r - z_e, half)
+    tri = [(-half - 0.01, P.CORNICE_TOP - 2.0), (half + 0.01, P.CORNICE_TOP - 2.0), (half + 0.01, P.CORNICE_TOP),
+           (0.0, P.GABLE_RIDGE), (-half - 0.01, P.CORNICE_TOP)]
+    return y0, half, M, tri
+
+
+def front_gable_siding(col=f"{COL}/Front"):
+    """The front gable's siding from the floor line to the band, cut round the window and returns
+    (re-run after the trim outline changes without rebuilding the gable)."""
+    import bpy
+    for n in ("Gable_Siding", "Gable_BayFlashing"):
+        if bpy.data.objects.get(n):
+            bpy.data.objects.remove(bpy.data.objects[n], do_unlink=True)
+    y0, half, M, tri = _front_gable_frame()
+    z_e = P.CORNICE_TOP
     band_z = 12.2
-    yfront = roofs.GABLE_OVERHANG
     # --- siding on the face from the floor line to the band, cut round the window and returns
     sp = siding.clap_solid([(-half, 0.0), (half, 0.0)][::-1], siding.TOP_MAIN, band_z)
     # clap_solid sweeps along the path with outward = right of travel; along -x in local => right = +y. OK
     so = core.obj("Gable_Siding", sp.xf(M), col, "siding_paint", smooth=None)
-    tri = [(-half - 0.01, z_e - 2.0), (half + 0.01, z_e - 2.0), (half + 0.01, z_e), (0.0, z_r), (-half - 0.01, z_e)]
     clip = core.geo_obj(geo.extrude_profile_y(geo.ccw(tri), -0.2, 0.2).xf(M), "_clip")
     core.boolean(so, [clip], op="INTERSECT")
     cut = [core.geo_obj(siding.trim_cutter(o), "_c") for o in P.OPENINGS if o["name"] == "L2_Gable"]
     for sx in (-1, 1):
         cut.append(core.geo_obj(box(sx * half - 0.6, sx * half + 0.6, -0.1, 0.8, siding.TOP_MAIN - 0.1, z_e + 0.02).xf(M), "_r"))
     # the front bay's roof meets the face low down
-    import bpy
     core.boolean(so, cut, op="DIFFERENCE")
     ob = bpy.data.objects.get("BayFront_Roof_Body")
     if ob:
@@ -234,6 +241,22 @@ def build_front_gable():
         # lead apron flashing dressed over the bay roof against the face
         fl = geo.box(bx0 + 0.01, y0 - 0.026, bz1 - 0.12, bx1 - 0.01, y0 - 0.002, bz1 - 0.005)
         core.obj("Gable_BayFlashing", fl, col, "lead", smooth=None)
+    core.finish_tmp()
+
+
+def build_front_gable():
+    col = f"{COL}/Front"
+    core.clear(col)
+    x0, y0, x1, y1 = P.C
+    cx = (x0 + x1) / 2
+    half = (x1 - x0) / 2
+    M = face_matrix(cx, y0, -math.pi / 2)
+    z_e, z_r = P.CORNICE_TOP, P.GABLE_RIDGE
+    pitch = math.atan2(z_r - z_e, half)
+    band_z = 12.2
+    yfront = roofs.GABLE_OVERHANG
+    tri = _front_gable_frame()[3]
+    front_gable_siding(col)
     # --- band at the gable's waist
     bh = (z_r - band_z) / math.tan(pitch)
     band = box(-bh - 0.3, bh + 0.3, 0.0, 0.035, band_z, band_z + 0.22)

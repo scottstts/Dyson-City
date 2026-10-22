@@ -73,7 +73,14 @@ LM_MARGIN = 0.0025          # pack margin, UV units (5 texels)
 # Daylight (the capture through the portals) and the lamps are baked apart and summed: together, the
 # light tree spends almost every shadow ray on the sky (one huge light) and the lamps (~0.1 W on this
 # scale) are almost never sampled, so lamp-lit texels came out black or speckled.
-BAKE_SAMPLES = {"day": 3072, "lamps": 2048}
+# The base pass per floor; refinement (below) adds samples only to the faces still noisy after it,
+# so the base needs only to be good for most of a floor. The top floor's halls and attic rooms are lit
+# almost only by daylight bounced off a small sunlit patch under a dormer (the hardest path there is to
+# sample): at 3,072 the denoiser left dark blotches along whole walls and ceilings (QA p99 0.165), so
+# its base is higher. *Rejected:* raising every floor's base to clear its worst faces (12,288 on the
+# ground and first floors, 32,768 on the top: 6 hours, spent mostly on walls already clean); path
+# guiding (CPU only), which gained less than its ~5x slowdown against the GPU.
+BAKE_SAMPLES = {0: {"day": 4096, "lamps": 2048}, 1: {"day": 4096, "lamps": 2048}, 2: {"day": 32768, "lamps": 4096}}
 MIN_CHART = 0.30            # m of atlas: ~5 texels across (a narrow jamb or breast face)
 VALID_AO = 0.02             # short-range AO below which a texel is under something (enclosed: ~0). At
                             # 0.15 the open hollows of a cornice and a wainscot panel's recesses (0.3–0.6
@@ -87,7 +94,23 @@ LIGHT_COLOUR = (1.0, 0.78, 0.52)    # incandescent, ~2,700 K
 GLOW_MATERIALS = {"lampshade": (0.55, "#ffd9a0"), "lamp_glass": (0.6, "#f3e3c0")}
 # Residual noise: the two half-sample bakes (independent seeds), each filled and denoised, differ by
 # their noise; over 8 × 8 texel blocks (the blotches' size) of lit, valid texels.
-QA_LIMITS = {"block_p99": 0.15, "block_mean": 0.04}
+QA_LIMITS = {"block_p99": 0.10, "block_mean": 0.03}
+# Faces still noisy after the base pass (their texels' residual noise, `noise_map`, over REFINE_NOISE)
+# are baked again alone (`_only_faces`) and merged: the grain left on the top floor was where a wall
+# faces a small sunlit patch head-on down a long hall, a few faces of hundreds.
+# A face also qualifies when REFINE_SHARE of its texels are over it: the noise gathers in a face's dim
+# corner (the box room stack's top), and averaged over the whole face it stayed under the bar.
+REFINE_NOISE = 0.03
+REFINE_SHARE = 0.1
+REFINE_ROUNDS = 3
+# Each round's samples on its faces: a fixed budget, not a multiple of the floor's base (4 × the top
+# floor's 32,768 made each round of a few faces cost an hour), and a face whose noise a round cut by
+# less than REFINE_GAIN drops out (the same dim corners were re-picked round after round)
+REFINE_SAMPLES = {"day": 16384, "lamps": 4096}
+REFINE_GAIN = 0.75
+SMOOTH_R = 4            # texels: residual-noise smoothing radius (a 9 × 9 mean, ~15 cm)
+CHUNK = 2048            # samples per bake call: the unit of progress, checkpoint and stop
+STOP = "STOP"           # create bake/STOP: the bake checkpoints after its current chunk and stops
 CD_PER_UNIT_REF = 31_800.0  # cd/m² of a white surface under the noon star, set against the capture
 
 FINISHES = None
@@ -121,10 +144,15 @@ def setup_world():
     w["source"] = "tools/house-env.mjs (game HDR at the house site)"
     sc.render.engine = "CYCLES"
     prefs = bpy.context.preferences.addons["cycles"].preferences
-    prefs.compute_device_type = "METAL"
+    # the GPU backend of the machine baking: Metal on a Mac, OptiX on an NVIDIA card (a rented one)
+    import sys
+    backend = "METAL" if sys.platform == "darwin" else "OPTIX"
+    prefs.compute_device_type = backend
     prefs.get_devices()
     for d in prefs.devices:
-        d.use = d.type == "METAL"
+        d.use = d.type == backend
+    if not any(d.use for d in prefs.devices):
+        raise RuntimeError(f"no {backend} device to bake on")
     sc.cycles.device = "GPU"
     sc.cycles.use_light_tree = True
     sc.cycles.max_bounces = 8
@@ -303,13 +331,19 @@ def _is_house(o):
         not any("_Prototypes" in c.get("path", "") or c.get("path", "").startswith("House/Engine") for c in o.users_collection)
 
 
+def is_lightmapped(o):
+    """Carries a lightmap (by name: the bake sets the props only when it runs)."""
+    n = o.name
+    return n.startswith(LM_PREFIX) or (n.startswith("Fireplace_") and n.endswith(LM_FIRE)) or n in LM_STAIR or n.startswith("Stack_")
+
+
 def groups():
     g = {0: [], 1: [], 2: []}
     for o in bpy.data.objects:
         if not _is_house(o):
             continue
         n = o.name
-        ok = n.startswith(LM_PREFIX) or (n.startswith("Fireplace_") and n.endswith(LM_FIRE)) or n in LM_STAIR or n.startswith("Stack_")
+        ok = is_lightmapped(o)
         if not ok:
             # lit from the probes: no lightmap left over from an earlier bake
             for k in ("lightmap", "lightmap_uv"):
@@ -652,56 +686,385 @@ def qa(D0, D1, valid):
     return {"lit": int(lit.sum()), "block_mean": float(blocks.mean()), "block_p99": float(np.percentile(blocks, 99))}
 
 
-def bake_lightmaps(levels=(0, 1, 2), samples=BAKE_SAMPLES):
-    """Per floor: the light (daylight and lamps apart, each in two halves with independent seeds), a
-    short-range AO for validity and the normals (the denoiser's guide); invalid texels and margins
-    filled; each half denoised; the mean written; the halves' difference QA'd."""
-    os.makedirs(BASE, exist_ok=True)
+def _face_texels(objs, size):
+    """Per charted face, the atlas texels whose centres it covers: [(object, face index, ys, xs)]."""
+    out = []
+    for o in objs:
+        me = o.data
+        uv = me.uv_layers["Lightmap"].data
+        for p in me.polygons:
+            q = np.array([tuple(uv[i].uv) for i in p.loop_indices]) * size
+            if q.max() < 2.0:
+                continue
+            x0, y0 = np.maximum(np.floor(q.min(0)).astype(int), 0)
+            x1, y1 = np.minimum(np.ceil(q.max(0)).astype(int), size)
+            if x1 <= x0 or y1 <= y0:
+                continue
+            ys, xs = np.mgrid[y0:y1, x0:x1]
+            px, py = xs + 0.5, ys + 0.5
+            inside = np.zeros(px.shape, bool)
+            for k in range(1, len(q) - 1):
+                a, b, c = q[0], q[k], q[k + 1]
+                d1 = (px - b[0]) * (a[1] - b[1]) - (a[0] - b[0]) * (py - b[1])
+                d2 = (px - c[0]) * (b[1] - c[1]) - (b[0] - c[0]) * (py - c[1])
+                d3 = (px - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (py - a[1])
+                inside |= ~(((d1 < 0) | (d2 < 0) | (d3 < 0)) & ((d1 > 0) | (d2 > 0) | (d3 > 0)))
+            if inside.any():
+                out.append((o, p.index, ys[inside], xs[inside]))
+    return out
+
+
+def _box(a, r):
+    """Box mean over (2r+1)² texels (edge-padded)."""
+    c = np.pad(a, r, mode="edge").cumsum(0).cumsum(1)
+    c = np.pad(c, ((1, 0), (1, 0)))
+    k = 2 * r + 1
+    return (c[k:, k:] - c[:-k, k:] - c[k:, :-k] + c[:-k, :-k]) / (k * k)
+
+
+def noise_map(D0, D1, valid):
+    """Residual noise per texel: the two independently seeded halves' denoised difference relative to
+    their sum, over the 8 × 8 texels round it (valid, lit texels only)."""
+    Y0 = D0 @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    Y1 = D1 @ np.array([0.2126, 0.7152, 0.0722], np.float32)
+    lit = valid & ((Y0 + Y1) / 2 > 2e-4)
+    w = lit.astype(np.float64)
+    d = _box(np.abs(Y0 - Y1) * w, 4)
+    m = _box((Y0 + Y1) * w, 4)
+    return np.where(lit, d / np.maximum(m, 1e-12), 0.0), lit
+
+
+class BakeStopped(Exception):
+    """bake/STOP was found: the bake checkpointed and stopped (re-run the same call to resume)."""
+
+
+def _ck(name, ext):
+    return os.path.join(BASE, "raw", f"{name}.{ext}")
+
+
+def _save_checkpoint(name, state, raw, n):
+    """The floor's raw passes, sample counts and progress, written atomically (a stop or a crash between
+    chunks loses at most the chunk in flight)."""
+    os.makedirs(os.path.join(BASE, "raw"), exist_ok=True)
+    arrays = {}
+    for (h, mode), a in raw.items():
+        arrays[f"L_{h}_{mode}"] = a
+        arrays[f"N_{h}_{mode}"] = n[(h, mode)]      # float32: refined faces pass half-float's 65,504
+    tmp = _ck(name, "tmp.npz")
+    np.savez(tmp, **arrays)
+    os.replace(tmp, _ck(name, "npz"))
+    with open(_ck(name, "tmp.json"), "w") as f:
+        json.dump(state, f)
+    os.replace(_ck(name, "tmp.json"), _ck(name, "json"))
+
+
+def _load_checkpoint(name):
+    if not os.path.exists(_ck(name, "json")):
+        return None, {}, {}
+    with open(_ck(name, "json")) as f:
+        state = json.load(f)
+    z = np.load(_ck(name, "npz"))
+    raw, n = {}, {}
+    for h in (0, 1):
+        for mode in ("day", "lamps"):
+            if f"L_{h}_{mode}" in z:
+                raw[(h, mode)] = z[f"L_{h}_{mode}"].astype(np.float32)
+                n[(h, mode)] = z[f"N_{h}_{mode}"].astype(np.float32)
+    return state, raw, n
+
+
+def _save_uvs(name, objs):
+    np.savez(_ck(name, "uv.npz"), **{o.name: _uv_array(o) for o in objs})
+
+
+def _uv_array(o):
+    uv = o.data.uv_layers["Lightmap"].data
+    a = np.empty(len(uv) * 2, np.float32)
+    uv.foreach_get("uv", a)
+    return a
+
+
+def _restore_uvs(name, objs):
+    """The charts the checkpoint was baked on (the file may hold another bake's)."""
+    z = np.load(_ck(name, "uv.npz"))
+    for o in objs:
+        if o.name not in z or "Lightmap" not in o.data.uv_layers or len(z[o.name]) != len(o.data.loops) * 2:
+            raise RuntimeError(f"{name}: the house changed since this bake started ({o.name}); delete bake/raw/{name}.* to start over")
+        o.data.uv_layers["Lightmap"].data.foreach_set("uv", z[o.name])
+        o["lightmap"] = name
+        o["lightmap_uv"] = 1
+
+
+def _bake_chunks(objs, light, name, state, targets, raw, n):
+    """Bake each half's day and lamp passes up to `targets` (total samples, split between the halves) in
+    CHUNK-sample bakes, each merged into the running sample-weighted means (only the texels it wrote:
+    a partial bake refines its faces alone), checkpointed, logged and checked for bake/STOP."""
+    import time
     sc = bpy.context.scene
-    sc.render.bake.target = "IMAGE_TEXTURES"
-    g = groups()
-    done = []
-    report = {}
-    for lv in levels:
-        objs = g[lv]
-        tag = ["G", "L1", "L2"][lv]
-        name = f"LM_{tag}"
-        size = LM_SIZE[lv]
-        light = _image(name, size)
-        halves = []
-        for seed in (1, 2):
-            L = np.zeros((size, size, 3), np.float32)
-            sc.cycles.seed = seed
-            for mode in ("day", "lamps"):
+    for h in (0, 1):
+        for mode in ("day", "lamps"):
+            key = f"{h}|{mode}"
+            target = max(1, targets[mode] // 2)
+            done = state["done"].get(key, 0)
+            while done < target:
+                s = min(CHUNK, target - done)
                 lighting(mode)
-                sc.cycles.samples = max(1, samples[mode] // 2)
+                sc.cycles.samples = s
+                # every chunk of every run its own seed: a repeated seed re-adds the same samples
+                sc.cycles.seed = (state["seed"] * 1_000_003 + state["stage"] * 10_007 + h * 5_003
+                                  + (mode == "lamps") * 2_003 + done) % 2_147_483_647
                 _bake_into(objs, light, "DIFFUSE", pass_filter={"DIRECT", "INDIRECT"})
-                P_ = _pixels(light)[..., :3]
-                if float(P_.max()) <= 0.0:
+                px = _pixels(light)
+                if state["stage"] == 0 and done == 0 and float(px[..., :3].max()) <= 0.0:
                     raise RuntimeError(f"{name}: the {mode} pass is black (lights excluded from the render?)")
-                L += P_
-            halves.append(L)
+                wrote = px[..., 3] > 0.5
+                k = (h, mode)
+                if k not in raw:
+                    raw[k] = np.zeros(px.shape[:2] + (3,), np.float32)
+                    n[k] = np.zeros(px.shape[:2], np.float32)
+                nn = n[k][wrote]
+                raw[k][wrote] = (raw[k][wrote] * nn[:, None] + px[..., :3][wrote] * s) / (nn + s)[:, None]
+                n[k][wrote] = nn + s
+                done += s
+                state["done"][key] = done
+                _save_checkpoint(name, state, raw, n)
+                print(f"[{time.strftime('%H:%M:%S')}] {name} {'base' if state['stage'] == 0 else 'refine ' + str(state['stage'])}"
+                      f" half {h} {mode}: {done}/{target}", flush=True)
+                if os.path.exists(os.path.join(BASE, STOP)):
+                    raise BakeStopped(f"{name}: stopped at stage {state['stage']}, {key} {done}/{target}")
+
+
+def _island_map(objs, faces, size):
+    """Per texel, the id of the UV island it lies in (−1 outside every chart): smoothing never mixes
+    unrelated charts packed side by side."""
+    ids = -np.ones((size, size), np.int32)
+    of_face = {}
+    nid = 0
+    for o in objs:
+        bm = bmesh.new()
+        bm.from_mesh(o.data)
+        bm.faces.ensure_lookup_table()
+        uvl = bm.loops.layers.uv["Lightmap"]
+        for f in bm.faces:
+            f.select = True
+        for isl in _islands(bm, uvl):
+            for f in isl:
+                of_face[(o.name, f.index)] = nid
+            nid += 1
+        bm.free()
+    for o, fi, ys, xs in faces:
+        ids[ys, xs] = of_face.get((o.name, fi), -1)
+    return ids
+
+
+def _smooth_residual(F, nm, island, valid):
+    """Where the halves still disagree (measured residual noise over REFINE_NOISE), blend the denoised
+    light toward its mean over SMOOTH_R texels round it, within the same UV island and over valid texels
+    only, in proportion to the noise (fully at twice the bar). Clean texels are untouched."""
+    alpha = np.clip((nm - REFINE_NOISE) / REFINE_NOISE, 0.0, 1.0) * valid
+    out = F.copy()
+    for i in np.unique(island[alpha > 0]):
+        if i < 0:
+            continue
+        ys, xs = np.nonzero(island == i)
+        y0, y1 = max(ys.min() - SMOOTH_R, 0), ys.max() + SMOOTH_R + 1
+        x0, x1 = max(xs.min() - SMOOTH_R, 0), xs.max() + SMOOTH_R + 1
+        m = ((island[y0:y1, x0:x1] == i) & valid[y0:y1, x0:x1]).astype(np.float64)
+        c = F[y0:y1, x0:x1].astype(np.float64)
+        den = _box(m, SMOOTH_R)
+        blur = np.stack([_box(c[..., k] * m, SMOOTH_R) for k in range(3)], -1) / np.maximum(den, 1e-9)[..., None]
+        a = (alpha[y0:y1, x0:x1] * (island[y0:y1, x0:x1] == i))[..., None]
+        out[y0:y1, x0:x1] = (c * (1 - a) + blur * a).astype(np.float32)
+    return out
+
+
+def _finish(name, raw, covered, valid, Nf, island):
+    """Denoise the mean of both halves; each half alone for the noise map. The written lightmap
+    (bake/<name>.exr) has its residual noise smoothed (`_smooth_residual`); returns the halves as
+    denoised (what refinement measures) and as smoothed (what QA measures: what ships)."""
+    wv = valid.astype(np.float32)
+    halves = [raw[(h, "day")] + raw[(h, "lamps")] for h in (0, 1)]
+    if not all(np.isfinite(L).all() for L in halves):
+        raise RuntimeError(f"{name}: non-finite texels in the raw passes")
+    D = []
+    for i, L in enumerate([(halves[0] + halves[1]) / 2] + halves):
+        tmp = os.path.join(BASE, f"_{name}_dn{i}.exr")
+        denoise(push_pull(L, wv), Nf, tmp)
+        D.append(_load_exr_rgb(tmp))
+        os.remove(tmp)
+    F, D = D[0], D[1:]
+    nm, _ = noise_map(D[0], D[1], valid)
+    path = os.path.join(BASE, f"{name}.exr")
+    _write_exr(_smooth_residual(F, nm, island, valid), path)
+    Ds = [_smooth_residual(d, nm, island, valid) for d in D]
+    return path, D, Ds
+
+
+def _only_faces(objs, keep):
+    """Collapse the Lightmap UVs of every face not in `keep` ({object name: face indices}) to a point
+    (nothing of theirs is baked); returns what restores them."""
+    saved = {}
+    for o in objs:
+        me = o.data
+        a = _uv_array(o)
+        saved[o.name] = a.copy()
+        sel = keep.get(o.name, set())
+        b = a.reshape(-1, 2)
+        for p in me.polygons:
+            if p.index not in sel:
+                b[p.loop_start:p.loop_start + p.loop_total] = (0.0005, 0.0005)
+        me.uv_layers["Lightmap"].data.foreach_set("uv", b.ravel())
+
+    def restore():
+        for o in objs:
+            o.data.uv_layers["Lightmap"].data.foreach_set("uv", saved[o.name])
+    return restore
+
+
+def _select_faces(faces, D, valid, state):
+    """Faces still noisy: their texels' residual noise over REFINE_NOISE on average, or REFINE_SHARE of
+    them over it. A face picked before is dropped once a round fails to cut its noise by REFINE_GAIN
+    (its noise sits in a corner more samples barely reach; the denoiser has it)."""
+    nm, lit = noise_map(D[0], D[1], valid)
+    keep = {}
+    texels = 0
+    for o, fi, ys, xs in faces:
+        m = lit[ys, xs]
+        if m.sum() < 4:
+            continue
+        v = nm[ys, xs][m]
+        mean = float(v.mean())
+        if not (mean > REFINE_NOISE or float((v > REFINE_NOISE).mean()) > REFINE_SHARE):
+            continue
+        key = f"{o.name}|{fi}"
+        prev = state["noise"].get(key)
+        if prev is not None and mean > prev * REFINE_GAIN:
+            continue
+        state["noise"][key] = mean
+        keep.setdefault(o.name, []).append(fi)
+        texels += len(ys)
+    return keep, texels
+
+
+def _bake_level(lv, objs, samples, resume=True, refine_more=False, rounds=REFINE_ROUNDS):
+    """One floor's lightmap as a resumable sequence: the base pass (stage 0), then refinement rounds
+    (stages 1…), each in checkpointed chunks. `resume`: continue an unfinished bake of the same
+    configuration from bake/raw/. `refine_more`: add `rounds` more rounds to a finished bake (0: only
+    its lightmap written again, denoised and smoothed)."""
+    import time
+    name = f"LM_{['G', 'L1', 'L2'][lv]}"
+    size = LM_SIZE[lv]
+    config = {"size": size, "base": samples[lv], "refine": REFINE_SAMPLES}
+    state, raw, n = _load_checkpoint(name) if (resume or refine_more) else (None, {}, {})
+    if refine_more and state is None and os.path.exists(os.path.join(BASE, "raw", f"{name}_0_day.npz")):
+        # a finished bake from before the checkpoints (one file per half and pass; its charts are the file's)
+        for h in (0, 1):
+            for mode in ("day", "lamps"):
+                z = np.load(os.path.join(BASE, "raw", f"{name}_{h}_{mode}.npz"))
+                raw[(h, mode)] = z["light"].astype(np.float32)
+                n[(h, mode)] = z["n"].astype(np.float32)
+        _save_uvs(name, objs)
+        state = {"config": {"size": size, "base": samples[lv], "refine": REFINE_SAMPLES}, "seed": 0, "stage": 1,
+                 "last": 0, "done": {}, "keep": None, "noise": {}, "rounds": [], "complete": True}
+    if refine_more:
+        if state is None:
+            raise RuntimeError(f"{name}: no bake in bake/raw/ to refine")
+        _restore_uvs(name, objs)
+        state["complete"] = False
+        state["last"] = state["stage"] + rounds - 1
+        state["seed"] = int(time.time())
+        print(f"{name}: refining a finished bake from stage {state['stage']}", flush=True)
+    elif state is not None and not state.get("complete") and state.get("config") == config:
+        _restore_uvs(name, objs)
+        print(f"{name}: resuming at stage {state['stage']} {state['done']}", flush=True)
+    else:
+        lightmap_uvs(lv, objs)
+        os.makedirs(os.path.join(BASE, "raw"), exist_ok=True)
+        _save_uvs(name, objs)
+        state = {"config": config, "seed": int(time.time()), "stage": 0, "last": REFINE_ROUNDS, "done": {},
+                 "keep": None, "noise": {}, "rounds": [], "complete": False}
+        raw, n = {}, {}
+    sc = bpy.context.scene
+    light = _image(name, size, alpha=True)
+    try:
+        if state["stage"] == 0:
+            _bake_chunks(objs, light, name, state, samples[lv], raw, n)
+            state.update(stage=1, done={}, keep=None)
+            _save_checkpoint(name, state, raw, n)
         lighting("all")
         sc.cycles.seed = 0
         covered, valid, Nf = _masks(objs, size)
-        wv = valid.astype(np.float32)
-        # The final is the denoised mean of both halves (all the samples: the denoiser does far
-        # better on the less noisy input); each half is denoised alone only to measure the noise.
-        path = os.path.join(BASE, f"{name}.exr")
-        denoise(push_pull((halves[0] + halves[1]) / 2, wv), Nf, path)
-        D = []
-        for i, L in enumerate(halves):
-            tmp = os.path.join(BASE, f"_{name}_half{i}.exr")
-            denoise(push_pull(L, wv), Nf, tmp)
-            D.append(_load_exr_rgb(tmp))
-            os.remove(tmp)
-        report[name] = {**qa(D[0], D[1], valid), "covered": int(covered.sum()), "invalid": int((covered & ~valid).sum())}
+        faces = _face_texels(objs, size)
+        island = _island_map(objs, faces, size)
+        _, D, Ds = _finish(name, raw, covered, valid, Nf, island)
+        while state["stage"] <= state["last"]:
+            if state["keep"] is None:
+                keep, texels = _select_faces(faces, D, valid, state)
+                state["rounds"].append({"faces": sum(len(v) for v in keep.values()), "texels": texels, **qa(D[0], D[1], valid)})
+                print(f"{name} refine {state['stage']}: {state['rounds'][-1]}", flush=True)
+                if not keep:
+                    break
+                state["keep"] = keep
+                _save_checkpoint(name, state, raw, n)
+            restore = _only_faces(objs, {k: set(v) for k, v in state["keep"].items()})
+            try:
+                _bake_chunks(objs, light, name, state, REFINE_SAMPLES, raw, n)
+            finally:
+                restore()
+            state.update(stage=state["stage"] + 1, done={}, keep=None)
+            _save_checkpoint(name, state, raw, n)
+            lighting("all")
+            sc.cycles.seed = 0
+            _, D, Ds = _finish(name, raw, covered, valid, Nf, island)
+        state["complete"] = True
+        _save_checkpoint(name, state, raw, n)
+        return {**qa(Ds[0], Ds[1], valid), "covered": int(covered.sum()), "invalid": int((covered & ~valid).sum()),
+                "refined": state["rounds"]}
+    finally:
         bpy.data.images.remove(light)
-        done.append(path)
-    with open(os.path.join(BASE, "qa.json"), "w") as f:
-        json.dump({"limits": QA_LIMITS, "lightmaps": report}, f, indent=1)
-    print("lightmap QA:", json.dumps(report))
+
+
+def bake_lightmaps(levels=(0, 1, 2), samples=BAKE_SAMPLES, resume=True, refine_more=False, rounds=REFINE_ROUNDS):
+    """Per floor (`_bake_level`): the light (daylight and lamps apart, each in two halves with
+    independent seeds), a short-range AO for validity and the normals (the denoiser's guide); invalid
+    texels and margins filled; the mean of both halves denoised and written; the faces still noisy
+    refined. Stop with bake/STOP (it checkpoints after the current chunk and raises BakeStopped);
+    the same call resumes."""
+    sc = bpy.context.scene
+    sc.render.bake.target = "IMAGE_TEXTURES"
+    g = groups()
+    report = {}
+    for lv in levels:
+        report[f"LM_{['G', 'L1', 'L2'][lv]}"] = _bake_level(lv, g[lv], samples, resume, refine_more, rounds)
+        _write_qa(report)
+    print("lightmap QA:", json.dumps(report), flush=True)
     return report
+
+
+def refine_lightmaps(levels=(0, 1, 2), rounds=REFINE_ROUNDS):
+    """More refinement rounds on finished bakes (bake/raw/), resumable like a bake; `rounds=0` only
+    writes their lightmaps again (denoised, smoothed) from the raw passes."""
+    setup_world()
+    col = lamps()
+    portals()
+    glass_for_bake(True)
+    try:
+        return bake_lightmaps(levels, refine_more=True, rounds=rounds)
+    finally:
+        glass_for_bake(False)
+        core.hide(col, True)
+
+
+def _write_qa(report):
+    """Merge this run's floors into bake/qa.json (a run of one floor keeps the others' entries)."""
+    path = os.path.join(BASE, "qa.json")
+    old = {}
+    if os.path.exists(path):
+        with open(path) as f:
+            old = json.load(f).get("lightmaps", {})
+    old.update(report)
+    with open(path, "w") as f:
+        json.dump({"limits": QA_LIMITS, "lightmaps": old}, f, indent=1)
 
 
 def qa_failures(report):
@@ -860,8 +1223,25 @@ def probe_inside(p):
     return back >= 3
 
 
+def probe_sealed(p):
+    """A probe in the pocket under a stair, behind its spandrel (the panelling that closes the space
+    from the room): its stair is straight overhead and a level ray meets the spandrel within 1.5 m.
+    Its light is the pocket's; valid, it lit the room side of the spandrel next to it as the pocket
+    (trilinear weights of ~0.95 across the 5 cm panelling: a black panel along the landing)."""
+    dg = bpy.context.evaluated_depsgraph_get()
+    sc = bpy.context.scene
+    ok, loc, nrm, idx, ob, mw = sc.ray_cast(dg, Vector(p), Vector((0, 0, 1)))
+    if not (ok and ob.name.startswith(("MainStair_", "TopStair_"))):
+        return False
+    for d in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0)):
+        ok, loc, nrm, idx, ob, mw = sc.ray_cast(dg, Vector(p), Vector(d), distance=1.5)
+        if ok and ob.name.endswith("Stair_Sp"):
+            return True
+    return False
+
+
 def bake_probes(spacing=1.0, res=(64, 32), samples=None):
-    samples = samples or {"day": 192, "lamps": 96}
+    samples = samples or {"day": 512, "lamps": 256}
     cam = _pano_camera(res)
     d, dw = _equirect_dirs(*res)
     Y = _sh_basis(d)                                   # h, w, 9
@@ -884,7 +1264,7 @@ def bake_probes(spacing=1.0, res=(64, 32), samples=None):
 
 
 def bake_reflections(res=(512, 256), samples=None):
-    samples = samples or {"day": 256, "lamps": 128}
+    samples = samples or {"day": 1024, "lamps": 256}
     cam = _pano_camera(res)
     out = []
     for r in P.ROOMS:
@@ -930,9 +1310,9 @@ def write_manifest(pts, refl, spacing, glow):
             "file": "probes.bin",
             "layout": "float32 little-endian, [probe][9 SH L2 coefficients (Y00, Y1-1, Y10, Y11, Y2-2, Y2-1, Y20, Y21, Y22)][RGB], radiance",
             "spacing": spacing,
-            "points": [{"level": lv, "room": rm, "p": [x, y, z], "valid": not probe_inside((x, y, z))}
+            "points": [{"level": lv, "room": rm, "p": [x, y, z], "valid": not (probe_inside((x, y, z)) or probe_sealed((x, y, z)))}
                        for lv, rm, x, y, z in pts],
-            "valid": "false where the probe sits inside furniture: skip it and renormalise the interpolation weights",
+            "valid": "false where the probe sits inside furniture or in the sealed pocket under a stair: skip it and renormalise the interpolation weights",
         },
         "reflections": refl,
         "lamps": {k: {"radiance": v} for k, v in glow.items()},
@@ -958,10 +1338,8 @@ def trial(levels=(0, 1, 2), size=512, fraction=8):
     portals()
     glass_for_bake(True)
     try:
-        g = groups()
-        for lv in levels:
-            lightmap_uvs(lv, g[lv])
-        report = bake_lightmaps(levels, samples={k: max(8, v // fraction) for k, v in BAKE_SAMPLES.items()})
+        report = bake_lightmaps(levels, samples={lv: {k: max(8, v // fraction) for k, v in s.items()} for lv, s in BAKE_SAMPLES.items()},
+                                resume=False)
         for name, r in report.items():
             share = r["covered"] / (size * size)
             if not 0.3 < share < 0.95:
@@ -974,17 +1352,15 @@ def trial(levels=(0, 1, 2), size=512, fraction=8):
         LM_SIZE.update(sizes)
 
 
-def rebake_lightmaps(levels=(0, 1, 2)):
-    """The lightmaps alone (their charts and the bake), keeping the probes, reflections and manifest."""
+def rebake_lightmaps(levels=(0, 1, 2), resume=True):
+    """The lightmaps alone (their charts and the bake), keeping the probes, reflections and manifest.
+    Resumes an unfinished bake of the same configuration (bake/raw/); stop it with bake/STOP."""
     setup_world()
     col = lamps()
     portals()
     glass_for_bake(True)
     try:
-        g = groups()
-        for lv in levels:
-            lightmap_uvs(lv, g[lv])
-        report = bake_lightmaps(levels)
+        report = bake_lightmaps(levels, resume=resume)
     finally:
         glass_for_bake(False)
         core.hide(col, True)
@@ -1017,9 +1393,6 @@ def run(levels=(0, 1, 2), probes=True, reflections=True, spacing=1.0):
     portals()
     glass_for_bake(True)
     try:
-        g = groups()
-        for lv in levels:
-            lightmap_uvs(lv, g[lv])
         report = bake_lightmaps(levels)
         pts = bake_probes(spacing) if probes else []
         refl = bake_reflections() if reflections else []

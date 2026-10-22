@@ -76,6 +76,13 @@ export const VIEWPOINTS: Record<string, Spawn> = {
   study: inHouse(4.0, -5.0, 5.25, 35, 0.0),
   /** §8.3: the turret room's window seat, the whole compound below. */
   turret: inHouse(3.4, -0.9, 9.15, 40, -0.12),
+  /** On the porch at the front door: the outer leaves' faces, lit outdoors. */
+  door: inHouse(0, 2.6, 0.9, 180, 0.12),
+  /** The west and east flanks: the windows' casings and reveals, lit outdoors. */
+  flankW: { ...inHouse(-19, -5, 0, 90, 0.2), height: undefined },
+  flankE: { ...inHouse(14, -5, 0, -90, 0.2), height: undefined },
+  /** The landing's end past the top stair, into the pocket under its flight. */
+  alcove: inHouse(-0.1, -10.4, 5.25, -28, -0.12),
   // The estate (docs/estate.md).
   /** From the Gate Court, the gateway and the terrace wall. */
   gateway: look([-418, -12], [-430, -40], deg(6)),

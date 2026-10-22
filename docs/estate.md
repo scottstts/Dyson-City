@@ -18,6 +18,7 @@ Code: `src/estate/`. The plan's intent is `docs/city_plan.md` §4; the house its
 - **Balustrades:** balusters and piers instanced. A pier at a corner turns to the bisector, and balusters keep clear of it.
 - **Lathe parts** (balusters, urns, finials) are built about the up axis (`upright`). Built about z they lay on their sides.
 - **Gateway:** the ramp in a cutting between retaining walls, a flight of steps either side (top tread at the head), cheek walls in the void, urns on the gate piers.
+  - The flights reserve the void each on its own side of the ramp: one void box across the whole gateway outranked the ramp and took its foot, so the ramp began 4.6 m inside the wall line, 0.37 m over the pad (`tests/estate.test.ts` holds the ramp to the wall line).
 - **Hedges** are swept sections with noise displacement, openings cut where walks pass.
 - **Buildings:** the kitchen garden's Flemish bond walls with buttress piers; the glasshouse (dwarf walls, members, panes); the carriage house (layered doors); benches and a sundial.
 - **Every part is audited** (`tests/estate.test.ts`): closed outward solids, no coplanar overlap, no clash beyond declared seats (`tests/helpers/estateAllow.ts`).

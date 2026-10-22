@@ -7,7 +7,7 @@ import os
 
 import numpy as np
 
-OUT = "/Users/scott/Documents/Projects/Node/dysonCity/blender/textures"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "textures")
 
 
 def hexc(h):

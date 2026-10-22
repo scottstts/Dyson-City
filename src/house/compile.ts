@@ -20,6 +20,7 @@
 import { readAccessor, normalMatrix, visitNodes, compose, type GltfDocument, type Mat4 } from './gltf';
 import { ProbeGrid, shDiffuse } from './probeGrid';
 import { rasteriseFloors, type FloorCells } from './floors';
+import { openingPlane, isIndoor, type OpeningPlane } from './openings';
 
 export type LightKind = 'lightmap' | 'probe' | 'exterior' | 'mixed';
 
@@ -160,6 +161,34 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
     meshes++;
     const nm = normalMatrix(m);
     const hm = normalMatrix(toHouse);
+    // Windows and the outer doors: one wall plane for the whole mesh (all its primitives), from its geometry.
+    let plane: OpeningPlane | null = null;
+    if (exteriorPart && !forceKind && FACING_INDOORS.test(name)) {
+      const prims = doc.meshes[meshIndex].primitives.filter((p) => p.mode === undefined || p.mode === 4)
+        .map((p) => readAccessor(doc, bin, p.attributes.POSITION) as Float32Array);
+      const hx = new Float32Array(prims.reduce((a, P) => a + P.length, 0));
+      let o = 0;
+      for (const P of prims) {
+        for (let v = 0; v < P.length; v += 3, o += 3) {
+          const x = P[v], y = P[v + 1], z = P[v + 2];
+          hx[o] = toHouse[0] * x + toHouse[4] * y + toHouse[8] * z + toHouse[12];
+          hx[o + 1] = toHouse[1] * x + toHouse[5] * y + toHouse[9] * z + toHouse[13];
+          hx[o + 2] = toHouse[2] * x + toHouse[6] * y + toHouse[10] * z + toHouse[14];
+        }
+      }
+      if (hx.length) {
+        let cx = 0, cy = 0, cz = 0;
+        for (let v = 0; v < hx.length; v += 3) {
+          cx += hx[v];
+          cy += hx[v + 1];
+          cz += hx[v + 2];
+        }
+        const k = 3 / hx.length;
+        // The nearest room's capture point (Blender frame) in glTF axes: which side is the room.
+        const r = grid.nearestCapture(cx * k, -cz * k, cy * k);
+        plane = openingPlane(hx, r[0], -r[1]);
+      }
+    }
     for (const prim of doc.meshes[meshIndex].primitives) {
       if (prim.mode !== undefined && prim.mode !== 4) continue;
       const mat = prim.material ?? 0;
@@ -193,37 +222,17 @@ export function compilePart(part: string, doc: GltfDocument, bin: ArrayBuffer, g
           hn[v * 3 + 1] = 1;
         }
       }
-      if (kind === 'exterior' && FACING_INDOORS.test(name)) {
-        // Windows and the outer doors: a face looks indoors when it lies on the room's side of the
-        // opening's mid-plane (through the mesh's middle, square to the way into its room).
-        let cx = 0, cy = 0, cz = 0;
-        for (let v = 0; v < count; v++) {
-          cx += hx[v * 3];
-          cy += hx[v * 3 + 1];
-          cz += hx[v * 3 + 2];
-        }
-        cx /= count;
-        cy /= count;
-        cz /= count;
-        // The nearest room's capture point (Blender frame) in glTF axes: the horizontal way in.
-        const r = grid.nearestCapture(cx, -cz, cy);
-        let dx = r[0] - cx;
-        let dz = -r[1] - cz;
-        const l = Math.hypot(dx, dz) || 1;
-        dx /= l;
-        dz /= l;
+      if (kind === 'exterior' && plane) {
+        // A face looks indoors when it lies on the room's side of the opening's wall mid-plane.
         let any = false;
         for (let v = 0; v < count; v++) {
-          const s = (hx[v * 3] + hn[v * 3] * 0.05 - cx) * dx + (hx[v * 3 + 2] + hn[v * 3 + 2] * 0.05 - cz) * dz;
-          if (s > 0) {
-            indoor[v] = 1;
-            any = true;
-          }
+          indoor[v] = isIndoor(plane, hx[v * 3], hx[v * 3 + 2], hn[v * 3], hn[v * 3 + 2]);
+          if (indoor[v]) any = true;
         }
         if (any) kind = 'mixed';
         // The opening it fills, for culling the outdoors from inside.
         let ap = apertures.get(name);
-        if (!ap) apertures.set(name, (ap = { name, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], outward: [-dx, -dz] }));
+        if (!ap) apertures.set(name, (ap = { name, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], outward: [-plane.dx, -plane.dz] }));
         for (let v = 0; v < count; v++) {
           for (let k = 0; k < 3; k++) {
             ap.min[k] = Math.min(ap.min[k], hx[v * 3 + k]);

@@ -21,7 +21,7 @@ from mathutils.bvhtree import BVHTree
 
 from . import plan as P
 
-OUT = "/Users/scott/Documents/Projects/Node/dysonCity/blender/audit"
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "audit")
 SKIP_COLLS = {"_tmp_bool"}
 
 
@@ -578,6 +578,32 @@ def material_health():
     return out
 
 
+def pendants():
+    """Every pendant's canopy seated on what it hangs from: straight up from its top face (centre and a
+    ring at 6.5 cm, inside the canopy's 7 cm) the ceiling or its rose's flat boss is within 2 mm. A rose
+    off the pendant's axis, or a canopy hung below a missing rose, leaves a gap or hits the rose's slope."""
+    from mathutils import Vector
+    sc = bpy.context.scene
+    out = []
+    for o in house_objects():
+        if not (o.name.startswith("Furn_") and "Pendant" in o.name):
+            continue
+        p = o.matrix_world.translation
+        top = max((o.matrix_world @ Vector(c)).z for c in o.bound_box)
+        for dx, dy in ((0, 0), (0.065, 0), (-0.065, 0), (0, 0.065), (0, -0.065)):
+            # the pendant hidden (its canopy's top is coincident with what it seats on)
+            o.hide_set(True)
+            ok, loc, nrm, idx, ob, mw = sc.ray_cast(bpy.context.evaluated_depsgraph_get(), Vector((p.x + dx, p.y + dy, top - 0.01)),
+                                                    Vector((0, 0, 1)), distance=0.5)
+            o.hide_set(False)
+            gap = (loc.z - top) if ok else None
+            if gap is None or gap > 0.002 or nrm.z > -0.99:
+                out.append(f"{o.name} @ ({p.x:.2f}, {p.y:.2f}): {'nothing above' if gap is None else f'{gap * 100:.1f} cm to {ob.name}'}"
+                           f" at offset ({dx}, {dy})")
+                break
+    return out
+
+
 def run(write=True, full=True):
     objs = house_objects()
     import time
@@ -602,6 +628,8 @@ def run(write=True, full=True):
         lines.append(f"  {b}  inside  {a}: {n} verts, deepest {w * 100:.1f} cm @ {where}")
     from . import doorswing
     lines += ["", f"DOORS (shut / swing / slide checks): {len(doorswing.REPORT)}"] + [f"  {x}" for x in doorswing.REPORT]
+    pd = pendants()
+    lines += ["", f"PENDANTS (canopy seated on the ceiling or its rose, centred): {len(pd)}"] + [f"  {x}" for x in pd]
     mh2 = material_health()
     lines += ["", f"MATERIALS: {len(mh2)}"] + [f"  {x}" for x in mh2]
     lines += ["", f"PART INTERPENETRATION inside one object (part of material A > 8 mm inside closed part of B): {len(pp)}"]

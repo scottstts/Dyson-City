@@ -11,6 +11,13 @@ CLAD = ("Siding_", "BeltCourse", "WaterTable", "CornerBoards")
 
 
 def build():
+    cladding()
+    foundation()
+
+
+def cladding():
+    """The siding, belt course, water table and corner boards cut round the porch roofs, the chimney
+    and the outer doors (re-run after `siding.build` alone)."""
     objs = [o for o in bpy.data.objects if o.type == "MESH" and o.name.startswith(CLAD)]
     bodies = [bpy.data.objects.get(n) for n in ("Porch_Roof", "WestPorch_Roof", "RearStoop_HoodRoof")]
     bodies = [b for b in bodies if b is not None]
@@ -40,6 +47,12 @@ def build():
                 core.remove(c)
         if keep:
             core.boolean(o, keep, op="DIFFERENCE")
+    core.finish_tmp()
+
+
+def foundation():
+    x0, y0, x1, y1 = P.CHIMNEY_EXT
+    doors = [o for o in P.openings(ext=True) if o["kind"] in ("door", "french")]
     fo = bpy.data.objects.get("Foundation")
     if fo is not None:
         cut = [core.geo_obj(geo.box(x0 - 0.01, y0 - 0.01, -1.0, x1 + 0.2, y1 + 0.01, 2.0), "_ch")]

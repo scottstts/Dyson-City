@@ -125,23 +125,44 @@ def run_top(poly):
     return TOP_WING if (xm < P.M[0] - 0.01 or xm > P.M[2] + 0.01) else TOP_MAIN
 
 
+BACKBAND = 0.035     # the casing's back band, beyond its width (windows.ext_trim)
+HORN = 0.05          # the sill's horns, beyond the casing (windows.joinery)
+HORN_TOP = 0.0405    # their top where they meet the wall, over the rough sill
+HORN_LOW = -0.035    # their underside's front edge (it slopes down from the wall: the boards stop here)
+APRON_IN = 0.03      # the apron stops this far inside the casing's width
+
+
 def trim_cutter(o, depth=0.12, extra_w=0.0, z_lo=None, z_hi=None):
-    """Box covering an opening's exterior trim outline (siding stops here)."""
+    """The opening's exterior trim outline, through the cladding: the boards butt the trim exactly.
+
+    In the opening's plane (x along the wall, z over the rough sill) a window's outline steps with its
+    trim: the apron's width down to its foot, the sill horns' width up to their top, then the casing
+    and back band up through the head. A door's is its casing and back band from below the floor.
+    *Rejected:* one box the casing's width plus 2 cm, down to 0.2 m under the sill: it bared the
+    sheathing in a slot down every casing and in an L beside the narrower apron (black in the game).
+    `z_lo`/`z_hi` (absolute) clip a door's outline (the belt course, water table and foundation)."""
+    from .windows import frame_matrix, tessellate_x, warp_cyl
     fl = P.LEVELS[o["level"]]
-    z0 = fl + o["sill"] - SILL_H if z_lo is None else z_lo
-    if o["kind"] in ("door", "french"):
-        z0 = fl - 0.25
-    z1 = fl + o["head"] + HEAD_H if z_hi is None else z_hi
-    a = o["ang"]
-    n = np.array([math.cos(a), math.sin(a)])
-    t = np.array([-n[1], n[0]])
-    p = np.array(o["p"])
-    hw = o["w"] / 2 + CASING + 0.056 + extra_w + (0.03 if o["kind"] in ("door", "french") else 0.0)
-    c = [p - t * hw - n * 0.05, p + t * hw - n * 0.05, p + t * hw + n * depth, p - t * hw + n * depth]
+    z_sill = fl + o["sill"]
+    door = o["kind"] in ("door", "french")
+    cas = CASING + (0.03 if door else 0.0) + extra_w
+    c = o["w"] / 2 + cas + BACKBAND
+    top = o["head"] - o["sill"] + HEAD_H
+    if door:
+        z0 = (fl - 0.25 if z_lo is None else z_lo) - z_sill
+        z1 = top if z_hi is None else z_hi - z_sill
+        outline = [(-c, z0), (c, z0), (c, z1), (-c, z1)]
+    else:
+        a = o["w"] / 2 + cas - APRON_IN
+        h = o["w"] / 2 + CASING + HORN
+        za = -SILL_H + 0.02
+        outline = [(-a, za), (a, za), (a, HORN_LOW), (h, HORN_LOW), (h, HORN_TOP), (c, HORN_TOP), (c, top),
+                   (-c, top), (-c, HORN_TOP), (-h, HORN_TOP), (-h, HORN_LOW), (-a, HORN_LOW)]
     if o.get("curved"):
-        # radial box needs to reach the curved surface at the casing's outer edges
-        c = [p - t * hw - n * 0.25, p + t * hw - n * 0.25, p + t * hw + n * depth, p - t * hw + n * depth]
-    return geo.prism([tuple(q) for q in c], z0, z1)
+        # radial sides, reaching in to the curved surface at the trim's outer edges
+        g = geo.extrude_profile_y(outline, -0.25, depth)
+        return warp_cyl(tessellate_x(g), o, P.TR)
+    return geo.extrude_profile_y(outline, -0.05, depth).xf(frame_matrix(o))
 
 
 def corner_board(c, d0, d1, z0, z1, kind):

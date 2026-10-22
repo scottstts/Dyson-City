@@ -360,11 +360,26 @@ def wainscot_along(chain, z0, z1, max_panel=0.62):
     return g
 
 
+# Ceiling roses: one over each pendant in these rooms (rooms.pendant), sized to its bowl. The pendant's
+# canopy seats on the rose's flat boss, ROSE_BOSS below the ceiling; elsewhere it seats on the ceiling.
+ROSE_ROOMS = GRAND - {"Vestibule"}
+ROSE_BOSS = 0.085
+BOSS_R = 0.075              # flat boss face: wider than the pendant's canopy (0.07)
+
+
+def rose_radius(room):
+    """The rose a pendant in `room` hangs from (m), or None (the canopy sits on the ceiling)."""
+    if room not in ROSE_ROOMS:
+        return None
+    return 0.34 if room in ("Parlour", "Dining") else 0.26
+
+
 def rose(r=0.32):
-    """Plaster ceiling rose: concentric beads and a ring of leaves (as relief rings), hanging down."""
+    """Plaster ceiling rose: concentric beads and a ring of leaves (as relief rings), hanging down to a
+    flat boss ROSE_BOSS below the ceiling."""
     prof = [(0.0, 0.0), (r, 0.0), (r, -0.008), (r - 0.02, -0.016), (r - 0.05, -0.02), (r - 0.06, -0.03), (r - 0.09, -0.032),
-            (r * 0.55, -0.045), (r * 0.45, -0.05), (r * 0.35, -0.04), (r * 0.25, -0.055), (r * 0.12, -0.07), (0.05, -0.08),
-            (0.0, -0.085)]
+            (r * 0.55, -0.045), (r * 0.45, -0.05), (r * 0.35, -0.04), (BOSS_R + 0.01, -0.068), (BOSS_R, -0.078),
+            (BOSS_R, -ROSE_BOSS), (0.0, -ROSE_BOSS)]
     g = geo.lathe(prof[::-1], seg=48)
     # leaf relief ring
     for k in range(16):
@@ -385,7 +400,6 @@ def build():
         fl = P.LEVELS[level]
         skirt, crowns, rails, dados, wains = core.Geo(), core.Geo(), core.Geo(), core.Geo(), core.Geo()
         skirt_w, wains_w = core.Geo(), core.Geo()
-        roses = core.Geo()
         # skirting
         for name, chains in room_chains(level, fl + 0.12, clip=stair_boxes(level)).items():
             grand = name in GRAND
@@ -430,12 +444,6 @@ def build():
                     if len(chain) < 2 or geo.path_len(chain) < 0.1:
                         continue
                     rails.add(sweep_chain(chain, closed, PICTURE_RAIL, zr))
-            # ceiling roses in the grand rooms, at the room's main piece centre
-            for r in P.rooms(level):
-                if r["name"] in GRAND and r["name"] not in ("Vestibule",):
-                    pc = np.array(max(r["pieces"], key=lambda q: abs(geo.area(q))))
-                    c = pc.mean(0)
-                    roses.add(rose(0.34 if r["name"] in ("Parlour", "Dining") else 0.26).move(c[0], c[1], P.CEIL[level]))
         tag = ["G", "L1", "L2"][level]
         if skirt.F:
             core.obj(f"Skirting_{tag}", skirt, COL, "trim_int", smooth=40)
@@ -449,6 +457,4 @@ def build():
             core.obj(f"DadoRail_{tag}", dados, COL, "walnut", smooth=40)
         if wains_w.F:
             core.obj(f"Wainscot_{tag}", wains_w, COL, "walnut", smooth=None, clean=True)
-        if roses.F:
-            core.obj(f"CeilingRoses_{tag}", roses, COL, "ceiling_plaster", smooth=40)
     core.finish_tmp()

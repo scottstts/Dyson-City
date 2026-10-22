@@ -3,10 +3,11 @@
 From a shell:  blender/tools/bl.py -b shell.build_level:0 roofs.build
 """
 import importlib
+import os
 import sys
 import time
 
-BASE = "/Users/scott/Documents/Projects/Node/dysonCity/blender"
+BASE = os.path.dirname(os.path.abspath(__file__))
 if BASE not in sys.path:
     sys.path.insert(0, BASE)
 
@@ -85,3 +86,24 @@ def export_all():
     reload()
     from build import export
     return export.run()
+
+
+def refresh_trim(save=True):
+    """After a bake, without disturbing it: the cladding re-cut to the trim outline (siding, gable face)
+    and every smooth mesh's area-weighted normals, then door swings, collision and the audit. Touches
+    nothing lightmapped (their UVs and normals are the bake's)."""
+    import bpy
+    go("siding.build")
+    from build import cuts, gables, finalize
+    cuts.cladding()
+    gables.front_gable_siding()
+    clad = [o for o in finalize._house_meshes() if o.name.startswith(cuts.CLAD + ("Gable_Siding", "Gable_BayFlashing"))]
+    finalize.clean(clad)
+    finalize.uv_fill(clad)
+    finalize.weight_normals(finalize._house_meshes())
+    go("doorswing.build", "collision.build")
+    from build import mat, audit
+    mat.rebuild_all()
+    audit.run()
+    if save:
+        bpy.ops.wm.save_mainfile()

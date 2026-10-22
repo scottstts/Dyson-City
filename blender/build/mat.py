@@ -3,6 +3,8 @@
 Every material reads UVs (never Generated/Object coords) so it can be baked to textures for the
 engine. Material names are stable slot names the engine export maps by name.
 """
+import os
+
 import bpy
 
 
@@ -557,7 +559,7 @@ def _petal(nb):
 
 # ---------------------------------------------------------------- interior
 
-TEX = "/Users/scott/Documents/Projects/Node/dysonCity/blender/textures/"
+TEX = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "textures") + os.sep
 
 
 def image_tex(nb, name, repeat=(1.0, 1.0), bump=0.0, rough=0.5, interp="Linear"):

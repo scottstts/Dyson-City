@@ -154,10 +154,17 @@ def _sheer_only(W, Hc, sill, opn=False):
 
 # ---------------------------------------------------------------- rooms
 
+HANGS = []       # (level, x, y, rose radius or None): where each pendant hangs, for its ceiling rose
+
+
 def pendant(room, x, y, level, big=True, drop=None, lumens=None, item="Pendant"):
     """A bowl pendant hung from the ceiling; `drop` (m) shortens it under the top floor's lower
-    ceilings and over door swings."""
-    ceil = P.CEIL[level] - 0.085          # hung from the boss of the ceiling rose
+    ceilings and over door swings. In the grand rooms it hangs from a ceiling rose centred on it (its
+    canopy seated on the rose's boss); elsewhere its canopy sits on the ceiling."""
+    from .interior import ROSE_BOSS, rose_radius
+    rr = rose_radius(room)
+    HANGS.append((level, x, y, rr))
+    ceil = P.CEIL[level] - (ROSE_BOSS if rr else 0.0)
     drop = drop if drop is not None else (1.0 if big else 0.7)
     put(room, item, f"pendant_{big}_{drop}", lambda big=big, drop=drop: F.pendant_bowl(drop=drop, r=0.32 if big else 0.22),
         x, y, z=ceil)
@@ -469,13 +476,30 @@ def porch():
     put("Porch", "DoorMat", "door_mat_1.2", lambda: F.door_mat(1.2, 0.6), 0.0, -0.45, 0, z=P.PORCH)
 
 
+def build_roses():
+    """The ceiling roses, one over each pendant that hangs from one (in the interior trim's collection)."""
+    from . import interior
+    for lv, tag in enumerate(("G", "L1", "L2")):
+        old = bpy.data.objects.get(f"CeilingRoses_{tag}")
+        if old is not None:
+            bpy.data.objects.remove(old, do_unlink=True)
+        g = core.Geo()
+        for level, x, y, rr in HANGS:
+            if level == lv and rr:
+                g.add(interior.rose(rr).move(x, y, P.CEIL[lv]))
+        if g.F:
+            core.obj(f"CeilingRoses_{tag}", g, interior.COL, "ceiling_plaster", smooth=40)
+
+
 def build():
     core.clear(COL)
     _cache.clear()
+    HANGS.clear()
     ground()
     first()
     top()
     porch()
     build_curtains()
+    build_roses()
     core.hide(core.coll(PROTO), True)
     core.finish_tmp()
