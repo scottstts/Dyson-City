@@ -35,3 +35,4 @@ blender/bake
 blender/export
 *.blend
 /assets/
+.ruff_cache
