@@ -18,13 +18,8 @@ import { NarrationClips } from '../audio/loadNarration';
 import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 
-let stageStart = performance.now();
-
 function stage(name: BootStage, entry: EntryScreen, progress: number): void {
   if (fatal.hasFired) throw new Error(`Startup aborted before stage "${name}"`);
-  const now = performance.now();
-  console.info(`[Dyson] boot: ${fatal.stage} took ${(now - stageStart).toFixed(0)} ms`);
-  stageStart = now;
   fatal.stage = name;
   entry.setProgress(progress);
 }
@@ -86,7 +81,6 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   await nextFrame();
   if (fatal.hasFired) throw new Error('Startup aborted after a GPU error');
 
-  console.info(`[Dyson] boot: ${fatal.stage} took ${(performance.now() - stageStart).toFixed(0)} ms`);
   fatal.stage = 'running';
   narration.load(audioContext);
   if (!debug.manual) game.start();

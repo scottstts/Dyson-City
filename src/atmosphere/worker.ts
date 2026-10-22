@@ -25,12 +25,10 @@ export interface AtmosphereWorkerResult {
   enclosurePreMirror: Uint16Array;
   enclosureIrr: Uint16Array;
   shellMean: [number, number, number];
-  millis: number;
 }
 
 self.onmessage = () => {
   try {
-    const t0 = performance.now();
     const enclosure = solveEnclosure(computePlasmaLut());
     // The air is lit by the whole sky over the habitat: the star and the shell.
     const luts = computeAtmosphere(ATMOSPHERE, (cosTheta, out) => sampleSky(enclosure.sky, Math.acos(cosTheta), out));
@@ -48,7 +46,6 @@ self.onmessage = () => {
       enclosurePreMirror: toHalfArray(enclosure.preMirror),
       enclosureIrr: toHalfArray(enclosure.irr),
       shellMean: enclosure.shellMean,
-      millis: performance.now() - t0,
     };
     const transfer = [result.skyLocal, result.aerial]
       .flatMap((p) => [p.scatter.buffer, p.transmittance.buffer])

@@ -62,7 +62,6 @@ export function buildVehicles(cityWalls: CollisionWorld, lock: EastLock, addStan
   const craft = new Craft();
   group.add(car.group, craft.group);
   const shade = createVehicleShade();
-  console.info(`[Dyson] vehicles: car ${car.triangles} tris, craft ${craft.triangles} tris (full detail)`);
 
   /** The top (world y) of whatever stands within r of a plan point: the car, a walker. */
   let walker: { x: number; y: number; z: number } | null = null;

@@ -52,7 +52,6 @@ export function buildCity(): City {
   const black = createBlackGlazeMaterial();
   materials[SLOT.black] = black;
 
-  const t0 = performance.now();
   const layout = frameLayout();
   const frameParts = buildFrameParts(layout);
   const frame = new Mesh(emitParts(frameParts.map((p) => p.mesh), { slots: FRAME_SLOTS }), materials);
@@ -65,7 +64,6 @@ export function buildCity(): City {
   sill.name = 'Dome.sill';
   group.add(sill);
 
-  console.info(`[Dyson] dome: ${frameParts.length} parts, ${bolts.length} bolts, ${((frame.geometry.index?.count ?? 0) / 3).toFixed(0)} tris, ${(performance.now() - t0).toFixed(0)} ms`);
 
   for (const m of group.children) {
     m.matrixAutoUpdate = false;

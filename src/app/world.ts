@@ -91,8 +91,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   const debugMode = skyDebug && skyDebug in SKY_DEBUG ? SKY_DEBUG[skyDebug as keyof typeof SKY_DEBUG] : 0;
 
   // The illuminant must be known before anything the star lights is captured.
-  const illuminant = await measureStarIlluminant(renderer, star);
-  console.info(`[Dyson] star illuminant ${illuminant.toArray().map((v) => v.toFixed(3)).join(', ')}`);
+  await measureStarIlluminant(renderer, star);
 
   const environment = createEnvironment(renderer, sky, PAD_HEIGHT + EYE_HEIGHT, startTime);
 
@@ -137,15 +136,11 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   scene.add(stand.group);
   city.walk.walls.meshes.push(stand.walk);
   const houseCopies = [...house.captureCopies(), ...estate.captureCopies()];
-  const tVehicles = performance.now();
   const vehicles = buildVehicles(city.walk.walls, city.lock, (w) => stand.addCarWalls(w));
   scene.add(vehicles.group);
-  console.info(`[Dyson] vehicles: ${(performance.now() - tVehicles).toFixed(0)} ms`);
   house.culling.track([...field.statics, ...field.moving, ...estate.outdoorMeshes, ...stand.outdoorMeshes]);
-  const tWalls = performance.now();
   const fieldOcc = occupancy([...field.statics, ...field.moving]);
-  const fieldWalls = addFieldWalls(city.walk.walls, fieldOcc);
-  console.info(`[Dyson] field walls: ${fieldWalls} segments, ${(performance.now() - tWalls).toFixed(0)} ms`);
+  addFieldWalls(city.walk.walls, fieldOcc);
 
   // Inside the Dome: the sky through the glass, the frame, the platform.
   const captureSite = [platform, deck].map((m) => {
@@ -164,7 +159,6 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   deckMaterial.needsUpdate = true;
   const composites = [...city.bindEnvironments(environment.target.texture, interior.target.texture), field.vapour.composite];
   // The star-shade under the field (lighting/starShade.ts), baked once: the platform and the field take it.
-  const tShade = performance.now();
   const occluders = rasterOccluders([...field.statics, ...field.moving, ...house.exteriorMeshes, ...estate.occluders, ...stand.occluders]);
   // The crew: planned on the field's occupancy and this height map; its fixtures join the raster.
   const crew = new Crew({ occupancy: fieldOcc, heights: { N: SHADE.N, origin: SHADE.origin, cell: SHADE.extent / SHADE.N, lohi: occluders }, estateWalk: estate.walk, walls: city.walk.walls });
@@ -178,9 +172,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   // The house's roofs over the eye (city/visibility.ts): its exterior on a fine local map, so the
   // star's glare fades as the eye walks under the porch and in, as under the gate's vault.
   city.addStarOccluders(houseOccluders(house.exteriorMeshes, house.centre));
-  const tRaster = performance.now();
   const shade = await createStarShade(renderer, occluders, FIELD_Y, floorMap(FIELD_Y, (x, z) => estateFloor(x, z) ?? standFloor(x, z)));
-  console.info(`[Dyson] star-shade: raster ${(tRaster - tShade).toFixed(0)} ms, visibility ${(performance.now() - tRaster).toFixed(0)} ms`);
   // The vehicles' shade as they move (vehicles/shade.ts) takes the pad's light, its sealer's
   // reflection of the zenith included (AO does not reach the clear coat): under a body the view up
   // is the body.
@@ -193,9 +185,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
   house.setLook({ shade: shade.ao, envTexture: interior.target.texture });
   estate.setLook({ shade: estateShade, envTexture: interior.target.texture });
   // The field's reflection probes, each captured where its zone stands (field/probes.ts).
-  const tProbes = performance.now();
   const probes = createFieldProbes(renderer, sky, field, startTime, { extras: [...city.captureExtras(), ...captureSite, ...houseCopies], interior, transmittance: GLASS_TRANSMISSION, shade: shade.ao });
-  console.info(`[Dyson] field probes: ${(performance.now() - tProbes).toFixed(0)} ms`);
   vehicles.setLook({ central: probes.central, outdoor: environment.target.texture, ao: shade.ao });
   // The estate's own probe: the house, its garden's walls and buildings, the field beyond.
   const estateProbe = createEstateProbe(renderer, sky, startTime, { extras: [...city.captureExtras(), ...captureSite.map((m) => m.clone()), ...house.captureCopies(), ...estate.captureCopies(), ...field.captureCopies({})], interior, transmittance: GLASS_TRANSMISSION });

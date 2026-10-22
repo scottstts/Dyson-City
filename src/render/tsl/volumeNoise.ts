@@ -38,13 +38,12 @@ export function generateNoiseVolumes(): Promise<NoiseVolumes> {
       worker.terminate();
       reject(new Error(`Noise worker failed: ${e.message}`));
     };
-    worker.onmessage = (e: MessageEvent<{ ok: true; value: Uint8Array; cellular: Uint8Array; millis: number } | { ok: false; error: string }>) => {
+    worker.onmessage = (e: MessageEvent<{ ok: true; value: Uint8Array; cellular: Uint8Array } | { ok: false; error: string }>) => {
       worker.terminate();
       if (!e.data.ok) {
         reject(new Error(`Noise generation failed: ${e.data.error}`));
         return;
       }
-      console.info(`[Dyson] noise volumes ${e.data.millis.toFixed(0)} ms`);
       resolve({ value: makeVolume(e.data.value, VALUE_SIZE, 'noise.value'), cellular: makeVolume(e.data.cellular, CELL_SIZE, 'noise.cellular') });
     };
     worker.postMessage(null);

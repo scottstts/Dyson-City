@@ -94,11 +94,9 @@ function merged(geo: BufferGeometry, matrices: Matrix4[]): BufferGeometry {
 }
 
 export function buildEstate(): Estate {
-  const t0 = performance.now();
   const group = new Group();
   group.name = 'Estate';
   const geo = estateGeometry();
-  const tGeo = performance.now();
   const walk = estateWalk(geo);
   const occluders: Mesh[] = [];
   const looks: ((look: EstateLook) => void)[] = [];
@@ -246,7 +244,6 @@ export function buildEstate(): Estate {
     if (look.envTexture) for (const g of [lawnGrass, meadowGrass]) g.setEnvironment(look.envTexture);
   });
   const near = (cx: number, cz: number, b: [number, number, number, number], m: number) => cx > b[0] - m && cx < b[2] + m && cz > b[1] - m && cz < b[3] + m;
-  console.info(`[Dyson] estate: geometry ${(tGeo - t0).toFixed(0)} ms, total ${(performance.now() - t0).toFixed(0)} ms, walk ${JSON.stringify(walk.counts)}`);
   return {
     group,
     walk,

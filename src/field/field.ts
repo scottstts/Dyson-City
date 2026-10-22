@@ -79,14 +79,12 @@ export function buildFieldZones(): FieldZone[] {
 }
 
 export function buildField(): Field {
-  const t0 = performance.now();
   const group = new Group();
   group.name = 'Field';
   const zones = buildFieldZones();
   const statics: Mesh[] = [];
   const moving: { mesh: Mesh; mover: Mover; zone: number }[] = [];
   const materials: Material[][] = [];
-  let tris = 0;
   zones.forEach((z, zi) => {
     const mats = createFieldMaterials(z.name);
     materials.push(mats);
@@ -97,7 +95,6 @@ export function buildField(): Field {
     mesh.updateMatrix();
     group.add(mesh);
     statics.push(mesh);
-    tris += (geo.index?.count ?? 0) / 3;
     for (const mv of z.movers) {
       const g = emitParts(mv.parts.map((p) => p.mesh), { slots: FIELD_SLOTS });
       const m = new Mesh(g, mats);
@@ -105,7 +102,6 @@ export function buildField(): Field {
       m.matrixAutoUpdate = false;
       group.add(m);
       moving.push({ mesh: m, mover: mv, zone: zi });
-      tris += (g.index?.count ?? 0) / 3;
     }
   });
   const pose = (t: number) => {
@@ -118,7 +114,6 @@ export function buildField(): Field {
   const vents = new ReliefVents(reliefStacks());
   const vapour = createVentVapour(vents);
   let time = 0;
-  console.info(`[Dyson] field: ${zones.reduce((n, z) => n + z.parts.length + z.movers.reduce((k, m) => k + m.parts.length, 0), 0)} parts, ${tris.toFixed(0)} tris, ${(performance.now() - t0).toFixed(0)} ms`);
   return {
     group,
     zones,

@@ -88,11 +88,9 @@ export class House {
   /** Builds the exterior (boot). */
   static async create(assets: HouseAssets, opts: HouseOptions): Promise<House> {
     const house = new House(assets, opts);
-    const t0 = performance.now();
     const ext = await house.buildPart(assets.exterior);
     house.root.add(ext.group);
     for (const m of ext.meshes) if (!m.material || !(m.material as Material).transparent) house.exteriorMeshes.push(m);
-    console.info(`[Dyson] house exterior built: ${ext.meshes.length} draws, ${(performance.now() - t0).toFixed(0)} ms`);
     return house;
   }
 
@@ -224,16 +222,13 @@ export class House {
    * with everything else (app/game.ts warmAll).
    */
   async loadInteriors(): Promise<void> {
-    const t0 = performance.now();
     // Prepared in the background since the exterior compiled (assets.ts); built here in order.
     const { floors, reflections } = this.assets.interiors;
     for (const prepared of floors) {
       const part = await prepared;
       await this.buildPart(part);
-      console.info(`[Dyson] house ${part.name}: ${part.compiled.stats.triangles} tris`);
     }
     this.baked.setAtlas(await reflections);
-    console.info(`[Dyson] house interiors built in ${(performance.now() - t0).toFixed(0)} ms`);
     void this.assets.pack.pruneCache();
   }
 

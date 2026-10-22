@@ -100,7 +100,6 @@ interface FetchedPart {
 
 /** Opens the pack and compiles the exterior: the boot-time half of the house. */
 export async function loadHouseAssets(): Promise<HouseAssets> {
-  const t0 = performance.now();
   const pack = await HousePack.open();
   const textures = new HouseTextures(pack);
   const worker = new HouseWorkerClient();
@@ -129,7 +128,6 @@ export async function loadHouseAssets(): Promise<HouseAssets> {
     return { name: f.name, doc: f.doc, compiled };
   };
   const exterior = await compileFetched(await fetchPart('exterior'));
-  console.info(`[Dyson] house exterior: ${exterior.compiled.stats.triangles} tris, compile ${exterior.compiled.stats.ms.toFixed(0)} ms, total ${(performance.now() - t0).toFixed(0)} ms`);
   return { pack, textures, worker, probes, rooms, exterior, interiors: prepareInteriors(fetchPart, compileFetched, rooms, pack, worker) };
 }
 

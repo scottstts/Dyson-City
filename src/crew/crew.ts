@@ -101,7 +101,6 @@ export class Crew {
   private materials: Material[];
 
   constructor(inp: CrewInputs) {
-    const t0 = performance.now();
     this.group.name = 'Crew';
     this.walls = inp.walls;
     this.materials = createCrewMaterials();
@@ -215,8 +214,6 @@ export class Crew {
     this.step(1 / 60, Infinity);
     this.sound.begin();
     this.write(new Vector3(-440, FIELD_Y + 1.6, 0));
-    const per = Object.entries(this.batch).map(([n, b]) => `${n} ${(b.near.triangles / b.near.count / 1000).toFixed(1)}k/${(b.far.triangles / b.far.count / 1000).toFixed(1)}k`).join(', ');
-    console.info(`[Dyson] crew: ${this.hands.length} Hands, ${this.riggers.length} Riggers, ${this.drays.length} Drays, ${this.linewalkers.length} Linewalkers, ${air.spotters.length} Spotters, ${air.ferries.length} Ferries; tris near/far each: ${per}; ${(performance.now() - t0).toFixed(0)} ms`);
   }
 
   /** Every drawn mesh (the house's indoor culling hides them indoors). */

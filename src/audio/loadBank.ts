@@ -8,13 +8,12 @@ export function loadAudioBank(sampleRate: number): Promise<AudioBank> {
       worker.terminate();
       reject(new Error(`Audio worker failed: ${e.message}`));
     };
-    worker.onmessage = (e: MessageEvent<{ ok: true; bank: AudioBank; millis: number } | { ok: false; error: string }>) => {
+    worker.onmessage = (e: MessageEvent<{ ok: true; bank: AudioBank } | { ok: false; error: string }>) => {
       worker.terminate();
       if (!e.data.ok) {
         reject(new Error(`Audio synthesis failed: ${e.data.error}`));
         return;
       }
-      console.info(`[Dyson] audio bank ${e.data.millis.toFixed(0)} ms at ${sampleRate} Hz`);
       resolve(e.data.bank);
     };
     worker.postMessage({ sampleRate });

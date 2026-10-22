@@ -70,7 +70,6 @@ export function computeAtmosphereTextures(): Promise<AtmosphereTextures> {
         return;
       }
       const r = e.data.result;
-      console.info(`[Dyson] atmosphere precompute ${r.millis.toFixed(0)} ms`);
       resolve({
         skyLocalS: makeTexture(r.skyLocal.scatter, LUT.skyWidth, LUT.skyHeight, 'atmo.skyLocal.S'),
         skyLocalT: makeTexture(r.skyLocal.transmittance, LUT.skyWidth, LUT.skyHeight, 'atmo.skyLocal.T'),

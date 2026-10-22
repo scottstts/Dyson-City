@@ -223,7 +223,11 @@ button {
   position: absolute;
   inset: 0;
   background: center / cover no-repeat;
-  animation: 15s linear infinite both;
+  /* Longhands: the build's minifier turns a shorthand without a name into `animation: none`. */
+  animation-duration: 15s;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  animation-fill-mode: both;
 }
 
 .entry-art:not(.is-shown) .entry-still {

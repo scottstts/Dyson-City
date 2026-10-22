@@ -56,7 +56,6 @@ function keyCurve(dt: number): number {
 }
 
 export function buildStand(): Stand {
-  const t0 = performance.now();
   const group = new Group();
   group.name = 'Stand';
   const platform = buildPlatform();
@@ -117,7 +116,6 @@ export function buildStand(): Stand {
   const walk = standWalk(parts, platform.proxies, term.footprint);
   const pose = screenPose();
   const silencer = new StandSilencer();
-  console.info(`[Dyson] stand: ${geometry.index!.count / 3} tris, ${(performance.now() - t0).toFixed(0)} ms`);
 
   return {
     group,
