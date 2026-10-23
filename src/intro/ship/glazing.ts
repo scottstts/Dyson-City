@@ -29,6 +29,8 @@ export interface Opening {
   /** The core polygon in (u, v), counter-clockwise, and the rounding radius. */
   core: Vec2[];
   r: number;
+  /** The rounded outline's area (m²). */
+  area: number;
 }
 
 function opening(name: string, n: Vec3, d: number, core3: Vec3[], r: number): Opening {
@@ -40,7 +42,9 @@ function opening(name: string, n: Vec3, d: number, core3: Vec3[], r: number): Op
   let a = 0;
   for (let i = 0; i < core.length; i++) a += core[i][0] * core[(i + 1) % core.length][1] - core[(i + 1) % core.length][0] * core[i][1];
   if (a < 0) core = [...core].reverse();
-  return { name, n, d, u, v, o, core, r };
+  let perimeter = 0;
+  for (let i = 0; i < core.length; i++) perimeter += Math.hypot(core[(i + 1) % core.length][0] - core[i][0], core[(i + 1) % core.length][1] - core[i][1]);
+  return { name, n, d, u, v, o, core, r, area: Math.abs(a) / 2 + perimeter * r + Math.PI * r * r };
 }
 
 /** The panes, at the glass's own plane (GLASS_INSET in from the outer skin). */
@@ -98,8 +102,46 @@ export function openingHit(op: Opening, o: V3, d: V3): F {
   return openingFns.get(op)!(o, d);
 }
 
+/**
+ * Shader: how much of a cone about a ray (ship frame; `spread` the tangent of its half-angle)
+ * leaves through an opening, 0..1: the signed distance from where the ray crosses the opening's
+ * plane to its rounded outline against the cone's footprint there (wider at a grazing angle), and
+ * no more than the opening's share of a footprint wider than it. A rough surface's reflection sees
+ * a window blurred by its lobe, not its outline.
+ */
+export function openingCover(op: Opening, o: V3, d: V3, spread: F): F {
+  return coverFns.get(op)!(o, d, spread);
+}
+
 const openingFns = new Map<Opening, (o: V3, d: V3) => F>();
+const coverFns = new Map<Opening, (o: V3, d: V3, spread: F) => F>();
 for (const op of [...WINDOWS, DOOR_OPENING]) {
+  const cover = Fn(([o, d, spread]: [V3, V3, F]) => {
+    const n = vec3(...op.n);
+    const den = dot(n, d);
+    const safe = den.abs().lessThan(1e-6).select(float(1e-6), den);
+    const t = float(op.d).sub(dot(n, o)).div(safe);
+    const q = o.add(d.mul(t)).sub(vec3(...op.o));
+    const p = vec2(dot(q, vec3(...op.u)), dot(q, vec3(...op.v)));
+    let outside: F = float(-1e9);
+    let dist: F = float(1e9);
+    for (let i = 0; i < op.core.length; i++) {
+      const a = op.core[i];
+      const b = op.core[(i + 1) % op.core.length];
+      const e = vec2(b[0] - a[0], b[1] - a[1]);
+      const len2 = (b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2;
+      const pa = p.sub(vec2(a[0], a[1]));
+      outside = max(outside, pa.x.mul(e.y).sub(pa.y.mul(e.x)).div(Math.sqrt(len2))) as unknown as F;
+      const h = pa.dot(e).div(len2).clamp(0, 1);
+      dist = min(dist, pa.sub(e.mul(h)).length()) as unknown as F;
+    }
+    // Signed distance to the rounded outline (negative inside).
+    const sd = outside.greaterThan(0.0).select(dist, outside).sub(op.r);
+    const footprint = max(t.mul(spread).div(max(den.abs(), 0.2)), 0.002);
+    const c = float(0.5).sub(sd.div(footprint.mul(2))).clamp(0, 1).mul(min(float(op.area).div(footprint.mul(footprint).mul(Math.PI)), 1));
+    return t.greaterThan(0.0).select(c, float(0));
+  }).setLayout({ name: `introCover_${op.name.replace(/[^a-z]/g, '')}`, type: 'float', inputs: [{ name: 'o', type: 'vec3' }, { name: 'd', type: 'vec3' }, { name: 'spread', type: 'float' }] }) as unknown as (o: V3, d: V3, spread: F) => F;
+  coverFns.set(op, cover);
   const fn = Fn(([o, d]: [V3, V3]) => {
     const n = vec3(...op.n);
     const den = dot(n, d);

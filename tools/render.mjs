@@ -15,7 +15,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIST_ORIGIN, serveDist, serveHousePack } from './serveDist.mjs';
+import { DIST_ORIGIN, serveDist, serveAssetHost } from './serveDist.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -79,7 +79,7 @@ async function capture(page, spot, logs, t0) {
 async function boot(spot) {
   const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: dpr });
   if (dist) await serveDist(context, dist);
-  await serveHousePack(context);
+  await serveAssetHost(context);
   const page = await context.newPage();
   const logs = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));

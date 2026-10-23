@@ -21,7 +21,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { DIST_ORIGIN, serveDist, serveHousePack } from '../serveDist.mjs';
+import { DIST_ORIGIN, serveDist, serveAssetHost } from '../serveDist.mjs';
 import { buildCapture, CAPTURE_DIST } from './build.mjs';
 import { SHOTS } from './shots.mjs';
 import { poseAt } from './path.mjs';
@@ -69,7 +69,7 @@ const browser = await chromium.launch({
 try {
   const context = await browser.newContext({ viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   await serveDist(context, CAPTURE_DIST);
-  await serveHousePack(context);
+  await serveAssetHost(context);
   const page = await context.newPage();
   const logs = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));

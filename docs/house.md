@@ -5,7 +5,7 @@ Code: `src/house/`. The asset and its export contract are `blender/docs/house.md
 ## Loading (`pack.ts`, `assets.ts`, `houseWorker.ts`)
 
 - **From R2, never the local file.** The game reads `house.pack` from the R2 bucket by HTTP Range. Entries are kept in the Cache API under a hash of the index, so a re-export never serves stale bytes, and old caches are pruned once the interiors are in.
-  - R2's CORS allows `http://localhost:5173`; the headless tools answer the R2 URL from `assets/house.pack` by request interception (`tools/serveDist.mjs`, `serveHousePack`) rather than adding origins.
+  - R2's CORS allows `http://localhost:5173`; the headless tools answer the R2 URL from `assets/house.pack` by request interception (`tools/serveDist.mjs`, `serveAssetHost`) rather than adding origins.
 - **Everything at boot.** The exterior loads in parallel with the atmosphere stage; the floors (G, L1, L2) and the room reflections are built in the boot's `interiors` stage. A failure is fatal through the normal error path.
   - **Prepared behind the exterior** (`assets.ts prepareInteriors`): the floors' fetch and worker compile and the reflections' prefilter start as soon as the exterior is compiled, so they run while the world is built; the `interiors` stage only builds the prepared parts (in order G, L1, L2) and installs the atlas. Fetches run one floor ahead of the worker (at most two floors' raw buffers alive). Errors stay observed until that stage awaits them, so they report there.
 - **Worker arrays are adopted.** Draw groups' typed arrays become the geometry's attributes as they are (`BufferAttribute`, not `Float32BufferAttribute`, which copies, ~180 MB over the house). They are never written or transferred afterwards.

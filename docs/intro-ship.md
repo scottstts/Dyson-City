@@ -46,7 +46,8 @@ Code: `src/intro/ship/`. Ship frame: metres, x forward, y up, z to starboard, or
 
 ## Light
 
-- **The cabin is lit like any interior: baked** (`cabinLight.ts`). Per vertex, the share of the hemisphere seen through the panes and the door, with bent normals, plus the lamps' and screens' irradiance. Image-based light alone lit the cockpit white in scene 1 with the star the hull hides.
+- **The cabin is lit like any interior: baked in Cycles** under the game's light (`docs/intro-cabin-bake.md`): lightmaps and per-corner light per scene, reflection captures, the live outside along reflections that leave through an opening. Image-based light alone lit the cockpit white in scene 1 with the star the hull hides.
+  - *Rejected:* a per-vertex bake in the game (visibility through the openings, the lamps unshadowed, one constant for the bounce): the cockpit read flat, the floor under the dash as bright as the open floor.
 - **The panes are not geometry.** They are composited analytically in post like the Dome's glass (`canopy.ts`, `glazing.ts`), so the world through a moving ship's windshield keeps its velocity under TAA.
 - **The ship's lights** (`lights.ts`) run while the engines do:
   - nav red and green on the nacelles, white at the tail;

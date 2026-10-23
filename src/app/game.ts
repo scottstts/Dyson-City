@@ -2,7 +2,7 @@
  * Runtime entry point: owns the frame loop and wires player, world, pipeline and exposure.
  * System logic lives in its own modules; this file only sequences them.
  */
-import { PerspectiveCamera, Vector3, type Node, type Object3D } from 'three/webgpu';
+import { Matrix4, PerspectiveCamera, Vector3, type Node, type Object3D } from 'three/webgpu';
 import type { RendererHandle } from '../core/renderer';
 import { fatal } from '../core/fatal';
 import type { World } from './world';
@@ -178,6 +178,16 @@ export class Game {
   /** Review: the intro at t s, held there (tools/intro-shots.mjs). */
   introSeek(t: number, hold = true): void {
     this.intro?.seek(t, hold);
+  }
+
+  /** Review: the intro's camera at a matrix in the ship's frame (column-major), or the eye (null). */
+  introCapture(local: number[] | null, outside = true): void {
+    this.intro?.setCapture(local ? new Matrix4().fromArray(local) : null, outside);
+  }
+
+  /** Review: the intro's timeline (its scenes' times). */
+  introTimeline(): unknown {
+    return this.intro?.timeline ?? null;
   }
 
   /** The intro to play on the first Enter (boot); `at` starts it at once for review (?intro). */

@@ -11,7 +11,7 @@
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DIST_ORIGIN, serveDist, serveHousePack } from './serveDist.mjs';
+import { DIST_ORIGIN, serveDist, serveAssetHost } from './serveDist.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -33,7 +33,7 @@ const browser = await chromium.launch({
 try {
   const context = await browser.newContext({ viewport: { width: w, height: h } });
   if (dist) await serveDist(context, dist);
-  await serveHousePack(context);
+  await serveAssetHost(context);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

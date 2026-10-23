@@ -6,17 +6,17 @@
  * and disposed once the intro ends.
  */
 import { Group, InstancedMesh, Matrix4, Mesh, type BufferGeometry, type Material, type Object3D } from 'three/webgpu';
-import { emitParts, PolyMesh, v3, type Vec3 } from '../../geometry/polyMesh';
+import { emitParts, type CornerAttributes, type PolyMesh } from '../../geometry/polyMesh';
 import { buildHull } from './hull';
 import { buildFin, buildNacelle, buildWing, mirrorZ } from './nacelle';
-import { buildCabin, CEILING_LIGHTS, CEILING_LIGHT } from './cabin/cabin';
-import { buildCockpit, dashFace, overheadFace, COCKPIT_LAMPS, DASH, MONITOR } from './cabin/cockpit';
-import { createShipMaterials, LAMP_RADIANCE, SCREEN_RADIANCE, SPOT_RADIANCE, type ShipLook, type ShipMaterials } from './materials';
+import { buildCabin } from './cabin/cabin';
+import { buildCockpit, DASH, MONITOR } from './cabin/cockpit';
+import { createShipMaterials, type ShipLook, type ShipMaterials } from './materials';
 import type { ShipScreens } from './screens';
-import { bakeCabinLight, type CabinEmitter } from './cabinLight';
+import type { CabinLight } from './cabinLight';
 import { SHIP_SLOT, SHIP_SLOTS, isCabinSlot } from './slots';
-import { EYE } from './spec';
 import { buildDoorFairing, buildDoorLeaf, doorOffset } from './door';
+import { cabinFaces, slotsOf } from './bake/cabinMesh';
 import { buildFlight, buildHandrail, buildStanchion, buildTread, HANDRAIL, STANCHIONS, stairPose, stairState, stanchionTurn, TREADS } from './stair';
 import { buildLeg, LEGS, poseLeg, type LegPose } from './gear';
 import { ShipParts } from './parts';
@@ -51,54 +51,6 @@ export function buildShipParts(): ShipParts {
   buildCockpitDetails(parts);
   buildCabinDetails(parts);
   return parts;
-}
-
-/** The faces of a part in the slots `keep` admits (vertices shared; unused ones are not emitted). */
-function slotsOf(m: PolyMesh, keep: (slot: number) => boolean): PolyMesh {
-  const out = new PolyMesh(m.crease);
-  out.verts = m.verts;
-  m.faces.forEach((f, i) => {
-    if (keep(m.faceMat[i])) out.face(f, m.faceMat[i], m.uvs[i]);
-  });
-  return out;
-}
-
-/** The cabin's emitters for its light bake: the ceiling's light line, the cockpit's lamps, the screens. */
-export function cabinEmitters(): CabinEmitter[] {
-  const out: CabinEmitter[] = CEILING_LIGHTS.map(([x0, x1]) => ({
-    centre: [(x0 + x1) / 2, CEILING_LIGHT.y, 0] as Vec3,
-    a: [(x1 - x0) / 2 - 0.06, 0, 0] as Vec3,
-    b: [0, 0, CEILING_LIGHT.halfWidth] as Vec3,
-    n: [0, -1, 0] as Vec3,
-    radiance: LAMP_RADIANCE,
-    group: 0 as const,
-  }));
-  const face = dashFace();
-  const midV = ((DASH.top + DASH.bottom) / 2 - DASH.face.y) / Math.cos(DASH.face.rake);
-  for (const z of DASH.displays.z) {
-    out.push({
-      centre: v3.add(face.o, v3.add(v3.add(v3.scale(face.u, z), v3.scale(face.v, midV)), v3.scale(face.w, 0.02))),
-      a: v3.scale(face.u, DASH.displays.hw),
-      b: v3.scale(face.v, DASH.displays.hh),
-      n: face.w,
-      radiance: SCREEN_RADIANCE * 0.2,
-      group: 1,
-    });
-  }
-  // The map lights (small discs, as squares of the same area) and the footwell strip.
-  const oh = overheadFace();
-  const L = COCKPIT_LAMPS.overhead;
-  const side = (L.r * Math.sqrt(Math.PI)) / 2;
-  for (const z of L.lights) {
-    const c = v3.add(oh.o, v3.add(v3.add(v3.scale(oh.u, z), v3.scale(oh.v, L.back)), v3.scale(oh.w, 0.016)));
-    out.push({ centre: c, a: v3.scale(oh.u, side), b: v3.scale(oh.v, side), n: oh.w, radiance: SPOT_RADIANCE, group: 0 });
-  }
-  const F = COCKPIT_LAMPS.footwell;
-  out.push({ centre: [F.x - 0.06, F.y - F.depth, 0], a: [0, 0, F.halfWidth], b: [0.022, 0, 0], n: [0, -1, 0], radiance: LAMP_RADIANCE * 0.5, group: 0 });
-  const w = v3.norm(v3.sub(EYE, MONITOR.centre));
-  const u = v3.norm(v3.cross([0, 1, 0], w));
-  out.push({ centre: MONITOR.centre, a: v3.scale(u, MONITOR.hw), b: v3.scale(v3.cross(w, u), MONITOR.hh), n: w, radiance: SCREEN_RADIANCE * 0.5, group: 1 });
-  return out;
 }
 
 /** What moves this frame. */
@@ -145,7 +97,7 @@ export class Ship {
   private readonly geometries: BufferGeometry[] = [];
   private readonly extraMaterials: Material[] = [];
 
-  constructor(screens: ShipScreens) {
+  constructor(screens: ShipScreens, light: CabinLight) {
     this.group.name = 'IntroShip';
     this.group.matrixAutoUpdate = false;
     this.materials = createShipMaterials({
@@ -160,26 +112,27 @@ export class Ship {
     mats[SHIP_SLOT.engineGlow] = mainGlow.material;
     this.mainLevel = mainGlow.level;
     for (const [slot, m] of Object.entries(this.lights.materials)) mats[Number(slot)] = m;
-    const emit = (parts: PolyMesh[]) => {
-      const g = emitParts(parts, { slots: SHIP_SLOTS });
+    const emit = (parts: PolyMesh[], corners?: CornerAttributes) => {
+      const g = emitParts(parts, { slots: SHIP_SLOTS, corners });
       this.geometries.push(g);
       return g;
     };
-    const mesh = (name: string, parts: PolyMesh[], list: Material[] = mats) => {
-      const m = new Mesh(emit(parts), list);
+    const mesh = (name: string, parts: PolyMesh[], list: Material[] = mats, corners?: CornerAttributes) => {
+      const m = new Mesh(emit(parts, corners), list);
       m.name = `IntroShip.${name}`;
       m.matrixAutoUpdate = false;
       this.group.add(m);
       return m;
     };
-    const emitters = cabinEmitters();
 
-    // Fixed: the outside and the cabin, each lit its own way.
+    // Fixed: the outside and the cabin, each lit its own way (the cabin by its bake).
     const parts = buildShipParts();
     this.triangles = parts.triangles;
     const fixed = parts.list.map((p) => p.mesh);
     mesh('outside', fixed.map((m) => slotsOf(m, (s) => !isCabinSlot(s))));
-    bakeCabinLight(mesh('cabin', fixed.map((m) => slotsOf(m, isCabinSlot))).geometry, emitters);
+    const cabin = cabinFaces(fixed);
+    light.verify('cabin', cabin);
+    mesh('cabin', cabin, mats, light.corners('cabin', cabin));
 
     // The lift vents' glow, on the lifts' thrust.
     const ventMats = [...mats];
@@ -190,8 +143,9 @@ export class Ship {
     this.ventGlow = mesh('vent-glow', VENTS.map((v) => buildVentGrille(v).glow), ventMats);
 
     // The door: its inner face lit as the cabin (baked shut).
-    this.door = mesh('door', buildDoorLeaf());
-    bakeCabinLight(this.door.geometry, emitters);
+    const leaf = buildDoorLeaf();
+    light.verify('leaf', leaf);
+    this.door = mesh('door', leaf, this.materials.leafList(), light.corners('leaf', leaf));
 
     // The stair: the flight, its treads and stanchions (instanced), its rails.
     this.flight = mesh('stair', buildFlight());
@@ -291,7 +245,7 @@ export class Ship {
     this.group.removeFromParent();
     this.jets.group.removeFromParent();
     for (const g of this.geometries) g.dispose();
-    for (const m of [...this.materials.list, ...this.extraMaterials]) m.dispose();
+    for (const m of [...this.materials.list, ...this.materials.leafCabin.values(), ...this.extraMaterials]) m.dispose();
   }
 }
 

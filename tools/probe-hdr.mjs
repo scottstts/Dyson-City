@@ -7,7 +7,7 @@
  *   node tools/probe-hdr.mjs <spot> "<extra query>" x,y [x,y ...]   (x, y in 0..1 screen UV)
  */
 import { chromium } from 'playwright-core';
-import { serveHousePack } from './serveDist.mjs';
+import { serveAssetHost } from './serveDist.mjs';
 import zlib from 'node:zlib';
 
 const EV = -5; // linear scale 2^EV; radiance up to 32 before the view clamps
@@ -69,7 +69,7 @@ const browser = await chromium.launch({
 });
 try {
   const page = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  await serveHousePack(page.context());
+  await serveAssetHost(page.context());
   await page.goto(`http://localhost:5174/?autostart&spot=${spot}&view=hdr&ev=${EV}${query ? `&${query}` : ''}`);
   await page.waitForFunction(() => window.__dyson?.ready === true, null, { timeout: 120_000 });
   await page.evaluate(() => new Promise((r) => { let k = 0; const s = () => (++k >= 40 ? r() : requestAnimationFrame(s)); requestAnimationFrame(s); }));

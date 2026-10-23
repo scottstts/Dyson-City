@@ -1,6 +1,6 @@
 # Intro: the film
 
-Code: `src/intro/`. The script is `docs/intro.md`; the ship is `docs/intro-ship.md`, the view from outside the sphere `docs/intro-space.md`, the sound `docs/intro-audio.md`.
+Code: `src/intro/`. The script is `docs/intro.md`; the ship is `docs/intro-ship.md` (its cabin's light `docs/intro-cabin-bake.md`), the view from outside the sphere `docs/intro-space.md`, the sound `docs/intro-audio.md`.
 
 ## Shape
 

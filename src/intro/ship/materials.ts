@@ -4,26 +4,31 @@
  * matte black reveals, dark titanium machinery, nozzles heat-tinted by their burns. Inside,
  * charcoal liners, a graphite floor, black consoles, satin aluminium trim, dark leather.
  *
- * Outside, every material is lit by image-based light (env.ts). Inside, by what the openings and
- * the lamps send in (cabinLight.ts): the environment through the panes and the door, and the lamps'
- * and screens' baked light as emission on the diffuse share.
+ * Outside, every material is lit by image-based light (env.ts). Inside, by the cabin's bake
+ * (cabinLight.ts): the cabin's and the door leaf's cabin slots are the same finishes with each its
+ * own baked light, so the leaf's are copies.
  */
 import { DoubleSide, MeshPhysicalNodeMaterial, MeshStandardNodeMaterial, type Material, type Node, type Texture } from 'three/webgpu';
-import { clamp, color, float, mix, mrt, normalViewGeometry, packNormalToRGB, positionLocal, round, texture, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
+import { clamp, color, float, mix, mrt, normalView, normalViewGeometry, packNormalToRGB, positionLocal, round, texture, uv, vec2, vec3, vec4, velocity } from 'three/tsl';
 import { SHIP_SLOT, SHIP_SLOTS, isCabinSlot } from './slots';
-import { cabinLampLight, cabinState } from './cabinLight';
+import { CabinLight, cabinState } from './cabinLight';
 import { CONSOLE_PANELS, HULL_PANELS, PLATE_PANELS, panelSkin, perforation, treadSkin, type PanelSpec } from './skin';
 
 type V3 = Node<'vec3'>;
 
 export interface ShipLook {
-  /** Environment outside (env.ts) and inside (cabinLight.ts). */
+  /** Environment outside (env.ts), and the cabin's and the door leaf's inside (cabinLight.ts). */
   env: Node;
   cabinEnv: Node;
+  leafEnv: Node;
 }
 
 export interface ShipMaterials {
   readonly list: Material[];
+  /** The leaf's own copies of the cabin slots, by slot. */
+  readonly leafCabin: ReadonlyMap<number, Material>;
+  /** The list as it stands, with the leaf's own cabin slots (the door leaf's mesh). */
+  leafList(): Material[];
   setLook(look: ShipLook): void;
 }
 
@@ -33,7 +38,15 @@ export const LAMP_RADIANCE = 3.0;
 export const SPOT_RADIANCE = 60;
 export const SCREEN_RADIANCE = 0.55;
 
-interface Finish {
+/** The emitters' glow colours (sRGB hex; × their radiance), shared with the cabin's bake. */
+export const LAMP_GLOW = '#ffe9cc';
+export const SPOT_GLOW = '#fff1dc';
+/** A blank screen's dim panel (linear), and the share of SCREEN_RADIANCE the dash's displays and
+ *  the monitor show on average (for the bake: their images change, their mean light does not). */
+export const SCREEN_PANEL: readonly [number, number, number] = [0.05, 0.065, 0.08];
+export const SCREEN_MEAN = { display: 0.2, monitor: 0.5 } as const;
+
+export interface Finish {
   name: string;
   hex: string;
   metalness: number;
@@ -44,7 +57,7 @@ interface Finish {
   specular?: number;
 }
 
-const FINISH: Record<number, Finish> = {
+export const FINISH: Record<number, Finish> = {
   // A low-reflectance matte black (F0 ~2.4 %): under a star 90° across, a glossier black mirrors
   // the blaze off every upward facet and reads grey.
   [SHIP_SLOT.hull]: { name: 'hull', hex: '#2c2d30', metalness: 0, roughness: 0.58, specular: 0.6 },
@@ -81,6 +94,15 @@ function smoothContact() {
   return mrt({ normal: vec4(packNormalToRGB(normalViewGeometry), 1), velocity });
 }
 
+/**
+ * Inside: no contact AO over a lightmap (its bake holds the occlusion, render/sceneMrt.ts); a
+ * fitting lit at its corners keeps it for contact. `geometric`: the surface's own normal (above).
+ */
+function cabinContact(geometric: boolean) {
+  const n = geometric ? normalViewGeometry : normalView;
+  return mrt({ normal: vec4(packNormalToRGB(n), float(1).sub(CabinLight.lightmapped())), velocity });
+}
+
 function physical(f: Finish): MeshPhysicalNodeMaterial {
   const m = new MeshPhysicalNodeMaterial({ metalness: f.metalness, roughness: f.roughness, clearcoat: f.coat ?? 0, clearcoatRoughness: f.coatRoughness ?? 0.2 });
   m.name = `Ship.${f.name}`;
@@ -99,7 +121,7 @@ function screen(name: string, image: Node<'vec3'> | null): MeshPhysicalNodeMater
   m.name = `Ship.${name}`;
   m.colorNode = vec3(0.01, 0.0095, 0.009);
   m.specularIntensityNode = float(0.05);
-  const glow: V3 = image ?? (vec3(0.05, 0.065, 0.08) as unknown as V3);
+  const glow: V3 = image ?? (vec3(...SCREEN_PANEL) as unknown as V3);
   m.emissiveNode = glow.mul(SCREEN_RADIANCE).mul(cabinState.screens);
   return m;
 }
@@ -124,12 +146,12 @@ export function createShipMaterials(screens: ScreenImages): ShipMaterials {
   const lamp = new MeshStandardNodeMaterial({ metalness: 0, roughness: 0.3 });
   lamp.name = 'Ship.lamp';
   lamp.colorNode = color('#f2e6d2');
-  lamp.emissiveNode = color('#ffe9cc').mul(float(LAMP_RADIANCE)).mul(cabinState.lamps);
+  lamp.emissiveNode = color(LAMP_GLOW).mul(float(LAMP_RADIANCE)).mul(cabinState.lamps);
   list[S.lamp] = lamp;
   const spot = new MeshStandardNodeMaterial({ metalness: 0, roughness: 0.2 });
   spot.name = 'Ship.spot';
   spot.colorNode = color('#f6efe4');
-  spot.emissiveNode = color('#fff1dc').mul(float(SPOT_RADIANCE)).mul(cabinState.lamps);
+  spot.emissiveNode = color(SPOT_GLOW).mul(float(SPOT_RADIANCE)).mul(cabinState.lamps);
   list[S.spot] = spot;
   list[S.screen] = screen('screen', null);
   const mon = uv().div(vec2(screens.monitorHalf[0] * 2, screens.monitorHalf[1] * 2)).add(0.5);
@@ -165,20 +187,31 @@ export function createShipMaterials(screens: ScreenImages): ShipMaterials {
     const m = list[slot] as MeshPhysicalNodeMaterial;
     m.colorNode = color(FINISH[slot].hex).mul(perforation(0.018, 0.0028));
   }
-  // Inside, the lamps' and screens' baked light on each finish's diffuse share (metals: a little,
-  // for the lamps they mirror).
-  for (const [slot, f] of Object.entries(FINISH)) {
-    if (!isCabinSlot(Number(slot))) continue;
-    const m = list[Number(slot)] as MeshPhysicalNodeMaterial;
-    const share = f.metalness > 0.5 ? 0.12 : 1;
-    m.emissiveNode = cabinLampLight((m.colorNode as V3).mul(share) as unknown as V3);
-  }
+  list.forEach((m, slot) => {
+    if (isCabinSlot(slot)) (m as MeshStandardNodeMaterial).mrtNode = cabinContact(slot === S.console || slot === S.floor);
+  });
+  // The slots the ship fills itself (the engines' glow, the lights) are not in the list yet: the
+  // leaf's list is read from it when the leaf's mesh is made.
+  const leafCabin = new Map<number, Material>();
+  list.forEach((m, slot) => {
+    if (!isCabinSlot(slot)) return;
+    const c = m.clone();
+    c.name = `${m.name}.leaf`;
+    leafCabin.set(slot, c);
+  });
   return {
     list,
+    leafCabin,
+    leafList: () => Array.from({ length: SHIP_SLOTS }, (_, slot) => leafCabin.get(slot) ?? list[slot]),
     setLook(look) {
       list.forEach((m, slot) => {
         const mm = m as MeshStandardNodeMaterial;
         mm.envNode = isCabinSlot(slot) ? look.cabinEnv : look.env;
+        mm.needsUpdate = true;
+      });
+      leafCabin.forEach((m) => {
+        const mm = m as MeshStandardNodeMaterial;
+        mm.envNode = look.leafEnv;
         mm.needsUpdate = true;
       });
     },

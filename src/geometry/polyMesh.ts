@@ -131,65 +131,100 @@ export function triangulate(verts: Vec3[], face: number[]): [number, number, num
 export interface EmitOptions {
   /** Number of material slots (geometry groups are emitted in slot order). */
   slots: number;
+  /** Extra per-corner attributes (a corner shares an emitted vertex only with corners of equal values). */
+  corners?: CornerAttributes;
+}
+
+/** Per-corner values beyond position, normal and UV (e.g. a lightmap's UVs and baked light). */
+export interface CornerAttributes {
+  attributes: readonly { name: string; size: number }[];
+  /** The values of corner `corner` of face `face` of part `part` (all attributes, flattened). */
+  values(part: number, face: number, corner: number): ArrayLike<number>;
 }
 
 interface SlotBuffer {
   pos: number[];
   nrm: number[];
   uv: number[];
+  extra: number[];
   idx: number[];
 }
 
 /**
+ * Smooth-by-angle normals per face corner: a corner averages the adjacent faces of its own slot
+ * whose normals lie within the part's crease angle (area-weighted).
+ */
+export function cornerNormals(part: PolyMesh): Vec3[][] {
+  const fn = part.faces.map((f) => newell(part.verts, f));
+  const unit = fn.map((n) => v3.norm(n));
+  const around: number[][] = part.verts.map(() => []);
+  part.faces.forEach((f, fi) => {
+    for (const k of f) around[k].push(fi);
+  });
+  const cosCrease = Math.cos((part.crease * Math.PI) / 180);
+  return part.faces.map((f, fi) => {
+    const slot = part.faceMat[fi];
+    return f.map((k) => {
+      let n: Vec3 = [0, 0, 0];
+      for (const g of around[k]) {
+        if (part.faceMat[g] !== slot) continue;
+        if (v3.dot(unit[g], unit[fi]) < cosCrease) continue;
+        n = v3.add(n, fn[g]);
+      }
+      const l = v3.len(n);
+      return l > 0 ? v3.scale(n, 1 / l) : unit[fi];
+    });
+  });
+}
+
+/**
  * Emits parts as one indexed BufferGeometry with one group per material slot. Corners share an
- * emitted vertex only when they share a part vertex, slot, normal and UV, so smooth-by-angle
- * normals and per-face UV seams survive.
+ * emitted vertex only when they share a part vertex, slot, normal, UV and extra values, so
+ * smooth-by-angle normals and per-face UV seams survive.
  */
 export function emitParts(parts: PolyMesh[], opts: EmitOptions): BufferGeometry {
-  const perSlot: SlotBuffer[] = Array.from({ length: opts.slots }, () => ({ pos: [], nrm: [], uv: [], idx: [] }));
-  for (const part of parts) {
-    const fn = part.faces.map((f) => newell(part.verts, f));
-    const unit = fn.map((n) => v3.norm(n));
-    const around: number[][] = part.verts.map(() => []);
-    part.faces.forEach((f, fi) => {
-      for (const k of f) around[k].push(fi);
-    });
-    const cosCrease = Math.cos((part.crease * Math.PI) / 180);
-    // Emitted vertices already made for each part vertex: [slot, nx, ny, nz, u, v, index].
+  const perSlot: SlotBuffer[] = Array.from({ length: opts.slots }, () => ({ pos: [], nrm: [], uv: [], extra: [], idx: [] }));
+  const corners = opts.corners;
+  const E = corners ? corners.attributes.reduce((n, a) => n + a.size, 0) : 0;
+  parts.forEach((part, pi) => {
+    const normals = cornerNormals(part);
+    // Emitted vertices already made for each part vertex: [slot, nx, ny, nz, u, v, index, ...extra].
     const made: number[][][] = part.verts.map(() => []);
     part.faces.forEach((f, fi) => {
       const slot = part.faceMat[fi];
       const out = perSlot[slot];
       if (!out) throw new Error(`face slot ${slot} out of range`);
       const ids = f.map((k, c) => {
-        let n: Vec3 = [0, 0, 0];
-        for (const g of around[k]) {
-          if (part.faceMat[g] !== slot) continue;
-          if (v3.dot(unit[g], unit[fi]) < cosCrease) continue;
-          n = v3.add(n, fn[g]);
-        }
-        const l = v3.len(n);
-        n = l > 0 ? v3.scale(n, 1 / l) : unit[fi];
+        const n = normals[fi][c];
         const u = part.uvs[fi][c];
-        for (const m of made[k]) {
-          if (m[0] === slot && Math.abs(m[1] - n[0]) < 1e-5 && Math.abs(m[2] - n[1]) < 1e-5 && Math.abs(m[3] - n[2]) < 1e-5 && Math.abs(m[4] - u[0]) < 1e-6 && Math.abs(m[5] - u[1]) < 1e-6) return m[6];
+        const x = corners ? corners.values(pi, fi, c) : null;
+        search: for (const m of made[k]) {
+          if (!(m[0] === slot && Math.abs(m[1] - n[0]) < 1e-5 && Math.abs(m[2] - n[1]) < 1e-5 && Math.abs(m[3] - n[2]) < 1e-5 && Math.abs(m[4] - u[0]) < 1e-6 && Math.abs(m[5] - u[1]) < 1e-6)) continue;
+          for (let e = 0; e < E; e++) if (m[7 + e] !== x![e]) continue search;
+          return m[6];
         }
         const p = part.verts[k];
         const id = out.pos.length / 3;
         out.pos.push(p[0], p[1], p[2]);
         out.nrm.push(n[0], n[1], n[2]);
         out.uv.push(u[0], u[1]);
-        made[k].push([slot, n[0], n[1], n[2], u[0], u[1], id]);
+        const rec = [slot, n[0], n[1], n[2], u[0], u[1], id];
+        for (let e = 0; e < E; e++) {
+          out.extra.push(x![e]);
+          rec.push(x![e]);
+        }
+        made[k].push(rec);
         return id;
       });
       for (const t of triangulate(part.verts, f)) out.idx.push(ids[t[0]], ids[t[1]], ids[t[2]]);
     });
-  }
+  });
   const vertexCount = perSlot.reduce((n, s) => n + s.pos.length / 3, 0);
   const indexCount = perSlot.reduce((n, s) => n + s.idx.length, 0);
   const pos = new Float32Array(vertexCount * 3);
   const nrm = new Float32Array(vertexCount * 3);
   const uv = new Float32Array(vertexCount * 2);
+  const extra = corners ? corners.attributes.map((a) => new Float32Array(vertexCount * a.size)) : [];
   const idx = new Uint32Array(indexCount);
   const g = new BufferGeometry();
   let vBase = 0;
@@ -198,6 +233,15 @@ export function emitParts(parts: PolyMesh[], opts: EmitOptions): BufferGeometry 
     pos.set(s.pos, vBase * 3);
     nrm.set(s.nrm, vBase * 3);
     uv.set(s.uv, vBase * 2);
+    if (corners) {
+      const count = s.pos.length / 3;
+      let o = 0;
+      for (let v = 0; v < count; v++) {
+        corners.attributes.forEach((a, ai) => {
+          for (let c = 0; c < a.size; c++) extra[ai][(vBase + v) * a.size + c] = s.extra[o++];
+        });
+      }
+    }
     for (let i = 0; i < s.idx.length; i++) idx[iBase + i] = s.idx[i] + vBase;
     if (s.idx.length > 0) g.addGroup(iBase, s.idx.length, slot);
     vBase += s.pos.length / 3;
@@ -207,6 +251,7 @@ export function emitParts(parts: PolyMesh[], opts: EmitOptions): BufferGeometry 
   g.setAttribute('position', new BufferAttribute(pos, 3));
   g.setAttribute('normal', new BufferAttribute(nrm, 3));
   g.setAttribute('uv', new BufferAttribute(uv, 2));
+  corners?.attributes.forEach((a, ai) => g.setAttribute(a.name, new BufferAttribute(extra[ai], a.size)));
   g.setIndex(new BufferAttribute(idx, 1));
   g.computeBoundingSphere();
   g.computeBoundingBox();

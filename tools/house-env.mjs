@@ -21,8 +21,8 @@
 import { chromium } from 'playwright-core';
 import fs from 'node:fs';
 import path from 'node:path';
-import zlib from 'node:zlib';
-import { DIST_ORIGIN, serveDist, serveHousePack } from './serveDist.mjs';
+import { DIST_ORIGIN, serveDist, serveAssetHost } from './serveDist.mjs';
+import { CHROME, CHROME_ARGS, decodePng, mergeBrackets, sampleFace, writeRgbe } from './hdr.mjs';
 
 const args = process.argv.slice(2);
 const opt = (name, fallback) => {
@@ -43,56 +43,6 @@ const size = Number(opt('size', '512'));
 const out = opt('out', 'blender/bake/house_env.hdr');
 const EVS = [-12, -8, -4, 0, 4]; // brackets: 2^-EV is each one's clip level (4096 down to 1/16)
 const SETTLE = 12;
-
-// ---------------------------------------------------------------- PNG (8-bit RGB/RGBA) decode
-function decodePng(buf) {
-  let p = 8;
-  let w = 0;
-  let h = 0;
-  let bpp = 4;
-  const idat = [];
-  while (p < buf.length) {
-    const len = buf.readUInt32BE(p);
-    const type = buf.toString('ascii', p + 4, p + 8);
-    const data = buf.subarray(p + 8, p + 8 + len);
-    if (type === 'IHDR') {
-      w = data.readUInt32BE(0);
-      h = data.readUInt32BE(4);
-      bpp = data[9] === 6 ? 4 : 3;
-    } else if (type === 'IDAT') idat.push(data);
-    p += 12 + len;
-  }
-  const raw = zlib.inflateSync(Buffer.concat(idat));
-  const stride = w * bpp;
-  const px = Buffer.alloc(h * stride);
-  for (let y = 0; y < h; y++) {
-    const f = raw[y * (stride + 1)];
-    for (let x = 0; x < stride; x++) {
-      const a = x >= bpp ? px[y * stride + x - bpp] : 0;
-      const b = y > 0 ? px[(y - 1) * stride + x] : 0;
-      const c = x >= bpp && y > 0 ? px[(y - 1) * stride + x - bpp] : 0;
-      const v = raw[y * (stride + 1) + 1 + x];
-      let r;
-      if (f === 0) r = v;
-      else if (f === 1) r = v + a;
-      else if (f === 2) r = v + b;
-      else if (f === 3) r = v + ((a + b) >> 1);
-      else {
-        const pa = Math.abs(b - c);
-        const pb = Math.abs(a - c);
-        const pc = Math.abs(a + b - 2 * c);
-        r = v + (pa <= pb && pa <= pc ? a : pb <= pc ? b : c);
-      }
-      px[y * stride + x] = r & 255;
-    }
-  }
-  return { w, h, bpp, px };
-}
-
-const LIN = new Float64Array(256).map((_, i) => {
-  const s = i / 255;
-  return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
-});
 
 // ---------------------------------------------------------------- cube faces (three.js, Euler YXZ)
 const D = Math.PI / 180;
@@ -122,17 +72,13 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 
 // ---------------------------------------------------------------- capture
 fs.mkdirSync(path.dirname(out), { recursive: true });
-const browser = await chromium.launch({
-  executablePath: '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  headless: true,
-  args: ['--enable-unsafe-webgpu', '--enable-gpu', '--ignore-gpu-blocklist', '--use-angle=metal', '--enable-features=WebGPU', '--enable-dawn-features=allow_unsafe_apis'],
-});
+const browser = await chromium.launch({ executablePath: CHROME, headless: true, args: CHROME_ARGS });
 const faces = [];
 let meta;
 try {
   const context = await browser.newContext({ viewport: { width: size, height: size }, deviceScaleFactor: 1 });
   if (dist) await serveDist(context, dist);
-  await serveHousePack(context);
+  await serveAssetHost(context);
   const page = await context.newPage();
   const logs = [];
   page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
@@ -174,18 +120,7 @@ try {
       );
       brackets.push({ ev, img: decodePng(await page.screenshot()) });
     }
-    // merge: per pixel, the brightest exposure that did not clip, divided back by its exposure
-    const { w, h, bpp } = brackets[0].img;
-    const rad = new Float32Array(w * h * 3);
-    for (let i = 0; i < w * h; i++) {
-      let picked = brackets[0];
-      for (const b of brackets) {
-        const q = i * bpp;
-        if (Math.max(b.img.px[q], b.img.px[q + 1], b.img.px[q + 2]) < 245) picked = b;
-      }
-      const k = Math.pow(2, -picked.ev);
-      for (let c = 0; c < 3; c++) rad[i * 3 + c] = LIN[picked.img.px[i * bpp + c]] * k;
-    }
+    const { w, h, rad } = mergeBrackets(brackets);
     faces.push({ ...f, ...basis(f.yaw, f.pitch), w, h, rad });
     console.log(`face ${f.name}: done`);
   }
@@ -203,22 +138,6 @@ const Zb = [0, 1, 0];
 const W = 1024;
 const H = 512;
 const eq = new Float32Array(W * H * 3);
-function sampleFace(fc, u, v) {
-  const x = ((u + 1) / 2) * fc.w - 0.5;
-  const y = ((1 - v) / 2) * fc.h - 0.5;
-  const x0 = Math.max(0, Math.min(fc.w - 1, Math.floor(x)));
-  const y0 = Math.max(0, Math.min(fc.h - 1, Math.floor(y)));
-  const x1 = Math.min(fc.w - 1, x0 + 1);
-  const y1 = Math.min(fc.h - 1, y0 + 1);
-  const tx = Math.max(0, Math.min(1, x - x0));
-  const ty = Math.max(0, Math.min(1, y - y0));
-  const o = [0, 0, 0];
-  for (const [xx, yy, wgt] of [[x0, y0, (1 - tx) * (1 - ty)], [x1, y0, tx * (1 - ty)], [x0, y1, (1 - tx) * ty], [x1, y1, tx * ty]]) {
-    const i = (yy * fc.w + xx) * 3;
-    for (let c = 0; c < 3; c++) o[c] += fc.rad[i + c] * wgt;
-  }
-  return o;
-}
 let eUp = 0;
 for (let row = 0; row < H; row++) {
   // Cycles' equirect: v = atan2(z, hypot(x, y)) / π + 0.5 (v = 1 at the top row of the file)
@@ -247,23 +166,7 @@ for (let row = 0; row < H; row++) {
   }
 }
 
-// ---------------------------------------------------------------- Radiance RGBE (flat, no RLE)
-const header = Buffer.from(`#?RADIANCE\n# Dyson City: game light at the house site\nFORMAT=32-bit_rle_rgbe\n\n-Y ${H} +X ${W}\n`, 'ascii');
-const body = Buffer.alloc(W * H * 4);
-for (let i = 0; i < W * H; i++) {
-  const r = eq[i * 3];
-  const g = eq[i * 3 + 1];
-  const b = eq[i * 3 + 2];
-  const m = Math.max(r, g, b);
-  if (m < 1e-32) continue;
-  const e = Math.ceil(Math.log2(m) + 1e-9);
-  const s = 256 / Math.pow(2, e);
-  body[i * 4] = Math.min(255, Math.floor(r * s));
-  body[i * 4 + 1] = Math.min(255, Math.floor(g * s));
-  body[i * 4 + 2] = Math.min(255, Math.floor(b * s));
-  body[i * 4 + 3] = e + 128;
-}
-fs.writeFileSync(out, Buffer.concat([header, body]));
+writeRgbe(out, eq, W, H, 'Dyson City: game light at the house site');
 const side = {
   site: [siteX, siteZ],
   ground: meta.ground,

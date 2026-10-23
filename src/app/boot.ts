@@ -19,6 +19,7 @@ import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
 import { Intro } from '../intro/intro';
 import { loadIntroLines } from '../intro/audio/lines';
+import { loadCabinBake } from '../intro/ship/bake/cabinBake';
 import { IntroSounds } from '../intro/audio/sounds';
 
 function stage(name: BootStage, entry: EntryScreen, progress: number): void {
@@ -52,7 +53,8 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   const audioContext = GameAudio.context();
   // The house's exterior is fetched and compiled alongside (house/assets.ts).
   // The intro's recorded lines too (intro/audio/lines.ts).
-  const [atmosphere, noise, audioBank, speech, houseAssets, introLines] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadSpeech(audioContext), loadHouseAssets(), loadIntroLines(audioContext)]);
+  // And the intro ship's cabin bake (intro/ship/bake/).
+  const [atmosphere, noise, audioBank, speech, houseAssets, introLines, cabinBake] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadSpeech(audioContext), loadHouseAssets(), loadIntroLines(audioContext), loadCabinBake()]);
   setNoiseVolumes(noise);
 
   stage('environment', entry, 0.4);
@@ -60,7 +62,7 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   const world = await buildWorld(handle.renderer, atmosphere, houseAssets, debug.time ?? 0, debug.sky);
 
   // The intro (src/intro/): its ship and its view of the sphere from outside, in the world's scene.
-  const intro = new Intro({ renderer: handle.renderer, world, atmosphere, host, lines: introLines.map((b) => b.duration), view: debug.introView });
+  const intro = new Intro({ renderer: handle.renderer, world, atmosphere, host, lines: introLines.map((b) => b.duration), view: debug.introView, cabinBake });
 
   stage('interiors', entry, 0.5);
   // The house's floors are built while loading, never in play (house/house.ts).

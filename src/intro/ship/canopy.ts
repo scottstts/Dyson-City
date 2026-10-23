@@ -11,7 +11,7 @@ import { Fn, If, abs, dot, float, normalize, pmremTexture, pow, reflect, select,
 import type { Node, Texture } from 'three/webgpu';
 import type { TransparencyComposite } from '../../render/pipeline';
 import { WINDOWS, openingHit } from './glazing';
-import { cabinState } from './cabinLight';
+import { cabinState, type CabinLight } from './cabinLight';
 import { shipInSpace } from './env';
 
 type V3 = Node<'vec3'>;
@@ -24,7 +24,7 @@ export interface Canopy {
   readonly enabled: { value: number };
 }
 
-export function createCanopy(band: Texture, space: Texture): Canopy {
+export function createCanopy(band: Texture, space: Texture, light: CabinLight): Canopy {
   const enabled = uniform(0);
   const S = cabinState;
   const composite: TransparencyComposite = (origin, dir, dist, color) => {
@@ -46,7 +46,8 @@ export function createCanopy(band: Texture, space: Texture): Canopy {
             const nWorld = normalize((S.rotation as unknown as Node<'mat3'>).mul(nShip));
             const r = reflect(dir, nWorld);
             const sky = select(shipInSpace.greaterThan(0.5), pmremTexture(space, r, float(0.04)), pmremTexture(band, r, float(0.04))) as unknown as V3;
-            const refl = select(outward, S.fill as unknown as V3, sky);
+            const cabin = light.reflectionWorld(origin.add(dir.mul(t)), r, float(0.04));
+            const refl = select(outward, cabin, sky);
             out.assign(out.mul(float(1).sub(R)).mul(GLASS.transmission).add(refl.mul(R)));
           });
         }

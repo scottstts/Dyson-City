@@ -41,7 +41,25 @@ export async function serveDist(context, dir) {
 export const HOUSE_PACK_URL = 'https://pub-f86f1e8e87f44fa0b55fb73275682731.r2.dev/house.pack';
 const LOCAL_PACK = path.resolve('assets/house.pack');
 
-export async function serveHousePack(context) {
+/** The intro ship's cabin bake on the asset host (src/intro/ship/bake/cabinBake.ts). */
+export const SHIP_BAKE_URL = 'https://pub-f86f1e8e87f44fa0b55fb73275682731.r2.dev/ship-cabin.bin';
+
+/**
+ * The asset host for the game's bundles, past its CORS policy (it admits only the dev server's
+ * origin): the house's Range requests answered from the local export (`serveHousePack`), the cabin
+ * bake fetched from the host itself by Node (outside the page's CORS) and handed over.
+ */
+export async function serveAssetHost(context) {
+  await serveHousePack(context);
+  await context.route(SHIP_BAKE_URL, async (route) => {
+    const cors = { 'Access-Control-Allow-Origin': '*' };
+    if (route.request().method() === 'OPTIONS') return route.fulfill({ status: 204, headers: { ...cors, 'Access-Control-Allow-Headers': '*' } });
+    const response = await route.fetch();
+    return route.fulfill({ response, headers: { ...response.headers(), ...cors } });
+  });
+}
+
+async function serveHousePack(context) {
   if (!fs.existsSync(LOCAL_PACK)) return;
   const fd = fs.openSync(LOCAL_PACK, 'r');
   const size = fs.fstatSync(fd).size;

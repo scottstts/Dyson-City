@@ -14,7 +14,8 @@ import { createAtmosphereNodes, type AtmosphereTextures } from '../atmosphere/lu
 import { buildTimeline, sceneAt, type Timeline } from './timeline';
 import { Ship, type ShipState } from './ship/ship';
 import { shipEnvironment, shipInSpace } from './ship/env';
-import { cabinEnvironment, cabinState } from './ship/cabinLight';
+import { CabinLight, cabinState } from './ship/cabinLight';
+import type { CabinBake } from './ship/bake/cabinBake';
 import { createCanopy, type Canopy } from './ship/canopy';
 import { ShipScreens, type ScreenData } from './ship/screens';
 import { createSpaceView, type SpaceView } from './space/view';
@@ -55,6 +56,8 @@ export interface IntroDeps {
   view?: [number, number, number] | null;
   /** Lengths of the nine recorded lines (s). */
   lines: readonly number[];
+  /** The cabin's baked light (ship/bake/cabinBake.ts). */
+  cabinBake: CabinBake;
 }
 
 export class Intro {
@@ -66,6 +69,7 @@ export class Intro {
   private readonly world: World;
   private readonly canopy: Canopy;
   private readonly screens: ShipScreens;
+  private readonly cabinLight: CabinLight;
   private readonly screenData: ScreenData = { eta: 0, range: 0, speed: 0, height: 0, sink: 0, ground: 0, toSpot: 0, main: 0, lift: 0, gear: 1, outside: 0.55, landed: false };
   private readonly poseBefore: ShipPose = newShipPose();
   private groundHigh = false;
@@ -75,6 +79,8 @@ export class Intro {
   private readonly shipM = new Matrix4();
   private readonly frameOut: IntroFrame = { space: true, feet: new Vector3(), steps: [], starSeen: 0, adaptationLimit: SPACE_ADAPTATION, done: false };
   private hidden: [Object3D, boolean][] | null = null;
+  /** Review (tools/ship-bake/env.mjs): the camera held here in the ship's frame, the ship hidden. */
+  private capture: Matrix4 | null = null;
   private time = 0;
   private hold: number | null = null;
   private state: 'idle' | 'running' | 'done' = 'idle';
@@ -86,10 +92,12 @@ export class Intro {
     this.timeline = buildTimeline(deps.lines);
     this.space = createSpaceView(deps.renderer, { star: deps.world.star, atmo: createAtmosphereNodes(deps.atmosphere), space: deps.world.backdrop }, deps.view ?? undefined);
     this.screens = new ShipScreens();
-    this.ship = new Ship(this.screens);
+    this.cabinLight = new CabinLight(deps.cabinBake);
+    this.ship = new Ship(this.screens, this.cabinLight);
     const band = deps.world.environment.target.texture;
-    this.ship.setLook({ env: shipEnvironment(band, this.space.texture), cabinEnv: cabinEnvironment(band, this.space.texture) });
-    this.canopy = createCanopy(band, this.space.texture);
+    const space = this.space.texture;
+    this.ship.setLook({ env: shipEnvironment(band, space), cabinEnv: this.cabinLight.environment('cabin', band, space), leafEnv: this.cabinLight.environment('leaf', band, space) });
+    this.canopy = createCanopy(band, space, this.cabinLight);
     deps.world.localComposites.push(this.canopy.composite);
     this.ship.group.visible = false;
     this.space.sky.mesh.visible = false;
@@ -153,6 +161,18 @@ export class Intro {
     return this.overlay.enabled;
   }
 
+  /**
+   * Review: the camera at `local` (a matrix in the ship's frame) instead of the eye, the lids off.
+   * `outside`: the ship and its glass out of the picture too, the outside light as the cabin's bake
+   * sees it (tools/ship-bake/env.mjs). Null gives the eye back.
+   */
+  setCapture(local: Matrix4 | null, outside = true): void {
+    this.capture = local;
+    this.ship.group.visible = local === null || !outside;
+    this.canopy.enabled.value = local !== null && outside ? 0 : 1;
+    this.overlay.enabled = local === null;
+  }
+
   /** Held at a moment (review). */
   get held(): boolean {
     return this.hold !== null;
@@ -192,10 +212,11 @@ export class Intro {
     this.ship.update(this.shipState(t, space), t);
     this.sound?.set({ time: t, space, ship: this.ship.group.matrixWorld, state: this.state3 });
     (cabinState.door as unknown as { value: number }).value = this.ship.doorOpen;
-    this.setCabin(space);
+    this.setCabin();
     this.setGround(scene === 2);
     const e = this.eye.update(t, this.hold !== null ? 0 : dt, this.shipM);
-    e.matrix.decompose(camera.position, camera.quaternion, SCALE);
+    if (this.capture) CAPTURE.multiplyMatrices(this.shipM, this.capture).decompose(camera.position, camera.quaternion, SCALE);
+    else e.matrix.decompose(camera.position, camera.quaternion, SCALE);
     camera.updateMatrixWorld();
     this.overlay.update(t);
     this.updateScreens(t, space, e.aboard);
@@ -258,13 +279,11 @@ export class Intro {
     } else near.value.copy(this.nearAlbedo);
   }
 
-  /** The cabin's light this frame: where the ship is, its door, the light it passes round. */
-  private setCabin(space: boolean): void {
+  /** The cabin's light this frame: where the ship is (its door is set with its pose). */
+  private setCabin(): void {
     const S = cabinState;
     (S.toShip.value as Matrix4).copy(this.shipM).invert();
     (S.rotation.value as Matrix3).setFromMatrix4(this.shipM);
-    const fill = space ? CABIN_FILL.space : CABIN_FILL.band;
-    (S.fill.value as Vector3).set(fill, fill * 0.97, fill * 0.93);
   }
 
   /** Scene 1 is far from the band: its world is hidden, the ship lit by the sphere's light. */
@@ -303,6 +322,7 @@ export class Intro {
     this.overlay.dispose();
     this.ship.dispose();
     this.screens.dispose();
+    this.cabinLight.dispose();
     this.space.dispose();
     this.sound?.dispose();
     this.sound = null;
@@ -310,6 +330,7 @@ export class Intro {
 }
 
 const SCALE = new Vector3();
+const CAPTURE = new Matrix4();
 
 /** Scene 1: the closing speed (km/s) and the range to the shell at its start (km): 1.15 shell radii. */
 const APPROACH_SPEED = 54.8;
@@ -324,5 +345,3 @@ const CABIN_ADAPTATION = 1.8;
 /** Scene 1's eye: open at most this far (×, over the star's key). */
 const SPACE_ADAPTATION = 8;
 
-/** The light the cabin passes round itself (a radiance): dim far out, brighter under the star. */
-const CABIN_FILL = { space: 0.004, band: 0.04 } as const;
