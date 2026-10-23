@@ -35,6 +35,7 @@ Code: `src/intro/audio/`, through the game's engine and its rules (`docs/audio.m
 - **Gear:**
   - The gate's hydraulic power unit clone, pitched up: the nose leg's under the cockpit floor, the mains' in the nacelles.
   - Latches when down and locked or up.
+  - **The machines' loops follow their motion on the film's clock** (gear, door, stair, the door's roll). The audio clock advances in blocks: between two frames it often had not moved. The rate read zero and the loop stopped and restarted under its own tail every few frames, a crackle ("kzss") through the gear's deployment. Held or jumped, they are left as they are.
   - **Touchdown:** the car's knock and the vault's shut through the floor, the pads on the deck.
 - **Door:**
   - unlatch;

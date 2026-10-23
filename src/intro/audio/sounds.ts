@@ -362,16 +362,22 @@ export class IntroSounds implements TransientSounds {
     roar(this.rumble, Math.max(sm, sl), L.rumble, false);
     for (const w of this.whines) w.set(900 + 1700 * sl, L.whine * Math.pow(sl, 1.2), t);
 
-    // Actuators run while what they drive moves.
+    // Actuators run while what they drive moves: its rate on the film's clock. The audio clock
+    // advances in blocks, so between two frames it often had not moved (or moved twice): the rate
+    // read 0, the loop stopped and restarted under its own tail every few frames, a crackle.
+    // Held (no film time passed) or jumped (review), they are left as they are.
     const p = this.prev;
-    const rate = (a: number, b: number) => (dt > 0 ? Math.abs(a - b) / dt : 0);
-    const run = (v: LoopVoice, moving: boolean, pitch: number) => {
+    const df = p ? this.frame.time - p.time : 0;
+    const steady = df > 0 && df <= 1;
+    const rate = (a: number, b: number) => Math.abs(a - b) / df;
+    const run = (v: LoopVoice, moving: boolean, pitch: number, level: number = L.actuator, rise = 0.08, fall = 0.06) => {
+      if (!steady) return;
       if (moving) {
         if (!v.src) v.gain.gain.setValueAtTime(0, t);
         v.start(t, pitch);
-        glide(v.gain.gain, L.actuator, t, 0.08);
+        glide(v.gain.gain, level, t, rise);
       } else if (v.src) {
-        glide(v.gain.gain, 0, t, 0.06);
+        glide(v.gain.gain, 0, t, fall);
         v.stop(t + 0.4);
       }
     };
@@ -380,15 +386,7 @@ export class IntroSounds implements TransientSounds {
     run(this.doorRun, !!p && rate(s.door, p.door) > 0.05, 1.7);
     run(this.stairRun, !!p && rate(s.stair, p.stair) > 0.05, 1.35);
     // The leaf's roll on its track while it slides (the latter part of its motion).
-    const sliding = !!p && rate(s.door, p.door) > 0.05 && s.door > 1.1;
-    if (sliding) {
-      if (!this.doorRoll.src) this.doorRoll.gain.gain.setValueAtTime(0, t);
-      this.doorRoll.start(t, 2.2);
-      glide(this.doorRoll.gain.gain, L.actuator * 0.6, t, 0.1);
-    } else if (this.doorRoll.src) {
-      glide(this.doorRoll.gain.gain, 0, t, 0.08);
-      this.doorRoll.stop(t + 0.4);
-    }
+    run(this.doorRoll, !!p && rate(s.door, p.door) > 0.05 && s.door > 1.1, 2.2, L.actuator * 0.6, 0.1, 0.08);
   }
 
   /** One-shots at the film's moments and the machines' end stops. */
