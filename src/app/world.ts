@@ -21,7 +21,7 @@ import { createDeckMaterial } from '../ground/deckMaterial';
 import { PAD_HEIGHT } from '../ground/site';
 import { EYE_HEIGHT } from '../world/constants';
 import { updateFrameSpin } from '../sky/structure/spin';
-import { bakeSpace } from '../sky/space/bake';
+import { bakeSpace, type SpaceBackdrop } from '../sky/space/bake';
 import { CoronalGas } from '../sky/star/gas/solver';
 import { buildCity, type City } from '../city/city';
 import { GLASS_TRANSMISSION, type GlassComposite } from '../city/dome/glass';
@@ -57,6 +57,8 @@ export interface World {
   readonly interior: Environment;
   /** Thin layers composited in post (render/pipeline.ts): the Dome's glass, the chamber's mist. */
   readonly composites: GlassComposite[];
+  /** Thin layers of the eye's own surroundings, wherever it is (the intro's ship's canopy). */
+  readonly localComposites: GlassComposite[];
   /** The city's structure: the gate's airlock, walls and walkable surfaces. */
   readonly city: City;
   /** The Field: the Halo, the heroes and the network (docs/field.md). */
@@ -77,6 +79,8 @@ export interface World {
   readonly starAtmosphere: StarAtmosphere;
   /** The star's erupting gas: a fluid stepped on the GPU each frame. */
   readonly gas: CoronalGas;
+  /** The sky beyond the shell, baked (the intro's view from outside shows it too). */
+  readonly backdrop: SpaceBackdrop;
   update(gameTime: number): void;
 }
 
@@ -207,6 +211,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     environment,
     interior,
     composites,
+    localComposites: [],
     city,
     field,
     house,
@@ -216,6 +221,7 @@ export async function buildWorld(renderer: WebGPURenderer, atmoTextures: Atmosph
     crew,
     indoors: false,
     gas,
+    backdrop: space,
     starAtmosphere: createStarAtmosphere(star, atmo, sky.options.frame, gas),
     update: (t) => {
       star.update(t);

@@ -53,6 +53,13 @@ export interface EmitterOptions {
   simplePanning?: boolean;
   /** Where the direct sound arrives at the ears (default the engine's dry bus). */
   out?: AudioNode;
+  /**
+   * Time constant (s) of its position's smoothing (default 0.04). A source carried with a fast
+   * listener (the intro's ship at 60 m/s) takes none, and so does the listener while it is carried
+   * (AudioEngine.listenerGlide): each smoothed lags its target by speed × time constant, and the
+   * two lags never matched, which left a voice 12 cm from the ears 0.55 m behind them (−13 dB).
+   */
+  glide?: number;
 }
 
 const MAX_DELAY = 2.5;
@@ -74,6 +81,7 @@ export class Emitter {
   private directivity: Directivity | undefined;
   private readonly engine: AudioEngine;
   private first = true;
+  private readonly glideTime: number;
   /** The zone a 'located' source is in this frame (reused). */
   private readonly located: Zone[] = ['outside'];
 
@@ -85,6 +93,7 @@ export class Emitter {
     this.directivity = opts.directivity ? { ...opts.directivity, axis: [...opts.directivity.axis] } : undefined;
     this.sendLevel = opts.send ?? 1;
     this.sendScale = opts.sendScale;
+    this.glideTime = opts.glide ?? 0.04;
     this.input = ctx.createGain();
     this.delay = ctx.createDelay(MAX_DELAY);
     this.lowpass = ctx.createBiquadFilter();
@@ -145,6 +154,17 @@ export class Emitter {
     this.first = true;
   }
 
+  /** Takes the emitter out of the engine and disconnects it (its sources stop on their own). */
+  dispose(): void {
+    this.engine.removeEmitter(this);
+    this.input.disconnect();
+    this.panner.disconnect();
+    for (const s of this.sends) {
+      s.gain.disconnect();
+      s.slap?.disconnect();
+    }
+  }
+
   /** Per frame: re-derives every path term for the listener. */
   update(l: ListenerState, t: number): void {
     const [x, y, z] = this.position;
@@ -187,9 +207,10 @@ export class Emitter {
 
     const cutoff = Math.min(pathCutoff, airCutoff(l.zone, d), dirCutoff);
     const tc = this.first ? 0 : 0.04;
-    glide(this.panner.positionX, x, t, tc);
-    glide(this.panner.positionY, y, t, tc);
-    glide(this.panner.positionZ, z, t, tc);
+    const tp = this.first ? 0 : this.glideTime;
+    glide(this.panner.positionX, x, t, tp);
+    glide(this.panner.positionY, y, t, tp);
+    glide(this.panner.positionZ, z, t, tp);
     glide(this.delay.delayTime, Math.min(d / SPEED_OF_SOUND, MAX_DELAY), t, this.first ? 0 : 0.08);
     glide(this.lowpass.frequency, cutoff, t, tc);
     glide(this.gain.gain, pathGain * medium * dirGain, t, tc);

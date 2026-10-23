@@ -48,6 +48,19 @@ export interface Ears {
   matrixWorld: { elements: ArrayLike<number> };
 }
 
+/**
+ * A sound system that exists only for a while and drives the listener's coupling to it: the intro's
+ * ship (intro/audio/sounds.ts). It sounds through the same engine; GameAudio only gives it its turn
+ * each frame, the ship's door and vacuum for the paths, and what is underfoot aboard.
+ */
+export interface TransientSounds {
+  update(t: number, l: ListenerState): void;
+  /** The ship's door's openness (0..1) and whether it is in vacuum. */
+  readonly cabin: { open: number; vacuum: boolean };
+  /** What is underfoot at a point, where it knows better than the world (aboard, the stair). */
+  surface(x: number, y: number, z: number): GroundSurface | null;
+}
+
 export interface Point {
   x: number;
   y: number;
@@ -72,6 +85,7 @@ export class GameAudio {
   private readonly terminal: TerminalSounds | null;
   private readonly crew: CrewSounds | null;
   private readonly pending: FootEvent[] = [];
+  private transient: TransientSounds | null = null;
   private active = false;
   /** The player's volume on top of the mix (ui/audioPrefs.ts): 1 is the mix as authored, 0 is muted. */
   private userGain = 1;
@@ -86,6 +100,7 @@ export class GameAudio {
     innerOpen: 0,
     bar: 0.55,
     houseOpen: 0,
+    cabin: { open: 0, vacuum: false },
   };
 
   constructor(ctx: BaseAudioContext, world: AudioWorld, bank: AudioBank) {
@@ -93,7 +108,7 @@ export class GameAudio {
     this.engine.master.gain.value = LEVEL.master;
     this.airlock = world.airlock;
     this.watcher = new AirlockWatcher(world.airlock);
-    this.footsteps = new Footsteps(this.engine, (x, z, y) => world.surface(x, z, y));
+    this.footsteps = new Footsteps(this.engine, (x, z, y) => this.transient?.surface(x, y, z) ?? world.surface(x, z, y));
     this.gate = new GateSounds(this.engine, world.airlock.outer, world.airlock.inner);
     this.vents = new VentSounds(this.engine, world.airlock);
     this.field = world.field ? new FieldSounds(this.engine, world.field) : null;
@@ -122,6 +137,15 @@ export class GameAudio {
     return new AudioContext({ latencyHint: 'interactive' });
   }
 
+  /** Gives a transient sound system (the intro's ship) its turn each frame, or ends it (null). */
+  setTransient(s: TransientSounds | null): void {
+    this.transient = s;
+    if (!s) {
+      this.listener.cabin.open = 0;
+      this.listener.cabin.vacuum = false;
+    }
+  }
+
   /** Queues a footfall; it sounds at the feet on the next update. */
   foot(e: FootEvent): void {
     this.pending.push(e);
@@ -147,6 +171,10 @@ export class GameAudio {
     let open = 0;
     if (this.houseDoors) for (const d of this.houseDoors.list) if (d.spec.exterior && d.amount > open) open = d.amount;
     l.houseOpen = open;
+    if (this.transient) {
+      l.cabin.open = this.transient.cabin.open;
+      l.cabin.vacuum = this.transient.cabin.vacuum;
+    }
 
     const ev = this.watcher.step(this.airlock);
     for (const g of ev.gates) this.gate.play(g.gate, g.event, t);
@@ -171,6 +199,7 @@ export class GameAudio {
     this.house?.update(t, l);
     if (this.speech) this.announce(dt, t, l);
     this.terminal?.update(t, l);
+    this.transient?.update(t, l);
     this.engine.update(l, t);
   }
 

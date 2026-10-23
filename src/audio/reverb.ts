@@ -1,5 +1,5 @@
 /**
- * Procedural impulse responses for the three spaces (docs/audio.md). Pure: returns sample arrays.
+ * Procedural impulse responses for the spaces (docs/audio.md). Pure: returns sample arrays.
  *
  * An IR holds only the room's reflections: the direct sound takes the dry path (emitter.ts). Its
  * level is physical: in a diffuse field the reverberant energy relative to the direct sound at
@@ -78,6 +78,12 @@ const CITY_LIFT = 10;
  */
 const HOUSE_SIZE: [number, number, number] = [6, 5, 3.8];
 const HOUSE_T60 = [0.75, 0.7, 0.6, 0.55, 0.5, 0.45, 0.4, 0.32];
+/**
+ * The intro's ship's cabin: ~11 × 5.2 × 2.6 m of composite panels and padded liners, a carpeted
+ * nothing; hard enough to ring briefly, the liners taking the top.
+ */
+const CABIN_SIZE: [number, number, number] = [11, 5.2, 2.6];
+const CABIN_T60 = [0.5, 0.45, 0.4, 0.36, 0.33, 0.3, 0.26, 0.2];
 
 export const REVERBS: Record<Zone, ReverbSpec> = {
   chamber: {
@@ -124,6 +130,20 @@ export const REVERBS: Record<Zone, ReverbSpec> = {
       listener: [2.6, 1.6, 2.4],
       reflect: [0.82, 0.8, 0.7],
       window: 0.04,
+    },
+  },
+  cabin: {
+    length: 0.9,
+    t60: CABIN_T60,
+    onset: 0.006,
+    buildup: 0.02,
+    energy: diffuseEnergy(CABIN_SIZE[0] * CABIN_SIZE[1] * CABIN_SIZE[2], CABIN_T60[4]),
+    shoebox: {
+      size: CABIN_SIZE,
+      source: [8.6, 2.6, 2.2],
+      listener: [8.0, 2.6, 1.2],
+      reflect: [0.8, 0.74, 0.7],
+      window: 0.03,
     },
   },
   outside: {

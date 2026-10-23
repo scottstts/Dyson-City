@@ -29,6 +29,7 @@ import { hash12 } from './tsl/noise';
 import { hueFilmic } from './tsl/toneMap';
 import { filmLook, vignette } from './tsl/look';
 import { createGlarePass, HALATION } from './glarePass';
+import { STAR_DISC_MEAN_RADIANCE } from '../world/radiometry';
 import { contactAO } from './sceneMrt';
 
 type TexNode = Node<'vec4'> & { sample(uv: Node<'vec2'>): Node<'vec4'>; value: import('three/webgpu').Texture };
@@ -48,6 +49,12 @@ export interface CameraSettings {
   starVisibility: Node<'float'>;
   /** Transmission of glass between the eye and the star (scales its glare only). */
   starTransmission: Node<'float'>;
+  /**
+   * 1 when the eye is on the band (its sky, air and star overhead); 0 in deep space (the intro's
+   * first scene), where the band's air, its glass and mist, the star's atmosphere and its overhead
+   * disc do not apply.
+   */
+  band: Node<'float'>;
 }
 
 export interface Pipeline {
@@ -68,7 +75,7 @@ export type ToneMapper = 'film' | 'agx' | 'aces' | 'neutral';
  */
 export type TransparencyComposite = (origin: Node<'vec3'>, dir: Node<'vec3'>, dist: Node<'float'>, color: Node<'vec3'>) => Node<'vec3'>;
 
-export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'>; composites?: TransparencyComposite[] }): Pipeline {
+export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: PerspectiveCamera, atmo: AtmosphereTextures, opts: { view: DebugView; toneMapper: ToneMapper; ao: boolean; illuminant: Node<'vec3'>; skyOverlay?: (dir: Node<'vec3'>, pixelAngle: Node<'float'>) => Node<'vec4'>; composites?: TransparencyComposite[]; localComposites?: TransparencyComposite[] }): Pipeline {
   const scenePass = pass(scene, cam);
   // The normal's alpha is the pixel's contact-AO weight (aoWeight): 1 by default; 0 where the light
   // already holds the occlusion (the house's lightmaps) or the pixel is a thin pane over another surface.
@@ -104,7 +111,9 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
     adaptation: uniform(1) as unknown as Node<'float'>,
     starVisibility: uniform(1) as unknown as Node<'float'>,
     starTransmission: uniform(1) as unknown as Node<'float'>,
+    band: uniform(1) as unknown as Node<'float'>,
   };
+  const onBand = settings.band.greaterThan(0.5);
 
   const taaEncode = (c: Node<'vec3'>) => {
     const e = c.mul(settings.exposure);
@@ -137,21 +146,36 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
       // Contact occlusion only: beyond a few tens of metres a pixel spans more than the AO radius.
       const aoFade = float(1).sub(smoothstep(25.0, 60.0, dist));
       const occlusion = mix(float(1), aoTex.sample(uv).r, aoStrength.mul(aoFade).mul(normalTex.sample(uv).a));
-      const apUV = aerialLutUV(dirW.y, dist);
-      inscatter.assign(texture(apS, apUV).rgb.mul(opts.illuminant));
-      transmit.assign(texture(apT, apUV).rgb);
       behind.assign(c.rgb.mul(occlusion));
+      If(onBand, () => {
+        const apUV = aerialLutUV(dirW.y, dist);
+        inscatter.assign(texture(apS, apUV).rgb.mul(opts.illuminant));
+        transmit.assign(texture(apT, apUV).rgb);
+      });
     }).Else(() => {
       // Its own pass keeps the sky shader small (sky/star/atmosphere.ts).
       if (opts.skyOverlay) {
-        const overlay = opts.skyOverlay(dirW, length(fwidth(dirW)).max(1e-6)).toVar();
-        behind.assign(behind.mul(exp(overlay.a.negate())).add(overlay.rgb));
+        const overlay = opts.skyOverlay;
+        If(onBand, () => {
+          const o = overlay(dirW, length(fwidth(dirW)).max(1e-6)).toVar();
+          behind.assign(behind.mul(exp(o.a.negate())).add(o.rgb));
+        });
       }
     });
-    // Thin layers in front of the opaque scene, farthest first (the Dome's glass, then the mist in the gate's chamber).
-    let seen: Node<'vec3'> = behind;
-    for (const c of opts.composites ?? []) seen = c(camPos as unknown as Node<'vec3'>, dirW, dist, seen);
-    const outc = seen.mul(transmit).add(inscatter);
+    // Thin layers in front of the opaque scene, farthest first (the Dome's glass, then the mist in
+    // the gate's chamber: the band's own), then the eye's own (the ship's canopy), wherever it is.
+    const seen = behind.toVar();
+    const bandLayers = opts.composites ?? [];
+    if (bandLayers.length) {
+      If(onBand, () => {
+        let s: Node<'vec3'> = seen;
+        for (const c of bandLayers) s = c(camPos as unknown as Node<'vec3'>, dirW, dist, s);
+        seen.assign(s);
+      });
+    }
+    let near: Node<'vec3'> = seen;
+    for (const c of opts.localComposites ?? []) near = c(camPos as unknown as Node<'vec3'>, dirW, dist, near);
+    const outc = near.mul(transmit).add(inscatter);
     return vec4(taaEncode(outc), 1.0);
   })();
 
@@ -166,8 +190,13 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
   const hdr = { sample: (uv: Node<'vec2'>) => vec4(taaDecode(hdrTex.sample(uv).rgb), 1.0), get rgb() { return taaDecode(hdrTex.rgb); } };
 
   // --- Glare: the eye's scatter and the camera's bloom (render/glare.ts, render/glarePass.ts) ---
-  const skyAt = (uv: Node<'vec2'>) => select(depthTex.sample(uv).r.greaterThan(0.0), float(0), float(1)) as unknown as Node<'float'>;
-  const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant, skyAt, starVisibility: settings.starVisibility, starTransmission: settings.starTransmission });
+  // Only the band's sky holds the star's disc overhead (in deep space it is nowhere near +y).
+  const skyAt = (uv: Node<'vec2'>) => select(depthTex.sample(uv).r.greaterThan(0.0), float(0), float(1)).mul(settings.band) as unknown as Node<'float'>;
+  // Away from the band the star is wherever it is seen: what is clipped as its disc is (over about
+  // half its mean radiance) halates as the disc does.
+  const starMean = luminance(vec3(...STAR_DISC_MEAN_RADIANCE).mul(opts.illuminant));
+  const clipAt = (uv: Node<'vec2'>) => float(1).sub(settings.band).mul(smoothstep(0.35, 0.6, luminance(hdr.sample(uv).rgb).div(starMean))) as unknown as Node<'float'>;
+  const glare = createGlarePass({ hdr: (uv) => hdr.sample(uv).rgb, viewDirAt, starGlare: atmo.starGlare, illuminant: opts.illuminant, skyAt, clipAt, starVisibility: settings.starVisibility, starTransmission: settings.starTransmission });
 
   // The optical axis, for the lens vignette (the camera looks down its local −Z).
   const camAxis = normalize(camWorld.mul(vec4(0, 0, -1, 0)).xyz);
@@ -179,7 +208,12 @@ export function createPipeline(renderer: WebGPURenderer, scene: Scene, cam: Pers
     const exposed = glare.apply(hdr.sample(uv).rgb, viewDir, skyAt(uv)).mul(gain).mul(settings.whiteBalance).mul(vignette(dot(viewDir, camAxis)));
     // The look sits before the display transform, in scene-linear exposure (render/tsl/look.ts); its
     // black point takes off the star's veil this pixel carries.
-    const veil = luminance(glare.starShare(viewDir)).mul(gain);
+    // On the band the veil is the star's analytic share; away from it, the eye's scatter of the image.
+    const veil = luminance(glare.starShare(viewDir)).toVar();
+    If(onBand.not(), () => {
+      veil.assign(luminance(glare.parts(viewDir).eye));
+    });
+    veil.mulAssign(gain);
     const looked = filmLook(exposed, veil) as unknown as Node<'vec3'>;
     // The clipped disc's halation spills white past its outline (glarePass.ts), screen-blended.
     const spill = vec3(...HALATION.tint).mul(glare.halation());

@@ -30,6 +30,8 @@ import type { TerminalKey } from '../terminal/os/os';
 import { CrewFrameSource } from '../crew/frame';
 import { crewReview } from '../crew/review';
 import { FIELD_Y } from '../field/layout';
+import type { Intro } from '../intro/intro';
+import { IntroReview } from '../intro/review';
 
 /** Where the West Gate's airlock is told the walker is while they drive: far from both its gates. */
 const NOBODY = new Vector3(0, 0, 0);
@@ -75,6 +77,13 @@ export class Game {
   /** Review (?tat): the OS's clock, held. */
   private reviewHold: number | null = null;
   private readonly crewFrame: CrewFrameSource;
+  /** The intro (src/intro/): played on the first Enter, then gone (null once it has ended). */
+  private intro: Intro | null = null;
+  /** ?introReview: the intro alone, looping, with review keys (intro/review.ts). */
+  private introReview: IntroReview | null = null;
+  private readonly host: HTMLElement;
+  /** Whether the intro was held last frame (its pause stops the sound too). */
+  private introHeld = false;
 
   constructor(handle: RendererHandle, world: World, atmo: AtmosphereTextures, audio: GameAudio, debug: DebugParams, entry: EntryScreen, host: HTMLElement, narration: NarrationClips) {
     this.narration = narration;
@@ -114,6 +123,7 @@ export class Game {
       illuminant: world.star.illuminant as unknown as Node<'vec3'>,
       skyOverlay: world.starAtmosphere,
       composites: world.composites,
+      localComposites: world.localComposites,
     });
     const illuminant = world.star.illuminant.value as Vector3;
     // A daylight-balanced photograph exposed for the star (render/exposure.ts).
@@ -142,6 +152,7 @@ export class Game {
     }
     if (debug.lock) world.city.lock.airlock.hold(debug.lock === 'outer' || debug.lock === 'open', debug.lock === 'inner' || debug.lock === 'open');
 
+    this.host = host;
     this.prompt = new InteractionPrompt(host);
     const prefs = loadAudioPrefs();
     audio.setUserGain(prefsGain(prefs));
@@ -149,16 +160,31 @@ export class Game {
     this.input.onLockChange = (locked) => {
       this.audio.setActive(locked);
       if (locked) {
-        this.playing = true;
+        // The first Enter starts the intro; the game begins when it ends.
+        if (this.intro?.pending) this.intro.start();
+        else if (!this.intro?.running) this.playing = true;
         this.entry.hide();
         this.pause.hide();
+        this.start();
         this.thaw();
-      } else if (this.playing && !fatal.hasFired) {
+      } else if ((this.playing || this.intro?.running) && !fatal.hasFired) {
         this.freeze();
         this.pause.show(() => this.input.requestLock());
       }
     };
     fatal.onStop(() => this.stop());
+  }
+
+  /** Review: the intro at t s, held there (tools/intro-shots.mjs). */
+  introSeek(t: number, hold = true): void {
+    this.intro?.seek(t, hold);
+  }
+
+  /** The intro to play on the first Enter (boot); `at` starts it at once for review (?intro). */
+  setIntro(intro: Intro, at?: { at: number; hold: boolean }): void {
+    this.intro = intro;
+    if (this.debug.introReview) this.introReview = new IntroReview(intro, this.host);
+    if (at) intro.start(at.at, at.hold);
   }
 
   /**
@@ -286,6 +312,10 @@ export class Game {
   }
 
   private frame(dt: number): void {
+    if (this.intro?.running) {
+      this.introFrame(dt);
+      return;
+    }
     if (this.debug.time === null) this.gameTime += dt;
     this.world.update(this.gameTime);
     const driving = this.driving;
@@ -297,18 +327,7 @@ export class Game {
     const usedByCar = !terminal.active && driving.update(dt, this.playing, use && !usedByTerminal);
     if (terminal.active) driving.update(dt, false, false);
     this.reviewTerminal();
-    // In the car the West Gate's airlock does not see a walker (the car never enters it).
-    this.world.city.update(dt, driving.inCar ? NOBODY : this.player.feet);
-    // Review time (?time) holds the craft where ?craft put it, as it holds the star.
-    this.world.vehicles.update(this.debug.time === null ? dt : 0, this.gameTime, driving.inCar ? null : this.player.feet);
-    // The crew after them (they hold for the walker and the car); review time holds them too.
-    this.world.crew.update(this.debug.time === null ? dt : 0, this.crewFrame.at(driving.inCar ? null : this.player.feet, this.world.vehicles));
-    this.camera.updateMatrixWorld();
-    this.world.house.update(dt, this.camera, this.player.feet, use && !usedByCar && !usedByTerminal && !driving.inCar && !terminal.active);
-    const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);
-    this.world.indoors = indoors;
-    this.world.estate.view(this.camera, indoors);
-    this.world.house.culling.update(this.camera, indoors);
+    this.advanceWorld(dt, driving.inCar ? null : this.player.feet, this.player.feet, use && !usedByCar && !usedByTerminal && !driving.inCar && !terminal.active);
     const aimed = driving.inCar || terminal.active ? null : this.world.house.doors.aimed;
     this.prompt.set(!this.playing || terminal.active ? null : (terminal.prompt ?? driving.prompt ?? (aimed ? (aimed.target > 0.5 ? 'Close' : 'Open') : null)));
     if (this.debug.wobble !== null) {
@@ -326,22 +345,107 @@ export class Game {
     const car = this.world.vehicles.car;
     if (driving.inCar) this.world.stand.listen(dt, car.state.x, car.groundY, car.state.z);
     else this.world.stand.listen(dt, this.player.feet.x, this.player.feet.y, this.player.feet.z);
+    this.present(dt, this.player.feet, 1);
+  }
+
+  /**
+   * The world's systems for this frame: the West Gate's airlock, the vehicles and the crew (a
+   * walker at `walker`, or none: driving), the house's doors (E pressed, `use`) and what is
+   * drawn of it and the estate from the eye.
+   */
+  private advanceWorld(dt: number, walker: Vector3 | null, feet: Vector3, use: boolean): void {
+    // In the car the West Gate's airlock does not see a walker (the car never enters it).
+    this.world.city.update(dt, walker ?? NOBODY);
+    // Review time (?time) holds the craft where ?craft put it, as it holds the star.
+    this.world.vehicles.update(this.debug.time === null ? dt : 0, this.gameTime, walker);
+    // The crew after them (they hold for the walker and the car); review time holds them too.
+    this.world.crew.update(this.debug.time === null ? dt : 0, this.crewFrame.at(walker, this.world.vehicles));
+    this.camera.updateMatrixWorld();
+    this.world.house.update(dt, this.camera, feet, use);
+    const indoors = this.world.house.inside(this.camera.position.x, this.camera.position.y, this.camera.position.z);
+    this.world.indoors = indoors;
+    this.world.estate.view(this.camera, indoors);
+    this.world.house.culling.update(this.camera, indoors);
+  }
+
+  /**
+   * The Stand's screen, the sound, and the picture: the star's glare as the eye sees it (`starShare`
+   * scales what city/visibility.ts finds, for an eye under a roof it does not know: the intro's
+   * cockpit), then the render and the eye's adaptation.
+   */
+  private present(dt: number, feet: Vector3, starShare: number): void {
     // The screen's auto-brightness follows the eye's adaptation (terminal/screenMaterial.ts).
     this.world.stand.update(this.reviewHold ?? this.gameTime, this.camera.position, terminalLive(this.world), this.narration.peaks, this.adaptation?.value ?? 1);
-    this.audio.update(dt, this.camera, this.player.feet);
+    this.audio.update(dt, this.camera, feet);
     this.world.skyMesh.updateHistory(this.camera);
     setPipelineTime(this.gameTime);
     const star = this.world.city.starVisibility(this.camera.position);
+    const visible = star.visible * starShare;
     // Under the house's roofs and the gate's vault the star is hidden by them (city/visibility.ts):
     // it fades as the eye walks in, eased over STAR_EASE so a quick step or turn never pops it.
-    this.starSeen = this.starSeen < 0 ? star.visible : this.starSeen + (star.visible - this.starSeen) * (1 - Math.exp(-dt / STAR_EASE));
+    this.starSeen = this.starSeen < 0 ? visible : this.starSeen + (visible - this.starSeen) * (1 - Math.exp(-dt / STAR_EASE));
     (this.pipeline.camera.starVisibility as unknown as { value: number }).value = this.starSeen;
     (this.pipeline.camera.starTransmission as unknown as { value: number }).value = star.transmission;
+    this.render(dt);
+  }
+
+  private render(dt: number, limit = this.terminal.reading ? READING_ADAPTATION : ADAPT_MAX): void {
     this.pipeline.render();
     if (this.adaptation) {
-      this.adaptation.limit = this.terminal.reading ? READING_ADAPTATION : ADAPT_MAX;
+      this.adaptation.limit = limit;
       (this.pipeline.camera.adaptation as unknown as { value: number }).value = this.adaptation.update(dt);
     }
     if (this.debug.profile) this.profileFrame();
+  }
+
+  /**
+   * A frame of the intro (src/intro/): it poses the camera; on the band the world runs as in play
+   * round the ship; in deep space (scene 1) the world is hidden and held. Enter skips it; its last
+   * frame is the player's first.
+   */
+  private introFrame(dt: number): void {
+    const intro = this.intro!;
+    if (this.introReview) this.introReview.update(this.input);
+    else {
+      if (this.input.consumePress('Enter') || this.input.consumePress('NumpadEnter')) intro.skip();
+      if (this.input.consumePress('Space')) intro.togglePause();
+    }
+    // The head is the film's: the mouse does nothing until it ends.
+    this.input.consumeLook();
+    const f = intro.update(dt, this.camera);
+    // Held (Space, or the review's hold): the world and the sound stop with the film.
+    if (intro.held !== this.introHeld) {
+      this.introHeld = intro.held;
+      this.audio.setActive(!intro.held && this.input.locked);
+    }
+    for (const e of f.steps) this.audio.foot(e);
+    const band = this.pipeline.camera.band as unknown as { value: number };
+    if (f.space) {
+      band.value = 0;
+      this.audio.update(dt, this.camera, f.feet);
+      intro.updateHistory(this.camera);
+      setPipelineTime(this.gameTime);
+      (this.pipeline.camera.starVisibility as unknown as { value: number }).value = 0;
+      this.starSeen = -1;
+      this.render(dt, f.adaptationLimit);
+    } else {
+      band.value = 1;
+      if (this.debug.time === null && !intro.held) this.gameTime += dt;
+      this.world.update(this.gameTime);
+      this.advanceWorld(dt, f.feet, f.feet, false);
+      this.prompt.set(null);
+      this.world.stand.listen(dt, f.feet.x, f.feet.y, f.feet.z);
+      this.present(dt, f.feet, f.starSeen);
+    }
+    this.introReview?.show();
+    if (f.done && this.introReview) this.introReview.loop();
+    else if (f.done) {
+      intro.finish();
+      this.audio.setTransient(null);
+      this.intro = null;
+      // The game begins on the intro's last view, exactly.
+      this.player.spawn(VIEWPOINTS[DEFAULT_VIEWPOINT]);
+      this.playing = this.input.locked;
+    }
   }
 }

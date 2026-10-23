@@ -57,7 +57,7 @@ const TOP = 38.9;
 const KNOCK = { from: 520, full: 15_000 } as const;
 
 
-class LoopVoice {
+export class LoopVoice {
   src: AudioBufferSourceNode | null = null;
   readonly gain: GainNode;
   readonly tone: BiquadFilterNode;

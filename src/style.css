@@ -93,7 +93,7 @@ button {
 
 .entry.is-ready {
   cursor: pointer;
-  /* The world shows through; only the edges and the floor darken for the type. */
+  /* The stills keep turning behind the name; the edges and the floor darken a little more for the type. */
   background: radial-gradient(ellipse 80% 70% at 50% 42%, rgba(0, 0, 0, 0) 40%, rgba(0, 0, 0, 0.5) 100%),
     linear-gradient(to top, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0) 32%);
 }
@@ -317,10 +317,6 @@ button {
   transition: opacity 1.4s ease;
 }
 
-.entry.is-ready .entry-art,
-.entry.is-ready .entry-tint {
-  opacity: 0;
-}
 
 /* The loading glyph: the sphere lights round its star, its belt turning, leading the corner line. */
 
@@ -807,4 +803,94 @@ button {
   color: var(--ink);
   font-size: 11px;
   letter-spacing: 0;
+}
+
+/* Intro (src/intro/overlay.ts) ------------------------------------------- */
+
+/* The intro's review readout (?introReview, src/intro/review.ts): over the lids, out of the way. */
+.intro-review {
+  position: fixed;
+  left: 24px;
+  top: 20px;
+  z-index: 6;
+  pointer-events: none;
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.82);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+.intro-review-time {
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  margin-bottom: 4px;
+}
+
+.intro-review-keys {
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.intro-overlay {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 5;
+}
+
+/*
+ * The lids: black with a soft edge 18vh deep, each reaching from beyond its edge of the screen to
+ * 62vh in (top: its lower edge at 62vh), so shut they overlap past the middle and nothing shows
+ * at the screen's edges whatever their travel.
+ */
+.intro-lid {
+  position: absolute;
+  left: -5vw;
+  right: -5vw;
+  height: 130vh;
+  will-change: transform;
+}
+
+.intro-lid-top {
+  top: -68vh;
+  background: linear-gradient(to bottom, #000 0%, #000 86%, rgba(0, 0, 0, 0.82) 92%, rgba(0, 0, 0, 0));
+}
+
+.intro-lid-bottom {
+  bottom: -68vh;
+  background: linear-gradient(to top, #000 0%, #000 86%, rgba(0, 0, 0, 0.82) 92%, rgba(0, 0, 0, 0));
+}
+
+.intro-veil {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  opacity: 0;
+}
+
+.intro-hint {
+  position: absolute;
+  right: 34px;
+  bottom: 30px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink-dim);
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  opacity: 0;
+}
+
+.intro-hint.is-shown {
+  opacity: 0.85;
+  transition: opacity 1.2s ease 1.2s;
+}
+
+.intro-hint[hidden] {
+  display: none;
+}
+
+.intro-hint .intro-hint-word + .key-cap {
+  margin-left: 14px;
 }

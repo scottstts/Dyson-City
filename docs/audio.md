@@ -17,7 +17,7 @@ These rules apply to all future sounds, not just the current ones.
   - HRTF direction at the ears.
 
   A synthesised buffer is the sound at its source, never pre-baked distance, reverb or panning.
-- **Spaces, not presets.** Reverberation belongs to the space a source radiates into (`outside`, `chamber`, `city`, `house`). It is heard through the same paths as the direct sound, so the chamber's ring leaks out of an open gate and dies behind a shut one.
+- **Spaces, not presets.** Reverberation belongs to the space a source radiates into (`outside`, `chamber`, `city`, `house`, and the intro's ship's `cabin`). It is heard through the same paths as the direct sound, so the chamber's ring leaks out of an open gate and dies behind a shut one.
 - **Levels are physical in proportion and compressed in range.** Real levels span 60 dB from a footstep to a landing leaf. `mix.ts` keeps their order and relative sense while fitting them on a game's scale. A limiter only protects the output; it is not a mixing tool.
 - **Resynthesised, not sampled.** No recording ships, except the spoken announcements (below). Where a reference recording exists, it is measured and a model is fitted to it (see below), and the game resynthesises from the model. Every playback has new fine structure. Where none exists, a sound is built from its mechanism (the valves, the jet).
 - **The ear decides.** A clone that measures well but sounds wrong is wrong. Get new sounds into the game early and iterate on what the user hears, not on fit numbers. Hand-built modal synthesis of the first pass read as thin and cartoonish (footsteps like bamboo, a pump like an alarm, a leaf landing like a cup on a table); fitted models fixed that.
@@ -30,6 +30,7 @@ These rules apply to all future sounds, not just the current ones.
   - The chamber: a sealed vault whose pressure cycles.
   - The city: 1 bar, 1.3 × 10⁸ m³ under the Dome.
   - The house: its rooms. Which zone a point is in is plan geometry (`zoneAt`), except the house, whose room boxes the house itself knows. `AudioEngine.locate(x, y, z)` asks it first, so the listener and the feet (`'located'` emitters) are placed by height as well as plan.
+  - The intro's ship's cabin, which the intro knows (`AudioEngine.cabin`, asked first). Its coupling (the hull, its door, vacuum) is in `docs/intro-audio.md`; no other zone's paths changed.
 - **Transmission.**
   - A shut leaf: −48 dB, low-passed at 160 Hz. That is the mass law for 80 mm of steel, plus some flanking through the piers.
   - The Dome's glass: −44 dB at 220 Hz.
@@ -266,15 +267,16 @@ These rules apply to all future sounds, not just the current ones.
 
 ## Runtime
 
-- **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it. The player's volume and mute (`docs/ui.md`) scale `LEVEL.master` through `GameAudio.setUserGain`.
+- **Boot.** The `AudioContext` is created at the atmosphere stage; its rate sets the bank's, built in `bankWorker.ts` in parallel. The intro's sound (`docs/intro-audio.md`) is made once `GameAudio` exists and handed in with `setTransient`; it goes when the intro ends.
+- **The listener's hearing** (`AudioEngine.hearing`, `hearingGain`) sits after the master, before the limiter: a low-pass at the Nyquist rate and unity gain, transparent, except while the intro's Guardian wakes. The context stays suspended until the pointer-lock click; pause fades and suspends it; fatal errors close it. The player's volume and mute (`docs/ui.md`) scale `LEVEL.master` through `GameAudio.setUserGain`.
 - **Per frame** (`Game.frame`, after the camera's matrix): the ears move to the camera, airlock events and queued foot events sound at time `t`, and every emitter's path is re-derived.
   - `glide` skips unchanged targets, so steady parameters add no automation.
   - Each zone's path to the listener (`transmission`) depends only on the listener's zone and the gates' and house doors' openness, so the engine derives it once per zone per frame (`AudioEngine.path`) and every emitter reads it; distance, directivity, delay and filtering stay per emitter.
-- **Cost.** 31 HRTF panners (two for the announcements, eleven for the crew), four convolvers (5.5 s, 7.5 s, 1.6 s and 1.4 s stereo) and short-lived sources (the vehicles' loops besides).
+- **Cost.** 31 HRTF panners (two for the announcements, eleven for the crew), five convolvers (5.5 s, 7.5 s, 1.6 s, 1.4 s and the cabin's 0.9 s stereo) and short-lived sources (the vehicles' loops besides). The intro adds ~20 emitters for its length only.
 
 ## Review
 
-- `node tools/audio-preview.mjs [walk-in walk-out chamber-stand turn deck]` runs the real controller, walls, airlock and `GameAudio` frame by frame in an `OfflineAudioContext` in headless Chrome.
+- `node tools/audio-preview.mjs [walk-in walk-out chamber-stand turn deck]` runs the real controller, walls, airlock and `GameAudio` frame by frame in an `OfflineAudioContext` in headless Chrome. `node tools/intro-audio.mjs` does the same for the intro's soundtrack.
   - It writes WAVs to `tools/out/audio/` and prints events, per-second peak/RMS and clipped samples.
   - `direction` prints the left/right balance of one source while the listener turns (±9–10 dB at 10 m).
 - `tests/audio.test.ts`:

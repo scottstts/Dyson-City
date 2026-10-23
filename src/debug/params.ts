@@ -22,6 +22,10 @@
  *   ?crew=<type>[:i[:s]]                                     run the crew s seconds on (20) and stand facing robot i of a type (crew/review.ts)
  *   ?terminal[=<keys>]                                       start at the West Gate terminal, zoomed in and awake; keys (u d l r e, e.g. "rr" or "drre") are pressed after its boot
  *   ?tat=<s>                                                 with ?terminal: once the keys are pressed, hold the recording playing at s seconds in (stills)
+ *   ?intro=<s>[:hold]                                        play the intro from s seconds in at once (no Enter click); with :hold it stays at that moment
+ *   ?introView=<latDeg,lonDeg,distance>                       frame the intro's first scene from elsewhere (review)
+ *   ?introReview                                             the intro only, over and over: it loops instead of handing over to the game, with
+ *                                                            pause, scrubbing and scene jumps (intro/review.ts)
  */
 import type { DebugView, ToneMapper } from '../render/pipeline';
 
@@ -52,6 +56,12 @@ export interface DebugParams {
   terminal: string | null;
   /** With ?terminal: seconds into the recording to jump to once the keys are pressed. */
   terminalAt: number | null;
+  /** Play the intro from this time at once, held there or running (null: as in play). */
+  intro: { at: number; hold: boolean } | null;
+  /** The intro's first scene seen from (latitude°, longitude°, distance in shell radii). */
+  introView: [number, number, number] | null;
+  /** The intro only, looping, with review controls (intro/review.ts). */
+  introReview: boolean;
 }
 
 const VIEWS: DebugView[] = ['final', 'hdr', 'ao', 'normal', 'depth', 'velocity', 'aerial', 'nopost', 'distance', 'glare', 'veil'];
@@ -96,5 +106,15 @@ export function readDebugParams(search = window.location.search, hostname = wind
     crew: q.get('crew'),
     terminal: q.has('terminal') ? (q.get('terminal') ?? '') : null,
     terminalAt: q.get('tat') !== null && Number.isFinite(Number(q.get('tat'))) ? Number(q.get('tat')) : null,
+    intro: ((v) => {
+      if (v === null) return null;
+      const [at, mode] = v.split(':');
+      return Number.isFinite(Number(at)) ? { at: Number(at), hold: mode === 'hold' } : null;
+    })(q.get('intro')),
+    introView: ((v) => {
+      const p = v ? v.split(',').map(Number) : [];
+      return p.length === 3 && p.every(Number.isFinite) ? (p as [number, number, number]) : null;
+    })(q.get('introView')),
+    introReview: q.has('introReview'),
   };
 }

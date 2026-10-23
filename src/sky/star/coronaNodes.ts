@@ -11,7 +11,7 @@
  *    plumes inside dimmer coronal holes, and slow outflowing density blobs in the streamers
  *    (~300 km/s).
  */
-import { float, vec3, vec2, abs, length, max, min, normalize, smoothstep, sqrt, texture, exp, mix, select, pow } from 'three/tsl';
+import { float, vec3, vec2, abs, dot, length, max, min, normalize, smoothstep, sqrt, texture, exp, mix, select, pow } from 'three/tsl';
 import type { DataTexture, Node } from 'three/webgpu';
 import { vNoise4 } from '../../render/tsl/volumeNoise';
 import { STAR_DISC_MEAN_RADIANCE } from '../../world/radiometry';
@@ -43,20 +43,29 @@ function tableU(b: F): F {
  * photosphere or the shell. `pixelAngle`: angular pixel size (radians).
  */
 export function coronaEmission(star: StarState, table: DataTexture, d: V3, pixelAngle: F): V3 {
+  // The observer is at (0, −ro, 0) from the star centre (star radii); the plane of the sky is across y.
+  return coronaAlong(star, table, vec3(0, -OBSERVER_RADIUS, 0) as unknown as V3, d, vec3(0, 1, 0) as unknown as V3, pixelAngle);
+}
+
+/**
+ * The same along a ray from anywhere `o` (star radii, relative to the star centre, observer-frame
+ * axes) whose line crosses the cavity shell to shell (or down to the photosphere): the intro's view
+ * from outside the sphere, through an opening. `axis` is the eye–star axis; the plane of the sky
+ * is across it.
+ */
+export function coronaAlong(star: StarState, table: DataTexture, o: V3, d: V3, axis: V3, pixelAngle: F): V3 {
   const time = star.time as unknown as F;
-  const ro = OBSERVER_RADIUS;
-  // Star radii, relative to the star centre: the observer is at (0, −ro, 0) in the observer frame.
-  const tc = d.y.mul(ro);
-  const P = vec3(0, -ro, 0).add(d.mul(tc));
+  const tc = dot(o, d).negate();
+  const P = o.add(d.mul(tc));
   const b = length(P).toVar();
   const onDisc = b.lessThan(1.0);
   // On the disc the structure is sampled where the line meets the photosphere.
   const tHit = tc.sub(sqrt(max(float(1).sub(b.mul(b)), 0.0)));
-  const surf = vec3(0, -ro, 0).add(d.mul(tHit));
+  const surf = o.add(d.mul(tHit));
   // Position angle: the closest point (on the disc, the photosphere hit) projected onto the plane
-  // of the sky (the observer lies along −Y from the star centre).
+  // of the sky.
   const near = select(onDisc, surf, P);
-  const X = star.rotation.mul(normalize(vec3(near.x, 0.0, near.z))).toVar();
+  const X = star.rotation.mul(normalize(near.sub(axis.mul(dot(near, axis))))).toVar();
   const h = max(b.sub(1.0), 0.0).toVar();
   // Pixel size at the tangent point, in star radii.
   const pix = pixelAngle.mul(max(tc, 0.3));

@@ -2,14 +2,15 @@
  * The acoustic spaces and what couples them (docs/audio.md). Pure: positions in, gains and filter
  * cutoffs out.
  *
- * Four zones: the band outside (0.55 bar, open to the horizon), the gate chamber (a sealed stone
- * vault whose pressure cycles), the city under the Dome (1 bar, enormous), and the house's rooms
- * on the estate. Sound crosses between them through the West Gate's leaves (an 80 mm steel skin:
+ * Five zones: the band outside (0.55 bar, open to the horizon), the gate chamber (a sealed stone
+ * vault whose pressure cycles), the city under the Dome (1 bar, enormous), the house's rooms on the
+ * estate, and the intro's ship's cabin (1 bar, wherever the ship is: in deep space nothing reaches
+ * it from outside). Sound crosses between them through the West Gate's leaves (an 80 mm steel skin:
  * nothing but a low rumble when shut, everything once open), the Dome's glass, or the house's
  * walls and shut sashes (an open outer door lets the estate in).
  *
  * Which zone a point is in is plan geometry except for the house, whose rooms the house itself
- * knows (AudioEngine.locate).
+ * knows, and the ship's cabin, which the intro knows (AudioEngine.locate).
  */
 import { H, HOUSE_FOOTPRINT } from '../estate/layout';
 import { GATE } from '../city/gate/spec';
@@ -17,8 +18,8 @@ import { openingHeight } from '../city/gate/lighting';
 import { PAD_OUTER_RADIUS } from '../ground/site';
 import { SILL } from '../city/dome/spec';
 
-export type Zone = 'outside' | 'chamber' | 'city' | 'house';
-export const ZONES: readonly Zone[] = ['outside', 'chamber', 'city', 'house'];
+export type Zone = 'outside' | 'chamber' | 'city' | 'house' | 'cabin';
+export const ZONES: readonly Zone[] = ['outside', 'chamber', 'city', 'house', 'cabin'];
 
 export const SPEED_OF_SOUND = 343;
 
@@ -75,6 +76,23 @@ export function facadePath(open: number): Path {
 }
 
 /**
+ * The ship's hull, its door shut: a composite skin on frames with an insulated liner, ~32 dB, what
+ * gets through mostly the engines' and the gear's low rumble.
+ */
+const HULL: Path = { gain: 0.025, cutoff: 280 };
+
+/**
+ * Through the ship's hull with its door `open` (0..1, the share of the opening uncovered): the
+ * seal's first crack leaks early, and wide open the cabin hears the band as through a doorway.
+ */
+export function hullPath(open: number): Path {
+  const f = Math.min(Math.max(open, 0), 1);
+  if (f <= 0) return { ...HULL };
+  const o = Math.pow(f, 0.4);
+  return { gain: HULL.gain + (0.5 - HULL.gain) * o, cutoff: HULL.cutoff * Math.pow(20000 / HULL.cutoff, Math.pow(f, 0.3)) };
+}
+
+/**
  * Through a gate opening `h` metres high (lip above the sill). Even a slot leaks a lot: an 18 m
  * wide gap of 2 cm passes ~−20 dB, and its highs most of all once it is wider than their
  * wavelength. Fully open, the passage is just more of the same space.
@@ -103,9 +121,26 @@ function louder(a: Path, b: Path): Path {
   return a.gain >= b.gain ? a : b;
 }
 
-/** Path from a sound in zone `from` to a listener in zone `to`, given the gates' and the house's outer doors' openness. */
-export function transmission(from: Zone, to: Zone, outerOpen: number, innerOpen: number, houseOpen = 0): Path {
+/** The ship's cabin's coupling (the intro): its door's openness, and whether the ship is in vacuum. */
+export interface CabinState {
+  open: number;
+  vacuum: boolean;
+}
+
+const NO_CABIN: Readonly<CabinState> = { open: 0, vacuum: false };
+const SILENT: Readonly<Path> = { gain: 0, cutoff: 20 };
+
+/** Path from a sound in zone `from` to a listener in zone `to`, given the gates', the house's outer doors' and the ship's door's openness. */
+export function transmission(from: Zone, to: Zone, outerOpen: number, innerOpen: number, houseOpen = 0, cabin: Readonly<CabinState> = NO_CABIN): Path {
   if (from === to) return { ...OPEN_PATH };
+  // The ship stands on the band: to or from its cabin, through its hull, then on as from the band.
+  // In vacuum nothing crosses at all.
+  if (from === 'cabin' || to === 'cabin') {
+    if (cabin.vacuum) return { ...SILENT };
+    const other = from === 'cabin' ? to : from;
+    const hull = hullPath(cabin.open);
+    return other === 'outside' ? hull : series(hull, from === 'cabin' ? transmission('outside', to, outerOpen, innerOpen, houseOpen) : transmission(from, 'outside', outerOpen, innerOpen, houseOpen));
+  }
   // The house stands in the city: to or from it, through its shell, then on as from the city.
   if (from === 'house') return to === 'city' ? facadePath(houseOpen) : series(facadePath(houseOpen), transmission('city', to, outerOpen, innerOpen));
   if (to === 'house') return from === 'city' ? facadePath(houseOpen) : series(transmission(from, 'city', outerOpen, innerOpen), facadePath(houseOpen));
@@ -124,7 +159,7 @@ export function transmission(from: Zone, to: Zone, outerOpen: number, innerOpen:
  */
 export function mediumFactor(zone: Zone, chamberBar: number): number {
   if (zone === 'outside') return 0.55;
-  if (zone === 'city' || zone === 'house') return 1;
+  if (zone === 'city' || zone === 'house' || zone === 'cabin') return 1;
   return chamberBar;
 }
 
@@ -146,7 +181,7 @@ export function airCutoff(zone: Zone, d: number): number {
 export function wallDistance(zone: Zone, x: number, z: number): number {
   const r = Math.hypot(x, z);
   if (zone === 'chamber') return GATE.passageHalf;
-  if (zone === 'house') return MIN_WALL_DISTANCE;
+  if (zone === 'house' || zone === 'cabin') return MIN_WALL_DISTANCE;
   // The piers' end faces (the passage between them is open): outside the west ends, inside the east.
   const faceX = zone === 'outside' ? GATE.westX : GATE.eastX;
   const pier = Math.min(segmentDistance(x, z, faceX, GATE.passageHalf, GATE.outerHalf), segmentDistance(x, z, faceX, -GATE.outerHalf, -GATE.passageHalf));

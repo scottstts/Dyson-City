@@ -70,15 +70,23 @@ function boxInterval(f: Frame, lo: V3, hi: V3, tMax: F): { t0: F; t1: F } {
  * (observer frame) up to tEnd (shell units). `jitter` ∈ [0, 1) per pixel and frame.
  */
 export function magneticPlasma(star: StarState, mag: MagneticState, d: V3, tEnd: F, pixelAngle: F, starRadius: number, jitter: F): Node<'vec4'> {
+  return magneticPlasmaFrom(star, mag, vec3(0, -1, 0) as unknown as V3, d, tEnd, pixelAngle, starRadius, jitter);
+}
+
+/**
+ * The same from anywhere: `from` is the ray's origin relative to the star centre (shell units,
+ * observer-frame axes), `tEnd` measured from it (the intro's view from outside the sphere).
+ */
+export function magneticPlasmaFrom(star: StarState, mag: MagneticState, from: V3, d: V3, tEnd: F, pixelAngle: F, starRadius: number, jitter: F): Node<'vec4'> {
   const out = vec3(0).toVar();
   const tau = float(0).toVar();
-  const toC = vec3(0, 1, 0);
+  const toC = from.negate();
   const b = length(toC.sub(d.mul(dot(d, toC)))).div(starRadius);
   // Only rays passing within ~0.45 star radii of the limb can meet a prominence.
   If(b.greaterThan(0.75).and(b.lessThan(1.5)), () => {
     const time = star.time as unknown as F;
     const R = star.rotation;
-    const o = R.mul(vec3(0, -1, 0)).div(starRadius).toVar();
+    const o = R.mul(from).div(starRadius).toVar();
     const dir = R.mul(d).toVar();
     const tMax = tEnd.div(starRadius).toVar();
 

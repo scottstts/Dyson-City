@@ -35,6 +35,7 @@ import type { TextureModel } from './synth/spectral';
 import { VEHICLE_CAR } from './models/vehicleCar';
 import { VEHICLE_CRAFT } from './models/vehicleCraft';
 import { DRONE_ROTOR } from './models/droneRotor';
+import { INTRO_CABIN } from './models/introCabin';
 import { synthImpact } from './synth/vehicle';
 import type { GroundSurface } from '../city/walk';
 
@@ -73,6 +74,8 @@ export interface AudioBank {
   /** The crew (docs/audio.md, "The crew"): a drone's rotors (loop, RMS 1); the walkers' steps, on the player's steps' scale. */
   drone: Float32Array;
   robotSteps: Record<RobotStepKey, Float32Array[]>;
+  /** The intro's ship's cabin under way (docs/intro-audio.md): its machinery and air, a loop at RMS 1. */
+  introCabin: Float32Array;
 }
 
 export interface DoorSounds {
@@ -211,7 +214,7 @@ function renderPrint(p: SpectralPrint, sr: number, seed: number, tail = 0.05): F
 }
 
 export function buildAudioBank(sr: number): AudioBank {
-  const seeds: Record<Zone, number> = { outside: 11, chamber: 23, city: 37, house: 41 };
+  const seeds: Record<Zone, number> = { outside: 11, chamber: 23, city: 37, house: 41, cabin: 53 };
   const irs = {} as Record<Zone, [Float32Array, Float32Array]>;
   for (const z of ZONES) irs[z] = synthesizeImpulse(REVERBS[z], sr, seeds[z]);
 
@@ -287,11 +290,13 @@ export function buildAudioBank(sr: number): AudioBank {
     // (2^19 samples, ~11 s: its blade-pass lines are a few hertz wide.)
     drone: atRms(synthTexture(DRONE_ROTOR, 19, sr, rng(1401))),
     robotSteps,
+    // (2^19 samples: its two tonal lines are narrow.)
+    introCabin: atRms(synthTexture(INTRO_CABIN, 19, sr, rng(1501))),
   };
 }
 
 /** The bank's sample buffers, for a transfer list. */
 export function bankBuffers(b: AudioBank): ArrayBuffer[] {
-  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.car, b.craft, ...b.impact, b.drone, ...Object.values(b.robotSteps).flat()];
+  const arrays: Float32Array[] = [b.noise, ...Object.values(b.irs).flat(), ...Object.values(b.footsteps).flat(), b.hydraulicRun, b.leafRumble, b.hydraulicStart, ...b.hydraulicStop, ...b.leafShut, ...b.latch, b.valveOpen, b.valveClose, ...Object.values(b.field), ...b.door.open, ...b.door.swing, ...b.door.shut, ...Object.values(b.ticks).flat(2), b.car, b.craft, ...b.impact, b.drone, ...Object.values(b.robotSteps).flat(), b.introCabin];
   return arrays.map((a) => a.buffer as ArrayBuffer);
 }

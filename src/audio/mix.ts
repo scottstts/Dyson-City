@@ -70,6 +70,16 @@ export const LEVEL = {
    * and reel, the trimmer's motor and blades (RMS). First pass, to be tuned by ear.
    */
   crew: { hand: 0.8, rigger: 1.0, spotter: 0.12, ferry: 0.2, dray: 0.07, drayRoll: 0.035, probe: 0.03, latch: 0.12, linewalker: 0.03, lineRoll: 0.02, boom: 0.035, mower: 0.05, reel: 0.04, trimmer: 0.06, blades: 0.05 },
+  /**
+   * The intro's ship (intro/audio/sounds.ts), each at its source's size: the cabin's machinery
+   * (RMS, 1.5 m), the engines' rumble through its floor (RMS, 2 m), Aurelia's loudspeaker and the
+   * Guardian's own voice (peak, at the grille 0.3 m and the mouth 0.12 m), the PA's chime (relative
+   * to the speech, as `chime`), the avionics' tones (peak, 0.2 m); the main and lift engines at full
+   * thrust and their turbines' whine (RMS, 3 m); the gear's and the stair's and door's actuators
+   * (RMS, on the hydraulics' scale), their latches and the door's seal (peak); touchdown through
+   * the floor and at the pads (peak). First pass, to be tuned by ear.
+   */
+  intro: { ambient: 0.004, rumble: 0.008, ai: 1.0, voice: 0.55, chime: 0.3, tone: 0.07, main: 0.6, lift: 0.7, whine: 0.04, actuator: 0.05, latch: 0.12, seal: 0.08, touchdown: 0.09, pads: 0.5 },
 } as const;
 
 /**

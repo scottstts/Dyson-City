@@ -17,6 +17,9 @@ import { airlockAnnouncements, loadSpeech } from '../audio/loadSpeech';
 import { NarrationClips } from '../audio/loadNarration';
 import { isDebugHost, readDebugParams } from '../debug/params';
 import type { EntryScreen } from '../ui/entryScreen';
+import { Intro } from '../intro/intro';
+import { loadIntroLines } from '../intro/audio/lines';
+import { IntroSounds } from '../intro/audio/sounds';
 
 function stage(name: BootStage, entry: EntryScreen, progress: number): void {
   if (fatal.hasFired) throw new Error(`Startup aborted before stage "${name}"`);
@@ -48,12 +51,16 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   // announcements are the one recording that ships: fetched and decoded alongside.
   const audioContext = GameAudio.context();
   // The house's exterior is fetched and compiled alongside (house/assets.ts).
-  const [atmosphere, noise, audioBank, speech, houseAssets] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadSpeech(audioContext), loadHouseAssets()]);
+  // The intro's recorded lines too (intro/audio/lines.ts).
+  const [atmosphere, noise, audioBank, speech, houseAssets, introLines] = await Promise.all([computeAtmosphereTextures(), generateNoiseVolumes(), loadAudioBank(audioContext.sampleRate), loadSpeech(audioContext), loadHouseAssets(), loadIntroLines(audioContext)]);
   setNoiseVolumes(noise);
 
   stage('environment', entry, 0.4);
   await nextFrame();
   const world = await buildWorld(handle.renderer, atmosphere, houseAssets, debug.time ?? 0, debug.sky);
+
+  // The intro (src/intro/): its ship and its view of the sphere from outside, in the world's scene.
+  const intro = new Intro({ renderer: handle.renderer, world, atmosphere, host, lines: introLines.map((b) => b.duration), view: debug.introView });
 
   stage('interiors', entry, 0.5);
   // The house's floors are built while loading, never in play (house/house.ts).
@@ -65,7 +72,12 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
   // The terminal's narration loads after boot, in the background (audio/loadNarration.ts).
   const narration = new NarrationClips();
   const audio = new GameAudio(audioContext, audioWorld(world, speech, narration), audioBank);
+  // The intro's sound through the game's engine: the ship's cabin and machines (intro/audio/sounds.ts).
+  const introSound = new IntroSounds(audio.engine, introLines, intro.timeline);
+  intro.attachSound(introSound);
+  audio.setTransient(introSound);
   const game = new Game(handle, world, atmosphere, audio, debug, entry, host, narration);
+  game.setIntro(intro, debug.intro ?? undefined);
   // Every pipeline the game will draw with, compiled through the real passes (game.ts warmAll).
   game.warmAll();
   await nextFrame();
@@ -83,8 +95,11 @@ export async function boot(host: HTMLElement, entry: EntryScreen): Promise<void>
 
   fatal.stage = 'running';
   narration.load(audioContext);
-  if (!debug.manual) game.start();
-  if (debug.autostart) entry.hide();
+  // The frame loop starts with the Enter click, which starts the intro: until then the stills cover
+  // the canvas. Review tooling (?autostart, ?intro) runs it at once.
+  const review = debug.autostart || debug.intro !== null;
+  if (!debug.manual && review) game.start();
+  if (review) entry.hide();
   else entry.showReady(() => game.enter());
   // Review tooling hooks (tools/*.mjs), on local hosts only.
   if (isDebugHost()) (window as unknown as { __dyson?: unknown }).__dyson = { game, world, atmosphere, ready: true };

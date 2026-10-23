@@ -48,10 +48,10 @@ All of this is far brighter than the real Sun's (whose atmosphere is invisible b
 
 | Part | Code | Character |
 |---|---|---|
-| Corona | `corona.ts`, `coronaNodes.ts` | Thomson-scattered photosphere light, white. Baumbach–Allen density × dilution, integrated along each sight line (a 1D table: every line runs shell to shell or down to the photosphere). Gentle radial rays, streamers narrowing with height, polar plumes, outflowing blobs |
+| Corona | `corona.ts`, `coronaNodes.ts` (`coronaAlong`: from any viewpoint; the intro sees it from outside the shell) | Thomson-scattered photosphere light, white. Baumbach–Allen density × dilution, integrated along each sight line (a 1D table: every line runs shell to shell or down to the photosphere). Gentle radial rays, streamers narrowing with height, polar plumes, outflowing blobs |
 | Chromosphere | `coronaNodes.ts` | A burning fringe at the limb: a fire shader in (position angle, height), tongues of spicules advected up at ~250 km/s and thresholded by height, clustered |
 | Loop arcades | `activeLayer.ts` | On the whole visible surface: sparse arcades 15,000–60,000 km across in sky cells (more in the activity belts). Every loop is a 3D field line of a buried dipole (r = L·sin²θ), warped, drawn as a soft tube by ray–curve distance; a bundle of threads, broken into flickering knots siphoning at ~200 km/s, bright gassy footpoints; occasional flares |
-| Prominences | `magnetic.ts`, `magneticNodes.ts` | Quiescent: thick, lacy bodies of cool gas around one arched field line, raymarched: warped envelope, twisted fibres, voids, draining legs; they absorb what lies behind them |
+| Prominences | `magnetic.ts`, `magneticNodes.ts` (`magneticPlasmaFrom`: from any viewpoint) | Quiescent: thick, lacy bodies of cool gas around one arched field line, raymarched: warped envelope, twisted fibres, voids, draining legs; they absorb what lies behind them |
 | Gas bursts | `gas/` | A 2D fluid over the plane of the sky round the limb: vents erupt hot gas that billows, rolls, cools from white to gold and tears into wisps. Time-lapsed on purpose. See `star-gas.md` |
 
 - **Real time, energetic star.** Nothing is time-lapsed (that is the miniature effect) except the gas bursts, a deliberate exception (`star-gas.md`); the caged star's flows run at the Sun's fast end, so activity visibly moves at 700,000 km. Small-scale gas evolves in tens of seconds.

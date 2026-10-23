@@ -137,7 +137,7 @@ function mix01(a: number, b: number, t: number): number {
 }
 
 /** The jet's radiance along the view ray through a shell pixel (see the module note). */
-function jetRadiance(origin: V3, axis: V3, re: F, len: F, burn: F, time: F, shellLen: F): V3 {
+export function jetRadiance(origin: V3, axis: V3, re: F, len: F, burn: F, time: F, shellLen: F): V3 {
   return Fn(() => {
     const v = normalize(positionWorld.sub(cameraPosition));
     const w0 = cameraPosition.sub(origin);

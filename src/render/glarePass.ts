@@ -112,6 +112,11 @@ export function createGlarePass(opts: {
   /** 1 where the pixel at a screen UV shows the sky, 0 on geometry. */
   skyAt: (uv: Node<'vec2'>) => Node<'float'>;
   /**
+   * Where the image is clipped by a star that is not the overhead disc (the intro's view from
+   * outside the sphere, the star seen through its openings): it halates as the disc does.
+   */
+  clipAt?: (uv: Node<'vec2'>) => Node<'float'>;
+  /**
    * Share of the star's disc the eye can see (1 in the open, a little less under the Dome's frame,
    * 0 under a roof): scales the star's analytic glare. (The halation follows the disc's pixels.)
    */
@@ -135,7 +140,11 @@ export function createGlarePass(opts: {
   // frame member, a lamp) is an ordinary source.
   const source = rtt(Fn(() => vec4(hdr(screenUV).mul(float(1).sub(float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV)))), 1.0))(), null, null, { resolutionScale: SOURCE_SCALE });
   // The clipped disc on the sensor (sky pixels on the disc), for its halation.
-  const discMask = rtt(Fn(() => vec4(vec3(float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV))), 1.0))(), null, null, { resolutionScale: EXCESS_SCALE });
+  const clipAt = opts.clipAt;
+  const discMask = rtt(Fn(() => {
+    const disc = float(1).sub(offDisc(viewDirAt(screenUV))).mul(skyAt(screenUV));
+    return vec4(vec3(clipAt ? max(disc, clipAt(screenUV)) : disc), 1.0);
+  })(), null, null, { resolutionScale: EXCESS_SCALE });
   const sourceExcess = rtt(Fn(() => vec4(excess(source.sample(screenUV).rgb as unknown as V3), 1.0))(), null, null, { resolutionScale: EXCESS_SCALE });
 
   const eye = blurChain(source as unknown as Node<'vec4'>, screenGlareLobes());
